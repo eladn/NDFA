@@ -2,6 +2,7 @@ from confclass import confclass, confparam
 
 from ddfa_model_hyper_parameters import DDFAModelHyperParams, DDFAModelTrainingHyperParams
 from code_tasks.code_tasks import CodeTaskProperties
+from dataset_properties import DatasetProperties
 
 
 __all__ = ['ExperimentSetting']
@@ -23,3 +24,8 @@ class ExperimentSetting:
         default_factory=DDFAModelTrainingHyperParams,
         description="DDFA model training hyper-parameters.",
         arg_prefix='trn')
+
+    dataset: DatasetProperties = confparam(
+        default_factory=DatasetProperties,
+        description="Dataset properties.",
+        arg_prefix='ds')
