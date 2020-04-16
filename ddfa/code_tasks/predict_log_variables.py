@@ -23,7 +23,7 @@ __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCal
 class PredictLogVariablesTask(CodeTaskBase):
     def __init__(self, task_props: CodeTaskProperties):
         super(PredictLogVariablesTask, self).__init__(task_props)
-        pass
+        # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
     def preprocess(self, model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
                    raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
