@@ -1,7 +1,9 @@
 import abc
+import torch
 from torch.utils.data.dataset import Dataset
 from typing import Optional
 from confclass import confclass, confparam
+import torch.nn as nn
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
@@ -31,13 +33,17 @@ class CodeTaskBase(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def build_model(self, model_hps: DDFAModelHyperParams):
+    def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
         ...
 
     @abc.abstractmethod
     def create_dataset(
             self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, dataset_path: str) -> Dataset:
+        ...
+
+    @abc.abstractmethod
+    def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
         ...
 
     @staticmethod

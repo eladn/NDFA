@@ -41,7 +41,9 @@ def main():
             raw_eval_data_path=exec_params.raw_eval_data_path,
             raw_test_data_path=exec_params.raw_test_data_path)
 
-    model = task.build_model(exec_params.experiment_setting.model_hyper_params)
+    model = task.build_model(
+        model_hps=exec_params.experiment_setting.model_hyper_params,
+        pp_data_path=exec_params.pp_data_dir_path)
 
     if loaded_checkpoint:
         model.load_state_dict(loaded_checkpoint['model_state_dict'])
@@ -68,7 +70,7 @@ def main():
             eval_loader = DataLoader(
                 eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2)
 
-        criterion = nn.NLLLoss()  # TODO: fully implement loss function selection!
+        criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
         fit(
             nr_epochs=exec_params.experiment_setting.train_hyper_params.nr_epochs,
@@ -77,8 +79,7 @@ def main():
             train_loader=train_loader,
             valid_loader=eval_loader,
             optimizer=optimizer,
-            criterion=criterion
-        )
+            criterion=criterion)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         raise NotImplementedError()  # TODO: implement!
