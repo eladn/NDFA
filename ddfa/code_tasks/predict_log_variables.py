@@ -5,6 +5,7 @@ import typing
 import itertools
 import numpy as np
 import pickle as pkl
+import torch.nn as nn
 from collections import defaultdict
 from warnings import warn
 from torch.utils.data.dataset import Dataset, IterableDataset
@@ -15,6 +16,10 @@ from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties
 from ddfa.code_data_structure_api import *
 from ddfa.code_nn_modules.vocabulary import Vocabulary
+from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
+from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
+from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
+from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 
 
 __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsDataset']
@@ -30,12 +35,16 @@ class PredictLogVariablesTask(CodeTaskBase):
         preprocess(model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path,
                    raw_eval_data_path=raw_eval_data_path, raw_test_data_path=raw_test_data_path)
 
-    def build_model(self, model_hps: DDFAModelHyperParams):
-        raise NotImplementedError()  # TODO: implement!
+    def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
+        vocabs = load_or_create_vocabs(model_hps=model_hps, pp_data_path=pp_data_path)
+        return Model(model_hps=model_hps, vocabs=vocabs)
 
     def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
         return LoggingCallsDataset(datafold=datafold, pp_data_path=pp_data_path)
+
+    def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
+        return ModelLoss(model_hps=model_hps)
 
 
 class ModelInput(NamedTuple):
@@ -45,16 +54,65 @@ class ModelInput(NamedTuple):
     cfg_edges: torch.Tensor
     cfg_edges_attrs: torch.Tensor
     identifiers_idxs_of_all_symbols: torch.Tensor
+    logging_call_cfg_node_idx: torch.Tensor
+
+
+class ModelOutput(NamedTuple):
+    decoder_outputs: torch.Tensor
+    all_symbols_encoding: torch.Tensor
 
 
 class TaggedExample(NamedTuple):
     model_input: ModelInput
-    target_identifiers_idxs_of_symbols_used_in_logging_call: torch.Tensor
+    target_symbols_idxs_used_in_logging_call: torch.Tensor
 
 
 MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES = 6  # TODO: move to model hyper-parameters!
 MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER = 6  # TODO: move to model hyper-parameters!
 MAX_NR_TOKENS_IN_EXPRESSION = 200  # TODO: move to model hyper-parameters!
+
+
+class Model(nn.Module):
+    def __init__(self, model_hps: DDFAModelHyperParams, vocabs: 'Vocabs'):
+        super(Model, self).__init__()
+        self.model_hps = model_hps
+        self.vocabs = vocabs
+        self.identifier_encoder = IdentifierEncoder(sub_identifiers_vocab=vocabs.sub_identifiers)
+        expression_encoder = ExpressionEncoder(
+            tokens_vocab=vocabs.tokens, tokens_kinds_vocab=vocabs.tokens_kinds,
+            identifier_encoder=self.identifier_encoder)
+        self.cfg_node_encoder = CFGNodeEncoder(
+            expression_encoder=expression_encoder, pdg_node_control_kinds_vocab=vocabs.pdg_node_control_kinds)
+        self.encoder_decoder_inbetween_dense = nn.Linear(in_features=256, out_features=256)  # TODO: plug-in model hps
+        self.symbols_decoder = SymbolsDecoder()
+
+    def forward(self, x: ModelInput):
+        encoded_identifiers = self.identifier_encoder(x.identifiers)
+        encoded_cfg_nodes = self.cfg_node_encoder(
+            encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
+            cfg_nodes_control_kind=x.cfg_nodes_control_kind)
+        all_symbols_encoding = encoded_identifiers[x.identifiers_idxs_of_all_symbols]
+
+        final_cfg_node_vectors = encoded_cfg_nodes  # TODO: graph NN
+
+        logging_call_cfg_node_vector = final_cfg_node_vectors[x.logging_call_cfg_node_idx]
+        input_to_decoder = self.encoder_decoder_inbetween_dense(logging_call_cfg_node_vector)
+
+        decoder_outputs = self.symbols_decoder(
+            input_state=input_to_decoder, symbols_encodings=all_symbols_encoding)
+
+        return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encoding=all_symbols_encoding)
+
+
+class ModelLoss(nn.Module):
+    def __init__(self, model_hps: DDFAModelHyperParams):
+        super(ModelLoss, self).__init__()
+        self.model_hps = model_hps
+        self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
+
+    def forward(self, model_output: ModelOutput, target_symbols_idxs_used_in_logging_call: torch.Tensor):
+        target_symbols_encodings = model_output.all_symbols_encoding[target_symbols_idxs_used_in_logging_call]
+        return self.criterion(model_output.decoder_outputs, target_symbols_encodings)
 
 
 class LoggingCallsDataset(IterableDataset):
@@ -74,8 +132,7 @@ class LoggingCallsDataset(IterableDataset):
                     assert all(isinstance(elem, torch.Tensor) for elem in example.model_input)
                     yield TaggedExample(
                         model_input=ModelInput(**example.model_input._asdict()),
-                        target_identifiers_idxs_of_symbols_used_in_logging_call=
-                        example.target_identifiers_idxs_of_symbols_used_in_logging_call)
+                        target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
                 except (EOFError, pkl.UnpicklingError):
                     break
 
@@ -116,7 +173,7 @@ def nullable_lists_concat(*args) -> list:
 def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
                raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
     vocabs = load_or_create_vocabs(
-        model_hps=model_hps, raw_train_data_path=raw_train_data_path, pp_data_path=pp_data_path)
+        model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
     datafolds = (
         (SerDataFoldType.TRAIN, raw_train_data_path),
         (SerDataFoldType.VALIDATION, raw_eval_data_path),
@@ -146,8 +203,8 @@ def preprocess_example(
         for symbol in symbols_scope.symbols])
     symbols_used_in_logging_call = logging_call_pdg_node.symbols_use_def_mut.use.must + \
                                    logging_call_pdg_node.symbols_use_def_mut.use.may
-    target_identifiers_idxs_of_symbols_used_in_logging_call = torch.tensor([
-        symbol_ref.identifier_idx for symbol_ref in symbols_used_in_logging_call])
+    target_symbols_idxs_used_in_logging_call = torch.tensor([
+        symbol_ref.symbol_idx for symbol_ref in symbols_used_in_logging_call])
     cfg_nodes_control_kind = torch.tensor([
         vocabs.pdg_node_control_kinds.get_word_idx_or_unk(pdg_node.control_kind.value)
         for pdg_node in method_pdg.pdg_nodes])
@@ -191,9 +248,9 @@ def preprocess_example(
             cfg_nodes_expressions=cfg_nodes_expressions,
             cfg_edges=cfg_edges,
             cfg_edges_attrs=cfg_edges_attrs,
-            identifiers_idxs_of_all_symbols=symbols_identifier_idxs),
-        target_identifiers_idxs_of_symbols_used_in_logging_call=
-        target_identifiers_idxs_of_symbols_used_in_logging_call)
+            identifiers_idxs_of_all_symbols=symbols_identifier_idxs,
+            logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
+        target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)
 
 
 class Vocabs(NamedTuple):
@@ -204,8 +261,9 @@ class Vocabs(NamedTuple):
     pdg_control_flow_edge_types: Vocabulary
 
 
-def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: str, pp_data_path: str) -> Vocabs:
-    vocabs_special_words = ('<PAD>', '<UNK>', '<EOS>')
+def load_or_create_vocabs(
+        model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None) -> Vocabs:
+    vocabs_pad_unk_special_words = ('<PAD>', '<UNK>')
 
     sub_identifiers_carpus_generator = lambda: (
         sub_identifier
@@ -215,7 +273,7 @@ def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: 
         for sub_identifier in identifier_as_sub_identifiers)
     sub_identifiers_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='sub_identifiers',
-        special_words_sorted_by_idx=vocabs_special_words, min_word_freq=40,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<EOI>',), min_word_freq=40,
         max_vocab_size_wo_specials=1000, carpus_generator=sub_identifiers_carpus_generator)
 
     tokens_carpus_generator = lambda: (
@@ -228,7 +286,7 @@ def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: 
         if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
     tokens_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='tokens',
-        special_words_sorted_by_idx=vocabs_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=tokens_carpus_generator)
 
     pdg_node_control_kinds_carpus_generator = lambda: (
@@ -238,7 +296,7 @@ def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: 
         for pdg_node in method_pdg.pdg_nodes)
     pdg_node_control_kinds_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_node_control_kinds',
-        special_words_sorted_by_idx=vocabs_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=pdg_node_control_kinds_carpus_generator)
 
     tokens_kinds_carpus_generator = lambda: (
@@ -250,7 +308,7 @@ def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: 
         for token in pdg_node.code.tokenized)
     tokens_kinds_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='tokens_kinds',
-        special_words_sorted_by_idx=vocabs_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=tokens_kinds_carpus_generator)
 
     pdg_control_flow_edge_types_carpus_generator = lambda: (
@@ -261,7 +319,7 @@ def load_or_create_vocabs(model_hps: DDFAModelHyperParams, raw_train_data_path: 
         for edge in pdg_node.control_flow_out_edges)
     pdg_control_flow_edge_types_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_control_flow_edge_types',
-        special_words_sorted_by_idx=vocabs_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=pdg_control_flow_edge_types_carpus_generator)
 
     return Vocabs(
