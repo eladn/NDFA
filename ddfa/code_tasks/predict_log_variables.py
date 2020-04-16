@@ -206,11 +206,14 @@ def preprocess_example(
     target_symbols_idxs_used_in_logging_call = torch.tensor([
         symbol_ref.symbol_idx for symbol_ref in symbols_used_in_logging_call])
     cfg_nodes_control_kind = torch.tensor([
-        vocabs.pdg_node_control_kinds.get_word_idx_or_unk(pdg_node.control_kind.value)
+        vocabs.pdg_node_control_kinds.get_word_idx_or_unk(
+            pdg_node.control_kind.value if pdg_node.idx != logging_call.pdg_node_idx else '<LOG_PRED>')
         for pdg_node in method_pdg.pdg_nodes])
+    padding_expression = [[vocabs.tokens_kinds.get_word_idx_or_unk('<PAD>'),
+                vocabs.tokens.get_word_idx_or_unk('<PAD>')]] * MAX_NR_TOKENS_IN_EXPRESSION
     cfg_nodes_expressions = torch.tensor([
-        [token_to_input_vector(token, vocabs)
-         for token in pdg_node.code.tokenized]
+        [token_to_input_vector(token, vocabs) for token in pdg_node.code.tokenized]
+        if pdg_node.code is not None and pdg_node.idx != logging_call.pdg_node_idx else padding_expression
         for pdg_node in method_pdg.pdg_nodes])
     control_flow_edges = {}
     data_dependency_edges = defaultdict(set)
@@ -219,6 +222,8 @@ def preprocess_example(
             control_flow_edges[(src_pdg_node.idx, edge.pgd_node_idx)] = edge
     for src_pdg_node in method_pdg.pdg_nodes:
         for edge in src_pdg_node.data_dependency_out_edges:
+            if src_pdg_node.idx == logging_call.pdg_node_idx or edge.pgd_node_idx == logging_call.pdg_node_idx:
+                continue
             data_dependency_edges[(src_pdg_node.idx, edge.pgd_node_idx)].update(
                 symbol.identifier_idx for symbol in edge.symbols)
     edges = list(set(control_flow_edges.keys()) | set(data_dependency_edges.keys()))
@@ -296,7 +301,7 @@ def load_or_create_vocabs(
         for pdg_node in method_pdg.pdg_nodes)
     pdg_node_control_kinds_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_node_control_kinds',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
         carpus_generator=pdg_node_control_kinds_carpus_generator)
 
     tokens_kinds_carpus_generator = lambda: (
