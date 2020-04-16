@@ -2,14 +2,14 @@ from confclass import confclass, confparam
 from typing import Optional
 import argparse
 
-from experiment_setting import ExperimentSetting
+from ddfa.experiment_setting import ExperimentSetting
 
 
 @confclass
 class ModelExecutionParams:
     model_save_path: Optional[str] = confparam(
         default=None,
-        description="Path to save the model file into.",
+        description="Path to save the model file into during and after training.",
         arg_names=['--model-save-path'])
 
     model_load_path: Optional[str] = confparam(
@@ -17,20 +17,45 @@ class ModelExecutionParams:
         description="Path to load the model from.",
         arg_names=['--model-load-path'])
 
-    train_data_path: Optional[str] = confparam(
+    pp_data_dir_path: Optional[str] = confparam(
         default=None,
         description="Path to preprocessed dataset.",
-        arg_names=['--train-data-path'])
-
-    eval_data_path: Optional[str] = confparam(
-        default=None,
-        description="Path to preprocessed evaluation data.",
-        arg_names=['--eval-data-path'])
+        arg_names=['--pp-data'])
 
     predict_data_path: Optional[str] = confparam(
         default=None,
         description="Path to preprocessed prediction data.",
         arg_names=['--pred-data-path'])
+
+    perform_training: bool = confparam(
+        default=False,
+        description="Train of the model.",
+        arg_names=['--train'])
+
+    perform_evaluation: bool = confparam(
+        default=False,
+        description="Evaluate of the model. If `--train` has also been set, evaluate during and after the training.",
+        arg_names=['--eval'])
+
+    perform_preprocessing: bool = confparam(
+        default=False,
+        description="Perform preprocessing of the raw dataset.",
+        arg_names=['--preprocess'])
+
+    raw_train_data_path: Optional[str] = confparam(
+        default=None,
+        description="Path to raw train dataset.",
+        arg_names=['--raw-train-data-path'])
+
+    raw_eval_data_path: Optional[str] = confparam(
+        default=None,
+        description="Path to raw evaluation dataset.",
+        arg_names=['--raw-eval-data-path'])
+
+    raw_test_data_path: Optional[str] = confparam(
+        default=None,
+        description="Path to raw test dataset.",
+        arg_names=['--raw-test-data-path'])
 
     verbose_mode: int = confparam(
         default=1,
@@ -81,13 +106,8 @@ class ModelExecutionParams:
         arg_names=['--use-gpu']
     )
 
-    @property
-    def perform_training(self) -> bool:
-        return bool(self.train_data_path)
-
-    @property
-    def perform_evaluation(self) -> bool:
-        return bool(self.eval_data_path)
+    seed: Optional[int] = confparam(
+        default=1)
 
     @property
     def perform_prediction(self):
@@ -122,8 +142,29 @@ class ModelExecutionParams:
     #     return '/'.join(model_file_path.rstrip('/').split('/')[:-1] + [vocabularies_save_file_name])
 
     def __verify_conf__(self):
-        if not self.perform_training and not self.should_load_model:
-            raise argparse.ArgumentError(None, "Must train or load a model.")
+        if not any((self.perform_preprocessing, self.perform_training,
+                    self.perform_evaluation, self.perform_prediction)):
+            raise argparse.ArgumentError(None, "Please choose one of {--preprocess, --train, --eval, --predict}.")
+        if self.perform_preprocessing and (self.perform_training or self.perform_evaluation or self.perform_prediction):
+            raise argparse.ArgumentError(
+                None, "Cannot perform both preprocessing and training/evaluation/prediction in the same execution.")
+        if self.perform_prediction and self.perform_training:
+            raise argparse.ArgumentError(None, "Cannot perform both prediction and training in the same execution.")
+        if self.perform_evaluation and not self.perform_training and not self.should_load_model:
+            raise argparse.ArgumentError(None, "Must train or load a model in order to perform evaluation.")
+        if self.perform_prediction and not self.should_load_model:
+            raise argparse.ArgumentError(None, "Must load a model in order to perform prediction.")
+        if not self.perform_training and self.should_save_model:
+            raise argparse.ArgumentError(None, "Must train model in order to save the model.")
+        if self.perform_training and not self.should_save_model:
+            raise argparse.ArgumentError(None, "Must specify model save path if performing model training.")
+        if self.perform_preprocessing and not self.raw_train_data_path:
+            raise argparse.ArgumentError(None, "Must specify `--raw-train-data-path` if performing preprocessing.")
+        if not self.perform_preprocessing and (self.raw_train_data_path or self.raw_eval_data_path or self.raw_test_data_path):
+            raise argparse.ArgumentError(None, "Must specify `--preprocess` if specifying raw data path.")
+        assert self.raw_train_data_path or not (self.raw_eval_data_path or self.raw_test_data_path)
+        if not self.pp_data_dir_path:
+            raise argparse.ArgumentError(None, "Must specify `--pp-data`.")
 
 
 def test_model_execution_params():

@@ -22,6 +22,7 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader, valid_loader: DataLoader,
         optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
+    model.to(device)
     for epoch_nr in range(1, nr_epochs + 1):
         model.train()
         train_epoch_loss_sum = 0

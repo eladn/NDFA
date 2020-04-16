@@ -1,8 +1,8 @@
 from confclass import confclass, confparam
 
-from ddfa_model_hyper_parameters import DDFAModelHyperParams, DDFAModelTrainingHyperParams
-from code_tasks.code_tasks import CodeTaskProperties
-from dataset_properties import DatasetProperties
+from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams, DDFAModelTrainingHyperParams
+from ddfa.code_tasks.code_task_base import CodeTaskProperties
+from ddfa.dataset_properties import DatasetProperties
 
 
 __all__ = ['ExperimentSetting']
