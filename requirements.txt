@@ -2,4 +2,11 @@ torch>=1.4.0
 tqdm
 tabulate
 numpy
+scipy
 confclass
+OpenNMT-py>=1.1.1
+# torch-scatter==latest+cpu
+# torch-sparse==latest+cpu
+# torch-cluster==latest+cpu
+# torch-spline-conv==latest+
+torch-geometric
