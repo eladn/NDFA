@@ -17,7 +17,7 @@ from ddfa.code_data_structure_api import *
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 
 
-__all__ = ['PredictLogVariablesTask', 'ModelInput', 'LoggingCallsDataset']
+__all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsDataset']
 
 
 class PredictLogVariablesTask(CodeTaskBase):
@@ -45,6 +45,10 @@ class ModelInput(NamedTuple):
     cfg_edges: torch.Tensor
     cfg_edges_attrs: torch.Tensor
     identifiers_idxs_of_all_symbols: torch.Tensor
+
+
+class TaggedExample(NamedTuple):
+    model_input: ModelInput
     target_identifiers_idxs_of_symbols_used_in_logging_call: torch.Tensor
 
 
@@ -64,9 +68,14 @@ class LoggingCallsDataset(IterableDataset):
         with open(pp_data_filepath, 'br') as pp_data_file:
             while True:
                 try:
-                    example = pkl.load(pp_data_file)
-                    assert all(isinstance(elem, torch.Tensor) for elem in example)
-                    yield ModelInput(**example._asdict())
+                    example: TaggedExample = pkl.load(pp_data_file)
+                    assert all(hasattr(example, field) for field in TaggedExample._fields)
+                    assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
+                    assert all(isinstance(elem, torch.Tensor) for elem in example.model_input)
+                    yield TaggedExample(
+                        model_input=ModelInput(**example.model_input._asdict()),
+                        target_identifiers_idxs_of_symbols_used_in_logging_call=
+                        example.target_identifiers_idxs_of_symbols_used_in_logging_call)
                 except (EOFError, pkl.UnpicklingError):
                     break
 
@@ -125,7 +134,7 @@ def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_dat
 
 def preprocess_example(
         model_hps: DDFAModelHyperParams, vocabs: 'Vocabs',
-        logging_call: SerLoggingCall, method_pdg: SerMethodPDG) -> ModelInput:
+        logging_call: SerLoggingCall, method_pdg: SerMethodPDG) -> TaggedExample:
     logging_call_pdg_node = method_pdg.pdg_nodes[logging_call.pdg_node_idx]
     identifiers = torch.tensor([
         [vocabs.sub_identifiers.get_word_idx_or_unk(sub_identifier_str)
@@ -175,13 +184,14 @@ def preprocess_example(
     cfg_edges_attrs = torch.tensor([
         build_edge_attrs_vector(edge_vertices)
         for edge_vertices in edges])
-    return ModelInput(
-        identifiers=identifiers,
-        cfg_nodes_control_kind=cfg_nodes_control_kind,
-        cfg_nodes_expressions=cfg_nodes_expressions,
-        cfg_edges=cfg_edges,
-        cfg_edges_attrs=cfg_edges_attrs,
-        identifiers_idxs_of_all_symbols=symbols_identifier_idxs,
+    return TaggedExample(
+        model_input=ModelInput(
+            identifiers=identifiers,
+            cfg_nodes_control_kind=cfg_nodes_control_kind,
+            cfg_nodes_expressions=cfg_nodes_expressions,
+            cfg_edges=cfg_edges,
+            cfg_edges_attrs=cfg_edges_attrs,
+            identifiers_idxs_of_all_symbols=symbols_identifier_idxs),
         target_identifiers_idxs_of_symbols_used_in_logging_call=
         target_identifiers_idxs_of_symbols_used_in_logging_call)
 
