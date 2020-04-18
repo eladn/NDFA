@@ -69,6 +69,7 @@ class ExpressionEncoder(nn.Module):
         selected_encoded_identifiers_flattened = encoded_identifiers_flattened[identifiers_idxs_flattened_with_fixed_offsets]  # (batch_size * nr_exprs * nr_tokens_in_expr, embedding_dim)
         assert selected_encoded_identifiers_flattened.size() == (batch_size * nr_exprs * nr_tokens_in_expr, self.tokens_embedding_dim)
         selected_encoded_identifiers = selected_encoded_identifiers_flattened.view(batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
+        # TODO: we could thread the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
         embeddings = torch.where(
             use_identifier_vocab_condition, selected_encoded_identifiers, torch.where(
                 use_tokens_vocab_condition, selected_tokens_encoding, torch.zeros(selected_tokens_encoding.size())))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
@@ -78,8 +79,8 @@ class ExpressionEncoder(nn.Module):
             .view(expressions_tokens_kinds.size() + (self.token_kind_embedding_dim,))  # (batch_size, nr_exprs, nr_tokens_in_expr, token_kind_embedding_dim)
 
         expr_embeddings = torch.cat([token_kinds_embeddings, embeddings], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim + token_kind_embedding_dim)
-        expr_embeddings_flattened = expr_embeddings.flatten(0, 2)
-        expr_embeddings_projected_flattened = self.projection_linear_layer(expr_embeddings_flattened)
-        expr_encoded_flattened = self.transformer_encoder(expr_embeddings_projected_flattened)
-        expr_encoded = expr_encoded_flattened.view(batch_size, nr_exprs, nr_tokens_in_expr, -1)
+        expr_embeddings_projected = self.projection_linear_layer(expr_embeddings.flatten(0, 2))\
+            .view(batch_size, nr_exprs, nr_tokens_in_expr, -1)
+        expr_encoded = self.transformer_encoder(expr_embeddings_projected.flatten(0, 1).permute(0, 1))\
+            .permute(0, 1).view(batch_size, nr_exprs, nr_tokens_in_expr, -1)
         return expr_encoded
