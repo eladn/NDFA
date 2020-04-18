@@ -7,23 +7,23 @@ from ddfa.code_nn_modules.vocabulary import Vocabulary
 
 
 class IdentifierEncoder(nn.Module):
-    def __init__(self, sub_identifiers_vocab: Vocabulary, method: str = 'transformer_encoder'):
+    def __init__(self, sub_identifiers_vocab: Vocabulary, method: str = 'transformer_encoder', embedding_dim: int = 256):
         assert method in {'bi-lstm', 'transformer_encoder'}
         self.method = method
         super(IdentifierEncoder, self).__init__()
         self.sub_identifiers_vocab = sub_identifiers_vocab
-        self.embedding_dim = 256
+        self.embedding_dim = embedding_dim
         self.sub_identifiers_embedding_layer = nn.Embedding(
             num_embeddings=len(sub_identifiers_vocab), embedding_dim=self.embedding_dim)
 
         if method == 'transformer_encoder':
             transformer_encoder_layer = TransformerEncoderLayer(
                 d_model=self.embedding_dim, nhead=1, dim_feedforward=1028)
-            encoder_norm = LayerNorm(256)
+            encoder_norm = LayerNorm(self.embedding_dim)
             self.transformer_encoder = TransformerEncoder(
                 encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
         elif method == 'bi-lstm':
-            self.lstm_layer = nn.LSTM(256, 256, bidirectional=True, num_layers=2)
+            self.lstm_layer = nn.LSTM(self.embedding_dim, self.embedding_dim, bidirectional=True, num_layers=2)
 
     def forward(self, sub_identifiers_indices: Union[torch.Tensor, nn.utils.rnn.PackedSequence]):
         assert sub_identifiers_indices.dtype == torch.int32
