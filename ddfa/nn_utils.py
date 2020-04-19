@@ -72,3 +72,23 @@ def test(args, model, device, test_loader):
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
+
+def apply_batched_embeddings(embeddings: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
+    assert len(embeddings.size()) == 3  # (batch_size, nr_words_per_example, embedding_dim)
+    assert len(indices.size()) >= 1
+    assert embeddings.size()[0] == indices.size()[0]  # same batch_size
+    batch_size, nr_words_per_example, embedding_dim = embeddings.size()
+    indices_non_batch_dims = indices.size()[1:]
+    nr_indices_per_example = min(1, np.product(indices_non_batch_dims))
+    indices_flattened = indices.flatten()  # (batch_size * nr_indices_per_example,)
+    assert indices_flattened.size()[0] == batch_size * nr_indices_per_example
+    indices_offsets_fixes = (torch.range(start=0, end=batch_size-1) * nr_words_per_example)\
+        .repeat((nr_indices_per_example, 1)).T.flatten()  #  = [0,0,...0,1,1,...,1, ...]
+    assert indices_flattened.size() == indices_offsets_fixes.size()
+    indices_flattened_with_fixed_offsets = indices_flattened + indices_offsets_fixes
+    embeddings_flattened = embeddings.flatten(0, 1)  # (batch_size * nr_words_per_example, embedding_dim)
+    selected_embedding_vectors_flattened = embeddings_flattened[indices_flattened_with_fixed_offsets]  # (batch_size * nr_indices_per_example, embedding_dim)
+    assert selected_embedding_vectors_flattened.size() == (
+        batch_size * nr_indices_per_example, embedding_dim)
+    selected_embedding_vectors = selected_embedding_vectors_flattened.view(indices.size() + (embedding_dim,))
+    return selected_embedding_vectors

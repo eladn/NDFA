@@ -5,6 +5,7 @@ from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEnc
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.code_data_structure_api import *
+from ddfa.nn_utils import apply_batched_embeddings
 
 
 class ExpressionEncoder(nn.Module):
@@ -58,20 +59,10 @@ class ExpressionEncoder(nn.Module):
         selected_tokens_encoding = self.tokens_embedding_layer(tokens_idxs.flatten())\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
 
-        identifiers_idxs_flattened = identifiers_idxs.flatten()  # (batch_size * nr_exprs * nr_tokens_in_expr,)
-        assert identifiers_idxs_flattened.size() == (batch_size * nr_exprs * nr_tokens_in_expr,)
-        identifiers_idxs_offsets_fix_step = nr_exprs * nr_tokens_in_expr
-        identifiers_idxs_offsets_fixes = (torch.range(start=0, end=batch_size-1) * nr_identifiers_in_example)\
-            .repeat((identifiers_idxs_offsets_fix_step, 1)).T.flatten()  #  = [0,0,...0,1,1,...,1, ...]
-        assert identifiers_idxs_flattened.size() == identifiers_idxs_offsets_fixes.size()
-        identifiers_idxs_flattened_with_fixed_offsets = identifiers_idxs_flattened + identifiers_idxs_offsets_fixes
-        encoded_identifiers_flattened = encoded_identifiers.flatten(0, 1)  # (batch_size*encoded_identifiers, embedding_dim)
-        selected_encoded_identifiers_flattened = encoded_identifiers_flattened[identifiers_idxs_flattened_with_fixed_offsets]  # (batch_size * nr_exprs * nr_tokens_in_expr, embedding_dim)
-        assert selected_encoded_identifiers_flattened.size() == (
-            batch_size * nr_exprs * nr_tokens_in_expr, self.tokens_embedding_dim)
-        selected_encoded_identifiers = selected_encoded_identifiers_flattened.view(
-            batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
-        # TODO: we could thread the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
+        selected_encoded_identifiers = apply_batched_embeddings(
+            embeddings=encoded_identifiers, indices=identifiers_idxs)
+
+        # TODO: we could treat the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
         embeddings = torch.where(
             use_identifier_vocab_condition, selected_encoded_identifiers, torch.where(
                 use_tokens_vocab_condition, selected_tokens_encoding, torch.zeros(selected_tokens_encoding.size())))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
