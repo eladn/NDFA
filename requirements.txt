@@ -1,10 +1,10 @@
 torch>=1.4.0
-tqdm
+tqdm>=4.45.0
 tabulate
 numpy
 scipy
 confclass
-OpenNMT-py>=1.1.1
+# OpenNMT-py>=1.1.1
 # torch-scatter==latest+cpu
 # torch-sparse==latest+cpu
 # torch-cluster==latest+cpu
