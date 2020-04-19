@@ -56,7 +56,7 @@ class Vocabulary:
                 carpus_iterator_wo_low_freq if max_vocab_size_wo_specials is None else
                 itertools.islice(carpus_iterator_wo_low_freq, max_vocab_size_wo_specials))
             with open(vocabulary_file_path, 'bw') as vocabulary_file:
-                pkl.dump(vocabulary_file, all_vocab_words_sorted_by_idx)
+                pkl.dump(all_vocab_words_sorted_by_idx, vocabulary_file)
         return Vocabulary(
             name=vocab_name, all_words_sorted_by_idx=all_vocab_words_sorted_by_idx, params=vocabulary_params,
             special_words_sorted_by_idx=special_words_sorted_by_idx)
@@ -76,7 +76,7 @@ class Vocabulary:
         elif carpus_generator is not None:
             all_carpus_words_with_freqs = Counter(iter(carpus_generator()))
             with open(carpus_word_freqs_file_path, 'bw') as carpus_word_freqs_file:
-                pkl.dump(carpus_word_freqs_file, all_carpus_words_with_freqs)
+                pkl.dump(all_carpus_words_with_freqs, carpus_word_freqs_file)
         else:
             raise ValueError(
                 f'Error while trying to load or create a vocabulary ({vocab_name}): '
