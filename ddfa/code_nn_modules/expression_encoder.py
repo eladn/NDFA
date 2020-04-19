@@ -67,8 +67,10 @@ class ExpressionEncoder(nn.Module):
         identifiers_idxs_flattened_with_fixed_offsets = identifiers_idxs_flattened + identifiers_idxs_offsets_fixes
         encoded_identifiers_flattened = encoded_identifiers.flatten(0, 1)  # (batch_size*encoded_identifiers, embedding_dim)
         selected_encoded_identifiers_flattened = encoded_identifiers_flattened[identifiers_idxs_flattened_with_fixed_offsets]  # (batch_size * nr_exprs * nr_tokens_in_expr, embedding_dim)
-        assert selected_encoded_identifiers_flattened.size() == (batch_size * nr_exprs * nr_tokens_in_expr, self.tokens_embedding_dim)
-        selected_encoded_identifiers = selected_encoded_identifiers_flattened.view(batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
+        assert selected_encoded_identifiers_flattened.size() == (
+            batch_size * nr_exprs * nr_tokens_in_expr, self.tokens_embedding_dim)
+        selected_encoded_identifiers = selected_encoded_identifiers_flattened.view(
+            batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
         # TODO: we could thread the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
         embeddings = torch.where(
             use_identifier_vocab_condition, selected_encoded_identifiers, torch.where(
@@ -82,5 +84,5 @@ class ExpressionEncoder(nn.Module):
         expr_embeddings_projected = self.projection_linear_layer(expr_embeddings.flatten(0, 2))\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, -1)
         expr_encoded = self.transformer_encoder(expr_embeddings_projected.flatten(0, 1).permute(0, 1))\
-            .permute(0, 1).view(batch_size, nr_exprs, nr_tokens_in_expr, -1)
+            .sum(dim=0).view(batch_size, nr_exprs, -1)
         return expr_encoded
