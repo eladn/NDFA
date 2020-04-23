@@ -14,6 +14,7 @@ class CFGNodeEncoder(nn.Module):
         self.pdg_node_control_kinds_embeddings = nn.Embedding(
             num_embeddings=self.pdg_node_control_kinds_vocab_size,
             embedding_dim=self.pdg_node_control_kinds_embedding_dim)
+        self.output_dim = self.pdg_node_control_kinds_embedding_dim + expression_encoder.expr_encoding_dim
 
     def forward(self, encoded_identifiers: torch.Tensor, cfg_nodes_expressions: torch.Tensor,
                 cfg_nodes_control_kind: torch.Tensor):
