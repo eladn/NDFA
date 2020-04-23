@@ -1,7 +1,8 @@
 import os
+import torch
 import itertools
 import pickle as pkl
-from typing import Optional, Callable, Iterable, Collection, List
+from typing import Optional, Callable, Iterable, Collection, List, Union
 from collections import Counter
 
 
@@ -26,8 +27,10 @@ class Vocabulary:
     def size_wo_specials(self) -> int:
         return len(self.idx2word) - len(self.special_words)
 
-    def get_word_idx_or_unk(self, word: str, unk_word: str = '<UNK>') -> int:
-        return self.word2idx.get(word, default=unk_word)
+    def get_word_idx_or_unk(self, word: str, unk_word: str = '<UNK>',
+                            as_tensor: bool = False) -> Union[int, torch.Tensor]:
+        idx = self.word2idx.get(word, default=unk_word)
+        return torch.tensor([idx]) if as_tensor else idx
 
     @staticmethod
     def load_or_create(
