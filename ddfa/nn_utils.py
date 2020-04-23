@@ -73,21 +73,63 @@ def test(args, model, device, test_loader):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
 
-def apply_batched_embeddings(embeddings: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
-    assert len(embeddings.size()) == 3  # (batch_size, nr_words_per_example, embedding_dim)
+def apply_batched_embeddings(
+        batched_embeddings: torch.Tensor, indices: torch.Tensor,
+        mask: Optional[torch.Tensor] = None, padding_embedding_vector: Optional[torch.Tensor] = None,
+        common_embeddings: Optional[torch.Tensor] = None) -> torch.Tensor:
+    # TODO: use `mask` & `padding_embedding_vector` & `common_embeddings` if set
+    assert len(batched_embeddings.size()) == 3  # (batch_size, nr_words_per_example, embedding_dim)
     assert len(indices.size()) >= 1
-    assert embeddings.size()[0] == indices.size()[0]  # same batch_size
-    batch_size, nr_words_per_example, embedding_dim = embeddings.size()
+    assert batched_embeddings.size()[0] == indices.size()[0]  # same batch_size
+    batch_size, nr_words_per_example, embedding_dim = batched_embeddings.size()
+    assert common_embeddings is None or \
+           (len(common_embeddings.size()) == 2 and common_embeddings.size()[1] == embedding_dim)
+    assert (mask is None) ^ (padding_embedding_vector is not None)
+    assert padding_embedding_vector is None or \
+           (len(padding_embedding_vector.size()) == 1 and padding_embedding_vector.size()[0] == embedding_dim)
+    assert mask is None or mask.size() == indices.size()
+    if common_embeddings is not None and mask is not None:
+        raise ValueError('Can specify either `common_embeddings` or `mask`, but not both.')
     indices_non_batch_dims = indices.size()[1:]
     nr_indices_per_example = min(1, np.product(indices_non_batch_dims))
     indices_flattened = indices.flatten()  # (batch_size * nr_indices_per_example,)
-    assert indices_flattened.size()[0] == batch_size * nr_indices_per_example
+    assert indices_flattened.size() == (batch_size * nr_indices_per_example,)
     indices_offsets_fixes = (torch.range(start=0, end=batch_size-1) * nr_words_per_example)\
-        .repeat((nr_indices_per_example, 1)).T.flatten()  #  = [0,0,...0,1,1,...,1, ...]
+        .repeat((nr_indices_per_example, 1)).T.flatten()  #  = [0,0,...,0,1,1,...,1, ...]
     assert indices_flattened.size() == indices_offsets_fixes.size()
-    indices_flattened_with_fixed_offsets = indices_flattened + indices_offsets_fixes
-    embeddings_flattened = embeddings.flatten(0, 1)  # (batch_size * nr_words_per_example, embedding_dim)
-    selected_embedding_vectors_flattened = embeddings_flattened[indices_flattened_with_fixed_offsets]  # (batch_size * nr_indices_per_example, embedding_dim)
+    embeddings_flattened = batched_embeddings.flatten(0, 1)  # (batch_size * nr_words_per_example, embedding_dim)
+    if common_embeddings is None and mask is None:
+        indices_flattened_with_fixed_offsets = indices_flattened + indices_offsets_fixes
+        selected_embedding_vectors_flattened = embeddings_flattened[
+            indices_flattened_with_fixed_offsets]  # (batch_size * nr_indices_per_example, embedding_dim)
+    elif mask is not None:
+        mask_flattened = mask.flatten().view(-1, 1)  # (batch_size * nr_indices_per_example, 1)
+        indices_flattened_with_fixed_offsets = torch.where(
+            mask_flattened,
+            indices_flattened + indices_offsets_fixes,
+            torch.zeros(indices_flattened.size()))
+        selected_embedding_vectors_flattened = torch.where(
+            mask_flattened,
+            embeddings_flattened[indices_flattened_with_fixed_offsets],
+            padding_embedding_vector)  # (batch_size * nr_indices_per_example, embedding_dim)
+    else:  # common_embeddings is not None
+        # nr_common_embeddings = 0 if common_embeddings is None else common_embeddings.size()[0]
+        nr_common_embeddings = common_embeddings.size()[0]
+        use_common_embeddings_mask = (indices_flattened < nr_common_embeddings)
+        indices_flattened_with_fixed_offsets = torch.where(
+            use_common_embeddings_mask,
+            indices_flattened,
+            indices_flattened + indices_offsets_fixes - nr_common_embeddings)
+        selected_embedding_vectors_flattened = torch.where(
+            use_common_embeddings_mask.view(-1, 1),
+            embeddings_flattened[torch.where(
+                use_common_embeddings_mask,
+                torch.zeros(indices_flattened_with_fixed_offsets.size()),  # avoid accessing invalid index
+                indices_flattened_with_fixed_offsets)],
+            common_embeddings[torch.where(
+                use_common_embeddings_mask,
+                indices_flattened_with_fixed_offsets,
+                torch.zeros(indices_flattened_with_fixed_offsets.size()))])  # avoid accessing invalid index
     assert selected_embedding_vectors_flattened.size() == (
         batch_size * nr_indices_per_example, embedding_dim)
     selected_embedding_vectors = selected_embedding_vectors_flattened.view(indices.size() + (embedding_dim,))
