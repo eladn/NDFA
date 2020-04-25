@@ -88,6 +88,7 @@ def apply_batched_embeddings(
     assert padding_embedding_vector is None or \
            (len(padding_embedding_vector.size()) == 1 and padding_embedding_vector.size()[0] == embedding_dim)
     assert mask is None or mask.size() == indices.size()
+    assert mask is None or mask.dtype == torch.bool
     if common_embeddings is not None and mask is not None:
         raise ValueError('Can specify either `common_embeddings` or `mask`, but not both.')
     indices_non_batch_dims = indices.size()[1:]
@@ -103,13 +104,14 @@ def apply_batched_embeddings(
         selected_embedding_vectors_flattened = embeddings_flattened[
             indices_flattened_with_fixed_offsets.type(dtype=torch.long)]  # (batch_size * nr_indices_per_example, embedding_dim)
     elif mask is not None:
-        mask_flattened = mask.flatten().view(-1, 1)  # (batch_size * nr_indices_per_example, 1)
+        mask_flattened = mask.flatten()  # (batch_size * nr_indices_per_example, 1)
+        assert mask_flattened.size() == indices_flattened.size() == indices_offsets_fixes.size()
         indices_flattened_with_fixed_offsets = torch.where(
             mask_flattened,
-            indices_flattened + indices_offsets_fixes,
-            torch.zeros(indices_flattened.size()))
+            (indices_flattened + indices_offsets_fixes).type(dtype=torch.long),
+            torch.zeros(indices_flattened.size(), dtype=torch.long)).view(batch_size * nr_indices_per_example)
         selected_embedding_vectors_flattened = torch.where(
-            mask_flattened,
+            mask_flattened.view(-1, 1),
             embeddings_flattened[indices_flattened_with_fixed_offsets],
             padding_embedding_vector)  # (batch_size * nr_indices_per_example, embedding_dim)
     else:  # common_embeddings is not None
@@ -187,6 +189,26 @@ def apply_batched_embeddings_test():
             indices=indices_multiple_seqs_per_example[:, seq_idx, :])
         assert applied_embd.size() == wo_common_wo_mask_expected_result[:, seq_idx, :, :].size()
         assert torch.all(applied_embd == wo_common_wo_mask_expected_result[:, seq_idx, :, :])
+
+    wo_common_with_mask_expected_result = wo_common_wo_mask_expected_result.clone()  # (batch_size, nr_seqs_per_example, seq_len, embedding_dim)
+    padding_embedding_vector = torch.tensor([666, 777, 888])
+    wo_common_with_mask_expected_result[0, 1, 2] = padding_embedding_vector
+    wo_common_with_mask_expected_result[1, 0, 1] = padding_embedding_vector
+    wo_common_with_mask_expected_result[2, 1, 1] = padding_embedding_vector
+    wo_common_with_mask_expected_result[2, 0, 3] = padding_embedding_vector
+    wo_common_with_mask_expected_result[3, 0, 0] = padding_embedding_vector
+    mask = torch.ones(indices_multiple_seqs_per_example.size()).type(torch.bool)
+    mask[0, 1, 2] = False
+    mask[1, 0, 1] = False
+    mask[2, 1, 1] = False
+    mask[2, 0, 3] = False
+    mask[3, 0, 0] = False
+    applied_embd = apply_batched_embeddings(
+        batched_embeddings=batched_embeddings,
+        indices=indices_multiple_seqs_per_example,
+        mask=mask, padding_embedding_vector=padding_embedding_vector)
+    assert applied_embd.size() == wo_common_with_mask_expected_result.size()
+    assert torch.all(applied_embd == wo_common_with_mask_expected_result)
 
     indices_multiple_seqs_per_example_with_nonused_common_embeddings = indices_multiple_seqs_per_example + 5
     with_nonused_common_wo_mask_expected_result = wo_common_wo_mask_expected_result  # (batch_size, nr_seqs_per_example, seq_len, embedding_dim)
