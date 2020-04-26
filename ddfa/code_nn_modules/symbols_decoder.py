@@ -32,6 +32,7 @@ class SymbolsDecoder(nn.Module):
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
         assert encoder_output_len == self.encoder_output_len
         assert encoder_output_dim == self.encoder_output_dim
+        assert encoder_outputs_mask.size() == (batch_size, encoder_output_len)
 
         assert (target_symbols_idxs is None) ^ self.training  # used only while training with teacher-enforcing
         if not self.training:
@@ -55,6 +56,8 @@ class SymbolsDecoder(nn.Module):
             attn_weights = self.attn_weights_linear_layer(
                 torch.cat((target_symbols_encodings[:, T, :], rnn_hidden[-1, :, :]), dim=1))  # (batch_size, encoder_output_len)
             assert attn_weights.size() == (batch_size, encoder_output_len)
+            if encoder_outputs_mask is not None:
+                attn_weights.masked_fill_(~encoder_outputs_mask, float('-inf'))
             attn_probs = F.softmax(attn_weights, dim=1)  # (batch_size, encoder_output_len)
             # (batch_size, 1, encoder_output_len) * (batch_size, encoder_output_len, encoder_output_dim)
             # = (batch_size, 1, encoder_output_dim)
