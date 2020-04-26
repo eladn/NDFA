@@ -60,7 +60,7 @@ class ExpressionEncoder(nn.Module):
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
 
         selected_encoded_identifiers = apply_batched_embeddings(
-            embeddings=encoded_identifiers, indices=identifiers_idxs)
+            batched_embeddings=encoded_identifiers, indices=identifiers_idxs)
 
         # TODO: we could treat the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
         embeddings = torch.where(
