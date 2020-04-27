@@ -46,7 +46,7 @@ class PredictLogVariablesTask(CodeTaskBase):
     def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
         return ModelLoss(model_hps=model_hps)
 
-    def coallate_examples(self, examples: List['TaggedExample']):
+    def collate_examples(self, examples: List['TaggedExample']):
         assert all(isinstance(example, TaggedExample) for example in examples)
         assert all(not example.model_input.is_batched for example in examples)
         for field_name in ModelInput._fields:

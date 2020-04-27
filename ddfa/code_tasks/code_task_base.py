@@ -56,5 +56,5 @@ class CodeTaskBase(abc.ABC):
         return task_class(task_props)
 
     @abc.abstractmethod
-    def coallate_examples(self, examples: List[Any]):
+    def collate_examples(self, examples: List[Any]):
         ...

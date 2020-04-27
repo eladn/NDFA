@@ -66,7 +66,7 @@ def main():
             pp_data_path=exec_params.pp_data_dir_path)
         train_loader = DataLoader(
             train_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size,
-            collate_fn=task.coallate_examples)  # FIXME: add shuffle=True
+            collate_fn=task.collate_examples)  # FIXME: add shuffle=True
         eval_loader = None
         if exec_params.perform_evaluation:
             eval_dataset = task.create_dataset(
