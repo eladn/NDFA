@@ -26,12 +26,13 @@ class IdentifierEncoder(nn.Module):
             self.lstm_layer = nn.LSTM(self.embedding_dim, self.embedding_dim, bidirectional=True, num_layers=2)
 
     def forward(self, sub_identifiers_indices: Union[torch.Tensor, nn.utils.rnn.PackedSequence]):
-        assert sub_identifiers_indices.dtype == torch.int32
+        assert sub_identifiers_indices.dtype == torch.long
         if self.method == 'transformer_encoder':
             assert isinstance(sub_identifiers_indices, torch.Tensor)
             assert len(sub_identifiers_indices.size()) == 3
             batch_size, nr_identifiers_in_example, nr_sub_identifiers_in_identifier = sub_identifiers_indices.size()
-            sub_identifiers_indices = sub_identifiers_indices.flatten(0, 1).permute(0, 1)  # (nr_sub_identifiers, bs*nr_identifiers)
+            sub_identifiers_indices = sub_identifiers_indices.flatten(0, 1).permute(1, 0)  # (nr_sub_identifiers, bs*nr_identifiers)
+            assert sub_identifiers_indices.size() == (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example)
             sub_identifiers_embeddings = self.sub_identifiers_embedding_layer(sub_identifiers_indices)  # (nr_sub_identifiers, bs*nr_identifiers, embedding_dim)
             assert sub_identifiers_embeddings.size() == (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example, self.embedding_dim)
             sub_identifiers_encoded = self.transformer_encoder(sub_identifiers_embeddings).sum(dim=0)  # (bs*nr_identifiers, embedding_dim)
