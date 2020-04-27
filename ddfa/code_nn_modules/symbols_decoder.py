@@ -9,7 +9,8 @@ from ddfa.nn_utils import apply_batched_embeddings
 
 class SymbolsDecoder(nn.Module):
     def __init__(self, symbols_special_words_vocab: Vocabulary, symbols_special_words_embedding: nn.Embedding,
-                 input_len: int = 80, input_dim: int = 256, symbols_encoding_dim: int = 256, dropout_p: float = 0.1):
+                 input_len: int = 80, input_dim: int = 256, symbols_encoding_dim: int = 256,
+                 symbols_emb_dropout_p: float = 0.1):
         super(SymbolsDecoder, self).__init__()
         self.encoder_output_len = input_len
         self.encoder_output_dim = input_dim
@@ -23,16 +24,18 @@ class SymbolsDecoder(nn.Module):
         self.attn_weights_linear_layer = nn.Linear(self.symbols_encoding_dim * 2, self.encoder_output_len)
         self.attn_and_input_combine_linear_layer = nn.Linear(
             self.symbols_encoding_dim + self.encoder_output_dim, self.symbols_encoding_dim)
-        self.symbols_emb_dropout_layer = nn.Dropout(self.dropout_p)
-        self.out_linear_layer = nn.Linear(self.encoder_output_dim, self.symbols_encoding_dim)
+        self.symbols_emb_dropout_p = symbols_emb_dropout_p
+        self.symbols_emb_dropout_layer = nn.Dropout(self.symbols_emb_dropout_p)
+        self.out_linear_layer = nn.Linear(self.symbols_encoding_dim, self.symbols_encoding_dim)
 
     def forward(self, encoder_outputs: torch.Tensor, encoder_outputs_mask: typing.Optional[torch.Tensor],
                 symbols_encodings: torch.Tensor, target_symbols_idxs: typing.Optional[torch.IntTensor]):
         assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
+        nr_all_symbols = symbols_encodings.size()[1]
         assert encoder_output_len == self.encoder_output_len
         assert encoder_output_dim == self.encoder_output_dim
-        assert encoder_outputs_mask.size() == (batch_size, encoder_output_len)
+        assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, encoder_output_len)
 
         assert (target_symbols_idxs is None) ^ self.training  # used only while training with teacher-enforcing
         if not self.training:
@@ -40,24 +43,29 @@ class SymbolsDecoder(nn.Module):
 
         assert target_symbols_idxs is not None
         assert len(target_symbols_idxs.size()) == 2 and target_symbols_idxs.size()[0] == batch_size
-        nr_symbols = target_symbols_idxs.size()[1]
+        nr_target_symbols = target_symbols_idxs.size()[1]
         target_symbols_encodings = apply_batched_embeddings(
             batched_embeddings=symbols_encodings, indices=target_symbols_idxs,
-            common_embeddings=self.symbols_special_words_embedding)  # (batch_size, nr_symbols, symbols_encoding_dim)
-        assert target_symbols_encodings.size() == (batch_size, nr_symbols, self.symbols_encoding_dim)
+            common_embeddings=self.symbols_special_words_embedding)  # (batch_size, nr_target_symbols, symbols_encoding_dim)
+        assert target_symbols_encodings.size() == (batch_size, nr_target_symbols, self.symbols_encoding_dim)
         target_symbols_encodings = self.symbols_emb_dropout_layer(
-            target_symbols_encodings)  # (batch_size, nr_symbols, symbols_encoding_dim)
+            target_symbols_encodings)  # (batch_size, nr_target_symbols, symbols_encoding_dim)
 
         hidden_shape = (self.nr_rnn_layers, batch_size, self.symbols_encoding_dim)
         rnn_hidden = torch.zeros(hidden_shape, device=encoder_outputs.device, dtype=encoder_outputs.dtype)
         rnn_state = torch.zeros(hidden_shape, device=encoder_outputs.device, dtype=encoder_outputs.dtype)
         outputs = []
-        for T in range(nr_symbols):
+        for T in range(nr_target_symbols):
+            # FIXME: take time t-1 of `target_symbols_encodings` when predicting symbol #t.
+            # FIXME: the final output matrix should be without the initial `<SOS>` word (and hence of length-1)
+            # TODO: ensure the symbols in the pp input includes the `<SOS>` special word.
             attn_weights = self.attn_weights_linear_layer(
                 torch.cat((target_symbols_encodings[:, T, :], rnn_hidden[-1, :, :]), dim=1))  # (batch_size, encoder_output_len)
             assert attn_weights.size() == (batch_size, encoder_output_len)
             if encoder_outputs_mask is not None:
-                attn_weights.masked_fill_(~encoder_outputs_mask, float('-inf'))
+                # attn_weights.masked_fill_(~encoder_outputs_mask, float('-inf'))
+                attn_weights = attn_weights + torch.where(
+                    encoder_outputs_mask, torch.zeros_like(attn_weights), torch.full_like(attn_weights, float('-inf')))
             attn_probs = F.softmax(attn_weights, dim=1)  # (batch_size, encoder_output_len)
             # (batch_size, 1, encoder_output_len) * (batch_size, encoder_output_len, encoder_output_dim)
             # = (batch_size, 1, encoder_output_dim)
@@ -68,11 +76,15 @@ class SymbolsDecoder(nn.Module):
             attn_combine = self.attn_and_input_combine_linear_layer(attn_combine)  # (batch_size, symbols_encoding_dim)
 
             rnn_cell_input = F.relu(attn_combine).unsqueeze(0)  # (1, batch_size, symbols_encoding_dim)
-            output, (rnn_hidden, rnn_state) = self.decoding_lstm_layer(rnn_cell_input, rnn_hidden, rnn_state)
+            output, (rnn_hidden, rnn_state) = self.decoding_lstm_layer(rnn_cell_input, (rnn_hidden, rnn_state))
             assert output.size() == (1, batch_size, self.symbols_encoding_dim)
             assert rnn_hidden.size() == hidden_shape and rnn_state.size() == hidden_shape
 
-            output = F.log_softmax(self.out(output[0]), dim=1)
+            projection_on_symbols_encodings = torch.bmm(
+                symbols_encodings, self.out_linear_layer(output[0]).unsqueeze(-1)).view(batch_size, nr_all_symbols)
+            output = F.log_softmax(projection_on_symbols_encodings, dim=1)
+            assert output.size() == (batch_size, nr_all_symbols)
             outputs.append(output)
-
+        outputs = torch.stack(outputs).permute(1, 0, 2)
+        assert outputs.size() == (batch_size, nr_target_symbols, nr_all_symbols)
         return outputs
