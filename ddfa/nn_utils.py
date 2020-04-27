@@ -11,7 +11,7 @@ import numpy as np
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
                                 optimizer: Optional[Optimizer], criterion: nn.Module):
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-    y_pred = model(x_batch)
+    y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch)
     if optimizer is not None:
         loss.backward()
@@ -20,8 +20,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
     return loss.item(), len(x_batch)
 
 
-def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader, valid_loader: DataLoader,
-        optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
+def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
+        valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
     model.to(device)
     for epoch_nr in range(1, nr_epochs + 1):
         model.train()
@@ -33,16 +33,17 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 device, x_batch, y_batch, model, optimizer, criterion)
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
-            train_data_loader_with_progress.set_postfix(f'avg loss:{train_epoch_loss_sum/train_epoch_nr_examples:.4f}')
+            train_data_loader_with_progress.set_postfix(
+                {'avg loss': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}'})
 
-        model.eval()
-        with torch.no_grad():
-            losses, nums = zip(
-                *(perform_loss_step_for_batch(device, x_batch, y_batch, model, optimizer, criterion)
-                  for x_batch, y_batch in valid_loader))
-        val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
-
-        print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
+        if valid_loader is not None:
+            model.eval()
+            with torch.no_grad():
+                losses, nums = zip(
+                    *(perform_loss_step_for_batch(device, x_batch, y_batch, model, optimizer, criterion)
+                      for x_batch, y_batch in valid_loader))
+            val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
+            print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
 
 
 def train_epoch(args, epoch_nr: int, model: nn.Module, device, train_loader: DataLoader, optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
@@ -84,7 +85,9 @@ def apply_batched_embeddings(
     assert batched_embeddings.size()[0] == indices.size()[0]  # same batch_size
     batch_size, nr_words_per_example, embedding_dim = batched_embeddings.size()
     assert common_embeddings is None or \
-           (len(common_embeddings.size()) == 2 and common_embeddings.size()[1] == embedding_dim)
+           (isinstance(common_embeddings, torch.Tensor) and
+            len(common_embeddings.size()) == 2 and common_embeddings.size()[1] == embedding_dim) or \
+           (isinstance(common_embeddings, nn.Embedding) and common_embeddings.embedding_dim == embedding_dim)
     assert (mask is None) ^ (padding_embedding_vector is not None)
     assert padding_embedding_vector is None or \
            (len(padding_embedding_vector.size()) == 1 and padding_embedding_vector.size()[0] == embedding_dim)
@@ -116,7 +119,8 @@ def apply_batched_embeddings(
             embeddings_flattened[indices_flattened_with_fixed_offsets],
             padding_embedding_vector)  # (batch_size * nr_indices_per_example, embedding_dim)
     else:  # common_embeddings is not None
-        nr_common_embeddings = int(common_embeddings.size()[0])
+        nr_common_embeddings = common_embeddings.num_embeddings if isinstance(common_embeddings, nn.Embedding) else \
+            int(common_embeddings.size()[0])
         use_common_embeddings_mask = (indices_flattened < nr_common_embeddings)
         indices_flattened_with_fixed_offsets = torch.where(
             use_common_embeddings_mask,
