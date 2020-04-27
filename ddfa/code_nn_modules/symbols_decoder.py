@@ -29,10 +29,14 @@ class SymbolsDecoder(nn.Module):
         self.out_linear_layer = nn.Linear(self.symbols_encoding_dim, self.symbols_encoding_dim)
 
     def forward(self, encoder_outputs: torch.Tensor, encoder_outputs_mask: typing.Optional[torch.Tensor],
-                symbols_encodings: torch.Tensor, target_symbols_idxs: typing.Optional[torch.IntTensor]):
+                symbols_encodings: torch.Tensor, symbols_encodings_mask: typing.Optional[torch.BoolTensor],
+                target_symbols_idxs: typing.Optional[torch.IntTensor]):
         assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
+        assert len(symbols_encodings.size()) == 3
+        assert symbols_encodings.size()[0] == batch_size and symbols_encodings.size()[2] == self.symbols_encoding_dim
         nr_all_symbols = symbols_encodings.size()[1]
+        assert symbols_encodings_mask is None or symbols_encodings_mask.size() == (batch_size, nr_all_symbols)
         assert encoder_output_len == self.encoder_output_len
         assert encoder_output_dim == self.encoder_output_dim
         assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, encoder_output_len)
@@ -55,10 +59,7 @@ class SymbolsDecoder(nn.Module):
         rnn_hidden = torch.zeros(hidden_shape, device=encoder_outputs.device, dtype=encoder_outputs.dtype)
         rnn_state = torch.zeros(hidden_shape, device=encoder_outputs.device, dtype=encoder_outputs.dtype)
         outputs = []
-        for T in range(nr_target_symbols):
-            # FIXME: take time t-1 of `target_symbols_encodings` when predicting symbol #t.
-            # FIXME: the final output matrix should be without the initial `<SOS>` word (and hence of length-1)
-            # TODO: ensure the symbols in the pp input includes the `<SOS>` special word.
+        for T in range(nr_target_symbols - 1):  # we don't have to predict the initial `<SOS>` special word.
             attn_weights = self.attn_weights_linear_layer(
                 torch.cat((target_symbols_encodings[:, T, :], rnn_hidden[-1, :, :]), dim=1))  # (batch_size, encoder_output_len)
             assert attn_weights.size() == (batch_size, encoder_output_len)
@@ -82,9 +83,14 @@ class SymbolsDecoder(nn.Module):
 
             projection_on_symbols_encodings = torch.bmm(
                 symbols_encodings, self.out_linear_layer(output[0]).unsqueeze(-1)).view(batch_size, nr_all_symbols)
+            if symbols_encodings_mask is not None:
+                # TODO: does it really makes sense to mask this?
+                projection_on_symbols_encodings += torch.where(
+                    symbols_encodings_mask, torch.zeros_like(projection_on_symbols_encodings),
+                    torch.full_like(projection_on_symbols_encodings, float('-inf')))
             output = F.log_softmax(projection_on_symbols_encodings, dim=1)
             assert output.size() == (batch_size, nr_all_symbols)
             outputs.append(output)
         outputs = torch.stack(outputs).permute(1, 0, 2)
-        assert outputs.size() == (batch_size, nr_target_symbols, nr_all_symbols)
+        assert outputs.size() == (batch_size, nr_target_symbols - 1, nr_all_symbols)
         return outputs

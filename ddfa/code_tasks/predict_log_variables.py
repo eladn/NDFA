@@ -170,6 +170,7 @@ class Model(nn.Module):
             encoder_outputs=encoded_cfg_nodes_after_dense,
             encoder_outputs_mask=x.cfg_nodes_mask,
             symbols_encodings=all_symbols_encodings,
+            symbols_encodings_mask=x.identifiers_idxs_of_all_symbols_mask,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
 
         return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encoding=all_symbols_encodings)
@@ -184,7 +185,7 @@ class ModelLoss(nn.Module):
     def forward(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
         assert len(target_symbols_idxs.size()) == 2  # (batch_size, nr_target_symbols)
         assert target_symbols_idxs.dtype == torch.long
-        return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs.flatten(0, 1))
+        return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
 class LoggingCallsDataset(IterableDataset):
@@ -288,7 +289,8 @@ def preprocess_example(
         return None
     all_symbols = [symbol for symbols_scope in method_pdg.symbols_scopes
                    for symbol in symbols_scope.symbols]
-    if len(all_symbols) > MAX_NR_SYMBOLS:
+    nr_symbols = len(all_symbols)
+    if nr_symbols > MAX_NR_SYMBOLS:
         return None
     nr_edges = sum(len(pdg_node.control_flow_out_edges) +
                    sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
@@ -322,8 +324,8 @@ def preprocess_example(
         [symbol.identifier_idx for symbol in all_symbols] +
         ([0] * (MAX_NR_SYMBOLS - len(all_symbols))), dtype=torch.long)
     symbols_identifier_mask = torch.cat([
-        torch.ones(len(all_symbols), dtype=torch.bool),
-        torch.zeros(MAX_NR_SYMBOLS - len(all_symbols), dtype=torch.bool)])
+        torch.ones(nr_symbols, dtype=torch.bool),
+        torch.zeros(MAX_NR_SYMBOLS - nr_symbols, dtype=torch.bool)])
     cfg_nodes_mask = torch.cat([
         torch.ones(len(method_pdg.pdg_nodes), dtype=torch.bool),
         torch.zeros(MAX_NR_PDG_NODES - len(method_pdg.pdg_nodes), dtype=torch.bool)])
