@@ -3,6 +3,7 @@ import json
 import torch
 import typing
 import itertools
+import functools
 import torch.nn as nn
 from collections import defaultdict
 from warnings import warn
@@ -18,6 +19,7 @@ from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
+from ddfa.nn_utils import apply_batched_embeddings
 
 
 __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsDataset']
@@ -44,16 +46,49 @@ class PredictLogVariablesTask(CodeTaskBase):
     def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
         return ModelLoss(model_hps=model_hps)
 
+    def coallate_examples(self, examples: List['TaggedExample']):
+        assert all(isinstance(example, TaggedExample) for example in examples)
+        assert all(not example.model_input.is_batched for example in examples)
+        for field_name in ModelInput._fields:
+            if field_name == 'is_batched':
+                continue
+            if any(getattr(example.model_input, field_name).size() != getattr(examples[0].model_input, field_name).size()
+                   for example in examples):
+                raise ValueError(f'Not all examples have the same tensor size for `{field_name}`. '
+                                 f'sizes: {[getattr(example.model_input, field_name).size() for example in examples]}')
+        return TaggedExample(
+            model_input=ModelInput(
+                **{field_name: torch.cat(
+                    tuple(getattr(example.model_input, field_name).unsqueeze(0) for example in examples), dim=0)
+                   for field_name in ModelInput._fields if field_name != 'is_batched'},
+                is_batched=True),
+            target_symbols_idxs_used_in_logging_call=torch.cat(
+                tuple(example.target_symbols_idxs_used_in_logging_call.unsqueeze(0) for example in examples), dim=0))
+
 
 class ModelInput(NamedTuple):
-    identifiers: torch.IntTensor
-    cfg_nodes_control_kind: torch.IntTensor
-    cfg_nodes_expressions: torch.IntTensor
-    cfg_edges: torch.IntTensor
-    cfg_edges_attrs: torch.IntTensor
-    identifiers_idxs_of_all_symbols: torch.IntTensor
-    identifiers_idxs_of_all_symbols_mask: torch.IntTensor
-    logging_call_cfg_node_idx: torch.IntTensor
+    identifiers: torch.LongTensor
+    cfg_nodes_mask: torch.BoolTensor
+    cfg_nodes_control_kind: torch.LongTensor
+    cfg_nodes_expressions: torch.LongTensor
+    cfg_edges: torch.LongTensor
+    cfg_edges_mask: torch.BoolTensor
+    cfg_edges_attrs: torch.LongTensor
+    identifiers_idxs_of_all_symbols: torch.LongTensor
+    identifiers_idxs_of_all_symbols_mask: torch.BoolTensor
+    logging_call_cfg_node_idx: torch.LongTensor
+    is_batched: bool = False
+
+    @property
+    def batch_size(self) -> int:
+        assert self.is_batched and len(self.identifiers.size()) == 3
+        return self.identifiers.size()[0]
+
+    def to(self, device):
+        return ModelInput(
+            is_batched=self.is_batched,
+            **{field_name: getattr(self, field_name).to(device)
+               for field_name in self._fields if field_name != 'is_batched'})
 
 
 class ModelOutput(NamedTuple):
@@ -65,7 +100,13 @@ class TaggedExample(NamedTuple):
     model_input: ModelInput
     target_symbols_idxs_used_in_logging_call: torch.Tensor
 
+    def to(self, device):
+        return TaggedExample(
+            model_input=self.model_input.to(device),
+            target_symbols_idxs_used_in_logging_call=self.target_symbols_idxs_used_in_logging_call.to(device))
 
+
+MAX_NR_PDG_EDGES = 300  # TODO: move to model hyper-parameters!
 MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES = 6  # TODO: move to model hyper-parameters!
 MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER = 5  # TODO: move to model hyper-parameters!
 MAX_NR_TARGET_SYMBOLS = 4  # TODO: move to model hyper-parameters!
@@ -80,30 +121,58 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.model_hps = model_hps
         self.vocabs = vocabs
-        self.identifier_encoder = IdentifierEncoder(sub_identifiers_vocab=vocabs.sub_identifiers)
+        self.identifier_embedding_dim = 256  # TODO: plug-in model hps
+        self.expr_encoding_dim = 1028  # TODO: plug-in model hps
+        self.identifier_encoder = IdentifierEncoder(
+            sub_identifiers_vocab=vocabs.sub_identifiers, embedding_dim=self.identifier_embedding_dim)
         expression_encoder = ExpressionEncoder(
-            tokens_vocab=vocabs.tokens, tokens_kinds_vocab=vocabs.tokens_kinds)
+            tokens_vocab=vocabs.tokens, tokens_kinds_vocab=vocabs.tokens_kinds,
+            tokens_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
         self.cfg_node_encoder = CFGNodeEncoder(
             expression_encoder=expression_encoder, pdg_node_control_kinds_vocab=vocabs.pdg_node_control_kinds)
-        self.encoder_decoder_inbetween_dense = nn.Linear(in_features=256, out_features=256)  # TODO: plug-in model hps
-        self.symbols_decoder = SymbolsDecoder()
+        self.encoder_decoder_inbetween_dense_layers = [
+            nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)]
+        self.symbols_special_words_embedding = nn.Embedding(
+            num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim)
+        self.symbols_decoder = SymbolsDecoder(
+            symbols_special_words_vocab=self.vocabs.symbols_special_words,
+            symbols_special_words_embedding=self.symbols_special_words_embedding, input_len=MAX_NR_PDG_NODES,
+            input_dim=self.cfg_node_encoder.output_dim, symbols_encoding_dim=self.identifier_embedding_dim)
 
-    def forward(self, x: ModelInput):
-        encoded_identifiers = self.identifier_encoder(x.identifiers)
+    def forward(self, x: ModelInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor]):
+        # x = tagged_example.model_input
+        # target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = tagged_example.target_symbols_idxs_used_in_logging_call
+        encoded_identifiers = self.identifier_encoder(x.identifiers)  # (batch_size, nr_identifiers, identifier_encoding_dim)
         encoded_cfg_nodes = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
-            cfg_nodes_control_kind=x.cfg_nodes_control_kind)
-        all_symbols_encoding = encoded_identifiers[x.identifiers_idxs_of_all_symbols]
+            cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
 
-        final_cfg_node_vectors = encoded_cfg_nodes  # TODO: graph NN
+        symbol_pad_embed = self.symbols_special_words_embedding(
+                self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>', as_tensor=True)).view(-1)
+        all_symbols_encodings = apply_batched_embeddings(
+            batched_embeddings=encoded_identifiers, indices=x.identifiers_idxs_of_all_symbols,
+            mask=x.identifiers_idxs_of_all_symbols_mask,
+            padding_embedding_vector=symbol_pad_embed)  # (batch_size, nr_symbols, identifier_encoding_dim)
+        assert all_symbols_encodings.size() == (x.batch_size, MAX_NR_SYMBOLS, self.identifier_embedding_dim)
 
-        logging_call_cfg_node_vector = final_cfg_node_vectors[x.logging_call_cfg_node_idx]
-        input_to_decoder = self.encoder_decoder_inbetween_dense(logging_call_cfg_node_vector)
+        encoded_cfg_nodes_after_dense = encoded_cfg_nodes
+        if self.encoder_decoder_inbetween_dense_layers:
+            encoded_cfg_nodes_after_dense = functools.reduce(
+                lambda last_res, cur_layer: cur_layer(last_res),
+                self.encoder_decoder_inbetween_dense_layers,
+                encoded_cfg_nodes.flatten(0, 1)).view(encoded_cfg_nodes.size()[:-1] + (-1,))
+
+        # final_cfg_node_vectors = encoded_cfg_nodes  # TODO: graph NN
+        # logging_call_cfg_node_vector = final_cfg_node_vectors[x.logging_call_cfg_node_idx]
+        # input_to_decoder = self.encoder_decoder_inbetween_dense(logging_call_cfg_node_vector)
 
         decoder_outputs = self.symbols_decoder(
-            input_state=input_to_decoder, symbols_encodings=all_symbols_encoding)
+            encoder_outputs=encoded_cfg_nodes_after_dense,
+            encoder_outputs_mask=x.cfg_nodes_mask,
+            symbols_encodings=all_symbols_encodings,
+            target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
 
-        return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encoding=all_symbols_encoding)
+        return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encoding=all_symbols_encodings)
 
 
 class ModelLoss(nn.Module):
@@ -112,9 +181,10 @@ class ModelLoss(nn.Module):
         self.model_hps = model_hps
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
 
-    def forward(self, model_output: ModelOutput, target_symbols_idxs_used_in_logging_call: torch.Tensor):
-        target_symbols_encodings = model_output.all_symbols_encoding[target_symbols_idxs_used_in_logging_call]
-        return self.criterion(model_output.decoder_outputs, target_symbols_encodings)
+    def forward(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
+        assert len(target_symbols_idxs.size()) == 2  # (batch_size, nr_target_symbols)
+        assert target_symbols_idxs.dtype == torch.long
+        return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs.flatten(0, 1))
 
 
 class LoggingCallsDataset(IterableDataset):
@@ -124,14 +194,16 @@ class LoggingCallsDataset(IterableDataset):
 
     def __iter__(self):
         # TODO: read correctly files splitted into chunks
-        pp_data_filepath = os.path.join(self.pp_data_path, f'pp-{self.datafold.value.lower()}.pt')
+        # TODO: add hash of task props & model HPs to perprocessed file name.
+        pp_data_filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.pt')
         with open(pp_data_filepath, 'br') as pp_data_file:
             while True:
                 try:
                     example: TaggedExample = torch.load(pp_data_file)
                     assert all(hasattr(example, field) for field in TaggedExample._fields)
                     assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
-                    assert all(isinstance(elem, torch.Tensor) for elem in example.model_input)
+                    assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
+                               for field in ModelInput._fields if field != 'is_batched')
                     yield TaggedExample(
                         model_input=ModelInput(**example.model_input._asdict()),
                         target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
@@ -150,12 +222,16 @@ def non_identifier_token_to_token_vocab_word(token: SerToken):
 
 
 def token_to_input_vector(token: SerToken, vocabs: 'Vocabs'):
-    assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR, SerTokenKind.IDENTIFIER}
+    assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR,
+                          SerTokenKind.IDENTIFIER, SerTokenKind.LITERAL}
     if token.kind == SerTokenKind.IDENTIFIER:
         return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-                vocabs.tokens.get_word_idx_or_unk(non_identifier_token_to_token_vocab_word(token))]
+                token.identifier_idx]
+    if token.kind == SerTokenKind.LITERAL:
+        return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
+            vocabs.tokens.get_word_idx_or_unk('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
     return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            token.identifier_idx]
+            vocabs.tokens.get_word_idx_or_unk(non_identifier_token_to_token_vocab_word(token))]
 
 
 def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>') -> Iterable:
@@ -181,8 +257,14 @@ def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_dat
         (SerDataFoldType.VALIDATION, raw_eval_data_path),
         (SerDataFoldType.TEST, raw_test_data_path))
     for datafold, raw_dataset_path in datafolds:
+        if raw_dataset_path is None:
+            continue
         # TODO: split file into chunks after it is too big
+        # TODO: add hash of task props & model HPs to perprocessed file name.
         pp_data_filepath = os.path.join(pp_data_path, f'pp_{datafold.value.lower()}.pt')
+        if os.path.isfile(pp_data_filepath):
+            raise ValueError(
+                f'Preprocessed file `{pp_data_filepath}` already exists. Please choose another `--pp-data` path.')
         with open(pp_data_filepath, 'bw') as pp_data_file:
             for logging_call, _, method_pdg in \
                     _iterate_raw_logging_calls_examples(dataset_path=raw_dataset_path):
@@ -201,19 +283,33 @@ def preprocess_example(
         return None
     if len(method_pdg.pdg_nodes) > MAX_NR_PDG_NODES:
         return None
-    if len(method_pdg.pdg_nodes) > MAX_NR_PDG_NODES:
+    if any(len(pdg_node.code.tokenized) > MAX_NR_TOKENS_IN_EXPRESSION
+           for pdg_node in method_pdg.pdg_nodes if pdg_node.code is not None):
         return None
     all_symbols = [symbol for symbols_scope in method_pdg.symbols_scopes
                    for symbol in symbols_scope.symbols]
     if len(all_symbols) > MAX_NR_SYMBOLS:
         return None
-
-    symbols_used_in_logging_call = list(set(logging_call_pdg_node.symbols_use_def_mut.use.must) |
-                                        set(logging_call_pdg_node.symbols_use_def_mut.use.may))
-    if len(symbols_used_in_logging_call) > MAX_NR_TARGET_SYMBOLS:
+    nr_edges = sum(len(pdg_node.control_flow_out_edges) +
+                   sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
+                   for pdg_node in method_pdg.pdg_nodes)
+    if nr_edges > MAX_NR_PDG_EDGES:
         return None
-    target_symbols_idxs_used_in_logging_call = torch.tensor([
-        symbol_ref.symbol_idx for symbol_ref in symbols_used_in_logging_call])
+
+    # TODO: fix tensor sizes (pad) for:
+    #  cfg_nodes_control_kind, cfg_nodes_expressions, cfg_edges, cfg_edges_attrs
+
+    symbols_idxs_used_in_logging_call = list(
+        set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
+        set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.may))
+    if len(symbols_idxs_used_in_logging_call) > MAX_NR_TARGET_SYMBOLS:
+        return None
+    target_symbols_idxs_used_in_logging_call = torch.tensor(list(truncate_and_pad(
+        [vocabs.symbols_special_words.get_word_idx_or_unk('<SOS>')] +
+        symbols_idxs_used_in_logging_call +
+        [vocabs.symbols_special_words.get_word_idx_or_unk('<EOS>')],
+        max_length=MAX_NR_TARGET_SYMBOLS + 2,
+        pad_word=vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
 
     identifiers = torch.tensor(
         [[vocabs.sub_identifiers.get_word_idx_or_unk(sub_identifier_str)
@@ -221,23 +317,34 @@ def preprocess_example(
          for sub_identifiers in itertools.islice(method_pdg.sub_identifiers_by_idx, MAX_NR_IDENTIFIERS)] +
         [sub_identifiers_pad
          for _ in range(MAX_NR_IDENTIFIERS - min(len(method_pdg.sub_identifiers_by_idx), MAX_NR_IDENTIFIERS))],
-        dtype=torch.int32)
+        dtype=torch.long)
     symbols_identifier_idxs = torch.tensor(
         [symbol.identifier_idx for symbol in all_symbols] +
-        ([0] * (MAX_NR_SYMBOLS - len(all_symbols))), dtype=torch.int32)
+        ([0] * (MAX_NR_SYMBOLS - len(all_symbols))), dtype=torch.long)
     symbols_identifier_mask = torch.cat([
-        torch.zeros(len(all_symbols), dtype=torch.int32),
-        torch.ones(MAX_NR_SYMBOLS - len(all_symbols), dtype=torch.int32)])
-    cfg_nodes_control_kind = torch.tensor([
+        torch.ones(len(all_symbols), dtype=torch.bool),
+        torch.zeros(MAX_NR_SYMBOLS - len(all_symbols), dtype=torch.bool)])
+    cfg_nodes_mask = torch.cat([
+        torch.ones(len(method_pdg.pdg_nodes), dtype=torch.bool),
+        torch.zeros(MAX_NR_PDG_NODES - len(method_pdg.pdg_nodes), dtype=torch.bool)])
+    cfg_nodes_control_kind = torch.tensor(list(truncate_and_pad([
         vocabs.pdg_node_control_kinds.get_word_idx_or_unk(
             pdg_node.control_kind.value if pdg_node.idx != logging_call.pdg_node_idx else '<LOG_PRED>')
-        for pdg_node in method_pdg.pdg_nodes], dtype=torch.int32)
+        for pdg_node in method_pdg.pdg_nodes], max_length=MAX_NR_PDG_NODES,
+        pad_word=vocabs.pdg_node_control_kinds.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
     padding_expression = [[vocabs.tokens_kinds.get_word_idx_or_unk('<PAD>'),
                 vocabs.tokens.get_word_idx_or_unk('<PAD>')]] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)
-    cfg_nodes_expressions = torch.tensor([
-        [token_to_input_vector(token, vocabs) for token in pdg_node.code.tokenized]
+    # TODO: add <EOS>
+    cfg_nodes_expressions = torch.tensor(list(truncate_and_pad([
+        list(truncate_and_pad(
+            [token_to_input_vector(token, vocabs) for token in pdg_node.code.tokenized],
+            max_length=MAX_NR_TOKENS_IN_EXPRESSION + 1, pad_word=padding_expression[0]))
         if pdg_node.code is not None and pdg_node.idx != logging_call.pdg_node_idx else padding_expression
-        for pdg_node in method_pdg.pdg_nodes], dtype=torch.int32)
+        for pdg_node in method_pdg.pdg_nodes],
+        max_length=MAX_NR_PDG_NODES, pad_word=padding_expression)), dtype=torch.long)
+    cfg_edges_mask = torch.cat([
+        torch.ones(nr_edges, dtype=torch.bool),
+        torch.zeros(MAX_NR_PDG_EDGES - nr_edges, dtype=torch.bool)])
     control_flow_edges = {}
     data_dependency_edges = defaultdict(set)
     for src_pdg_node in method_pdg.pdg_nodes:
@@ -250,31 +357,37 @@ def preprocess_example(
             data_dependency_edges[(src_pdg_node.idx, edge.pgd_node_idx)].update(
                 symbol.identifier_idx for symbol in edge.symbols)
     edges = list(set(control_flow_edges.keys()) | set(data_dependency_edges.keys()))
-    cfg_edges = torch.tensor([
+    cfg_edges = torch.tensor(list(truncate_and_pad([
         [src_pdg_node_idx, dst_pdg_node_idx]
-        for src_pdg_node_idx, dst_pdg_node_idx in edges], dtype=torch.int32)
+        for src_pdg_node_idx, dst_pdg_node_idx in edges],
+        max_length=MAX_NR_PDG_EDGES, pad_word=[-1, -1])), dtype=torch.long)
 
+    pad_edge_attrs_vector = [vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<PAD>')] + \
+                            ([-1] * MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES)
     def build_edge_attrs_vector(edge_vertices) -> List[int]:
         control_flow_edge_attrs = [
-            vocabs.pdg_node_control_kinds.get_word_idx_or_unk(
+            vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk(
                 control_flow_edges[edge_vertices].type.value)] \
             if edge_vertices in control_flow_edges else \
-            [vocabs.pdg_node_control_kinds.get_word_idx_or_unk('<UNK>')]
+            [vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<UNK>')]
         data_dependency_edge_attrs = list(truncate_and_pad(
             data_dependency_edges[edge_vertices], MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES, -1)) \
             if edge_vertices in data_dependency_edges else \
             ([-1] * MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES)
         return control_flow_edge_attrs + data_dependency_edge_attrs
 
-    cfg_edges_attrs = torch.tensor([
+    cfg_edges_attrs = torch.tensor(list(truncate_and_pad([
         build_edge_attrs_vector(edge_vertices)
-        for edge_vertices in edges])
+        for edge_vertices in edges], max_length=MAX_NR_PDG_EDGES, pad_word=pad_edge_attrs_vector)), dtype=torch.long)
+
     return TaggedExample(
         model_input=ModelInput(
             identifiers=identifiers,
+            cfg_nodes_mask=cfg_nodes_mask,
             cfg_nodes_control_kind=cfg_nodes_control_kind,
             cfg_nodes_expressions=cfg_nodes_expressions,
             cfg_edges=cfg_edges,
+            cfg_edges_mask=cfg_edges_mask,
             cfg_edges_attrs=cfg_edges_attrs,
             identifiers_idxs_of_all_symbols=symbols_identifier_idxs,
             identifiers_idxs_of_all_symbols_mask=symbols_identifier_mask,
@@ -288,10 +401,12 @@ class Vocabs(NamedTuple):
     pdg_node_control_kinds: Vocabulary
     tokens_kinds: Vocabulary
     pdg_control_flow_edge_types: Vocabulary
+    symbols_special_words: Vocabulary
 
 
 def load_or_create_vocabs(
         model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None) -> Vocabs:
+    print('Loading / creating vocabularies ..')
     vocabs_pad_unk_special_words = ('<PAD>', '<UNK>')
 
     sub_identifiers_carpus_generator = lambda: (
@@ -351,10 +466,19 @@ def load_or_create_vocabs(
         special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=pdg_control_flow_edge_types_carpus_generator)
 
+    symbols_special_words_vocab = Vocabulary(
+        name='symbols-specials', all_words_sorted_by_idx=[], params=(),
+        special_words_sorted_by_idx=('<PAD>', '<SOS>', '<EOS>'))
+
+    print('Done loading / creating vocabularies.')
+
     return Vocabs(
-        sub_identifiers=sub_identifiers_vocab, tokens=tokens_vocab,
-        pdg_node_control_kinds=pdg_node_control_kinds_vocab, tokens_kinds=tokens_kinds_vocab,
-        pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab)
+        sub_identifiers=sub_identifiers_vocab,
+        tokens=tokens_vocab,
+        pdg_node_control_kinds=pdg_node_control_kinds_vocab,
+        tokens_kinds=tokens_kinds_vocab,
+        pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
+        symbols_special_words=symbols_special_words_vocab)
 
 
 def _iterate_raw_logging_calls_examples(dataset_path: str) \
@@ -373,7 +497,7 @@ def _iterate_raw_logging_calls_examples(dataset_path: str) \
             method_pdg = SerMethodPDG.from_dict(method_pdg_dict)
 
             if logging_call.pdg_node_idx is None:
-                warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
+                # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
                 continue
             assert logging_call.pdg_node_idx < len(method_pdg.pdg_nodes)
             if logging_call.ast_node_idx is None:
