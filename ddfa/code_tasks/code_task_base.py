@@ -1,7 +1,7 @@
 import abc
 import torch
 from torch.utils.data.dataset import Dataset
-from typing import Optional
+from typing import Optional, List, Any
 from confclass import confclass, confparam
 import torch.nn as nn
 
@@ -39,7 +39,7 @@ class CodeTaskBase(abc.ABC):
     @abc.abstractmethod
     def create_dataset(
             self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
-            datafold: DataFold, dataset_path: str) -> Dataset:
+            datafold: DataFold, pp_data_path: str) -> Dataset:
         ...
 
     @abc.abstractmethod
@@ -54,3 +54,7 @@ class CodeTaskBase(abc.ABC):
             from ddfa.code_tasks.predict_log_variables import PredictLogVariablesTask
             task_class = PredictLogVariablesTask
         return task_class(task_props)
+
+    @abc.abstractmethod
+    def coallate_examples(self, examples: List[Any]):
+        ...
