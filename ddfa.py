@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
@@ -13,7 +14,7 @@ from ddfa.nn_utils import fit
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
     # TODO: fully implement (choose optimizer and lr)!
-    return torch.optim.adam.Adam(model.parameters())
+    return torch.optim.Adam(model.parameters())
 
 
 def main():
@@ -34,6 +35,11 @@ def main():
     task = CodeTaskBase.load_task(exec_params.experiment_setting.task)
 
     if exec_params.perform_preprocessing:
+        os.makedirs(exec_params.raw_train_data_path, exist_ok=True)
+        if exec_params.raw_eval_data_path is not None:
+            os.makedirs(exec_params.raw_eval_data_path, exist_ok=True)
+        if exec_params.raw_test_data_path is not None:
+            os.makedirs(exec_params.raw_test_data_path, exist_ok=True)
         task.preprocess(
             model_hps=exec_params.experiment_setting.model_hyper_params,
             pp_data_path=exec_params.pp_data_dir_path,
@@ -57,16 +63,17 @@ def main():
             model_hps=exec_params.experiment_setting.model_hyper_params,
             dataset_props=exec_params.experiment_setting.dataset,
             datafold=DataFold.Train,
-            dataset_path=exec_params.train_data_path)
+            pp_data_path=exec_params.pp_data_dir_path)
         train_loader = DataLoader(
-            train_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size, shuffle=True)
+            train_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size,
+            collate_fn=task.coallate_examples)  # FIXME: add shuffle=True
         eval_loader = None
         if exec_params.perform_evaluation:
             eval_dataset = task.create_dataset(
                 model_hps=exec_params.experiment_setting.model_hyper_params,
                 dataset_props=exec_params.experiment_setting.dataset,
                 datafold=DataFold.Validation,
-                dataset_path=exec_params.eval_data_path)
+                pp_data_path=exec_params.eval_data_path)
             eval_loader = DataLoader(
                 eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2)
 
