@@ -869,32 +869,32 @@ class SerDatasetName:
 
 @dataclass
 class SerMethodRef:
-    class_name: str
     code_filepath: str
     dataset_name: SerDatasetName
     hash: str
     name: str
     position: SerPositionRange
+    class_name: Optional[str] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerMethodRef':
         assert isinstance(obj, dict)
-        class_name = from_str(obj.get("className"))
         code_filepath = from_str(obj.get("codeFilepath"))
         dataset_name = SerDatasetName.from_dict(obj.get("datasetName"))
         hash = from_str(obj.get("hash"))
         name = from_str(obj.get("name"))
         position = SerPositionRange.from_dict(obj.get("position"))
-        return SerMethodRef(class_name, code_filepath, dataset_name, hash, name, position)
+        class_name = from_union([from_str, from_none], obj.get("className"))
+        return SerMethodRef(code_filepath, dataset_name, hash, name, position, class_name)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["className"] = from_str(self.class_name)
         result["codeFilepath"] = from_str(self.code_filepath)
         result["datasetName"] = to_class(SerDatasetName, self.dataset_name)
         result["hash"] = from_str(self.hash)
         result["name"] = from_str(self.name)
         result["position"] = to_class(SerPositionRange, self.position)
+        result["className"] = from_union([from_str, from_none], self.class_name)
         return result
 
 
@@ -1334,7 +1334,6 @@ class SerParameter:
 
 @dataclass
 class SerMethod:
-    class_name: str
     code: SerCodeSnippet
     code_filepath: str
     dataset_name: SerDatasetName
@@ -1342,12 +1341,12 @@ class SerMethod:
     hash: str
     name: str
     return_type_name: str
+    class_name: Optional[str] = None
     parameters: Optional[List[SerParameter]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerMethod':
         assert isinstance(obj, dict)
-        class_name = from_str(obj.get("className"))
         code = SerCodeSnippet.from_dict(obj.get("code"))
         code_filepath = from_str(obj.get("codeFilepath"))
         dataset_name = SerDatasetName.from_dict(obj.get("datasetName"))
@@ -1355,12 +1354,12 @@ class SerMethod:
         hash = from_str(obj.get("hash"))
         name = from_str(obj.get("name"))
         return_type_name = from_str(obj.get("returnTypeName"))
+        class_name = from_union([from_str, from_none], obj.get("className"))
         parameters = from_union([lambda x: from_list(SerParameter.from_dict, x), from_none], obj.get("parameters"))
-        return SerMethod(class_name, code, code_filepath, dataset_name, declaration, hash, name, return_type_name, parameters)
+        return SerMethod(code, code_filepath, dataset_name, declaration, hash, name, return_type_name, class_name, parameters)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["className"] = from_str(self.class_name)
         result["code"] = to_class(SerCodeSnippet, self.code)
         result["codeFilepath"] = from_str(self.code_filepath)
         result["datasetName"] = to_class(SerDatasetName, self.dataset_name)
@@ -1368,6 +1367,7 @@ class SerMethod:
         result["hash"] = from_str(self.hash)
         result["name"] = from_str(self.name)
         result["returnTypeName"] = from_str(self.return_type_name)
+        result["className"] = from_union([from_str, from_none], self.class_name)
         result["parameters"] = from_union([lambda x: from_list(lambda x: to_class(SerParameter, x), x), from_none], self.parameters)
         return result
 
