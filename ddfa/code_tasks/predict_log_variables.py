@@ -109,9 +109,11 @@ class TaggedExample(NamedTuple):
 MAX_NR_PDG_EDGES = 300  # TODO: move to model hyper-parameters!
 MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES = 6  # TODO: move to model hyper-parameters!
 MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER = 5  # TODO: move to model hyper-parameters!
+MIN_NR_TARGET_SYMBOLS = 1  # TODO: move to model hyper-parameters!
 MAX_NR_TARGET_SYMBOLS = 4  # TODO: move to model hyper-parameters!
 MAX_NR_IDENTIFIERS = 110  # TODO: move to model hyper-parameters!
 MAX_NR_SYMBOLS = 55  # TODO: move to model hyper-parameters!
+MIN_NR_SYMBOLS = 2  # TODO: move to model hyper-parameters!
 MAX_NR_TOKENS_IN_EXPRESSION = 30  # TODO: move to model hyper-parameters!
 MAX_NR_PDG_NODES = 80  # TODO: move to model hyper-parameters!
 
@@ -290,7 +292,7 @@ def preprocess_example(
     all_symbols = [symbol for symbols_scope in method_pdg.symbols_scopes
                    for symbol in symbols_scope.symbols]
     nr_symbols = len(all_symbols)
-    if nr_symbols > MAX_NR_SYMBOLS:
+    if nr_symbols > MAX_NR_SYMBOLS or nr_symbols < MIN_NR_SYMBOLS:
         return None
     nr_edges = sum(len(pdg_node.control_flow_out_edges) +
                    sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
@@ -304,11 +306,13 @@ def preprocess_example(
     symbols_idxs_used_in_logging_call = list(
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.may))
-    if len(symbols_idxs_used_in_logging_call) > MAX_NR_TARGET_SYMBOLS:
+    if len(symbols_idxs_used_in_logging_call) > MAX_NR_TARGET_SYMBOLS or \
+            len(symbols_idxs_used_in_logging_call) < MIN_NR_TARGET_SYMBOLS:
         return None
     target_symbols_idxs_used_in_logging_call = torch.tensor(list(truncate_and_pad(
         [vocabs.symbols_special_words.get_word_idx_or_unk('<SOS>')] +
-        symbols_idxs_used_in_logging_call +
+        [symbol_idx_wo_specials + len(vocabs.symbols_special_words)
+         for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
         [vocabs.symbols_special_words.get_word_idx_or_unk('<EOS>')],
         max_length=MAX_NR_TARGET_SYMBOLS + 2,
         pad_word=vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
