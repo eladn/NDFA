@@ -68,6 +68,7 @@ class PredictLogVariablesTask(CodeTaskBase):
 
 class ModelInput(NamedTuple):
     identifiers: torch.LongTensor
+    sub_identifiers_mask: torch.BoolTensor
     cfg_nodes_mask: torch.BoolTensor
     cfg_nodes_control_kind: torch.LongTensor
     cfg_nodes_expressions: torch.LongTensor
@@ -144,7 +145,9 @@ class Model(nn.Module):
     def forward(self, x: ModelInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor]):
         # x = tagged_example.model_input
         # target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = tagged_example.target_symbols_idxs_used_in_logging_call
-        encoded_identifiers = self.identifier_encoder(x.identifiers)  # (batch_size, nr_identifiers, identifier_encoding_dim)
+        encoded_identifiers = self.identifier_encoder(
+            sub_identifiers_indices=x.identifiers,
+            sub_identifiers_mask=x.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
         encoded_cfg_nodes = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
             cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
@@ -324,6 +327,13 @@ def preprocess_example(
         [sub_identifiers_pad
          for _ in range(MAX_NR_IDENTIFIERS - min(len(method_pdg.sub_identifiers_by_idx), MAX_NR_IDENTIFIERS))],
         dtype=torch.long)
+    sub_identifiers_mask = torch.tensor(
+        [[1] * min(len(sub_identifiers), MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER) +
+         [0] * (MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER - min(len(sub_identifiers), MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER))
+         for sub_identifiers in itertools.islice(method_pdg.sub_identifiers_by_idx, MAX_NR_IDENTIFIERS)] +
+        [[1] * MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER] *
+        (MAX_NR_IDENTIFIERS - min(len(method_pdg.sub_identifiers_by_idx), MAX_NR_IDENTIFIERS)),
+        dtype=torch.bool)
     symbols_identifier_idxs = torch.tensor(
         [symbol.identifier_idx for symbol in all_symbols] +
         ([0] * (MAX_NR_SYMBOLS - len(all_symbols))), dtype=torch.long)
@@ -389,6 +399,7 @@ def preprocess_example(
     return TaggedExample(
         model_input=ModelInput(
             identifiers=identifiers,
+            sub_identifiers_mask=sub_identifiers_mask,
             cfg_nodes_mask=cfg_nodes_mask,
             cfg_nodes_control_kind=cfg_nodes_control_kind,
             cfg_nodes_expressions=cfg_nodes_expressions,
