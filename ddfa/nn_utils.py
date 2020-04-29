@@ -9,7 +9,7 @@ import numpy as np
 
 
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
-                                optimizer: Optional[Optimizer], criterion: nn.Module):
+                                criterion: nn.Module, optimizer: Optional[Optimizer] = None):
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
     y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch)
@@ -20,6 +20,38 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
     return loss.item(), len(x_batch)
 
 
+class CyclicAppendOnlyBuffer:
+    def __init__(self, buffer_size: int):
+        assert buffer_size > 0
+        self._buffer_size = buffer_size
+        self._nr_items = 0
+        self._buffer = [None] * buffer_size
+        self._next_insert_idx = 0
+
+    def insert(self, item):
+        self._buffer[self._next_insert_idx] = item
+        self._next_insert_idx = (self._next_insert_idx + 1) % self._buffer_size
+        self._nr_items = min(self._nr_items + 1, self._buffer_size)
+
+    def get_all_items(self):
+        return (self._buffer[self._next_insert_idx:] if self._nr_items == self._buffer_size else []) + \
+               self._buffer[:self._next_insert_idx]
+
+
+class WindowAverage:
+    def __init__(self, max_window_size: int = 5):
+        self._max_window_size = max_window_size
+        self._items_buffer = CyclicAppendOnlyBuffer(buffer_size=max_window_size)
+
+    def update(self, number: float):
+        self._items_buffer.insert(number)
+
+    def get_window_avg(self, sub_window_size: Optional[int] = None):
+        assert sub_window_size is None or sub_window_size <= self._max_window_size
+        window_size = self._max_window_size if sub_window_size is None else sub_window_size
+        return np.average(self._items_buffer.get_all_items()[:window_size])
+
+
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
     model.to(device)
@@ -27,38 +59,28 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         model.train()
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
+        train_epoch_window_loss = WindowAverage(max_window_size=15)
         train_data_loader_with_progress = tqdm(train_loader)
         for x_batch, y_batch in iter(train_data_loader_with_progress):
             batch_loss, batch_nr_examples = perform_loss_step_for_batch(
-                device, x_batch, y_batch, model, optimizer, criterion)
+                device=device, x_batch=x_batch, y_batch=y_batch, model=model,
+                criterion=criterion, optimizer=optimizer)
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
+            train_epoch_window_loss.update(batch_loss)
             train_data_loader_with_progress.set_postfix(
-                {'avg loss': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}'})
+                {'loss (epoch avg)': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}',
+                 'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}'})
 
         if valid_loader is not None:
             model.eval()
             with torch.no_grad():
                 losses, nums = zip(
-                    *(perform_loss_step_for_batch(device, x_batch, y_batch, model, optimizer, criterion)
-                      for x_batch, y_batch in valid_loader))
+                    *(perform_loss_step_for_batch(
+                        device=device, x_batch=x_batch, y_batch=y_batch, model=model, criterion=criterion)
+                      for x_batch, y_batch in tqdm(valid_loader)))
             val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
             print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
-
-
-def train_epoch(args, epoch_nr: int, model: nn.Module, device, train_loader: DataLoader, optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
-    model.train()
-    for batch_idx, (x_batch, y_batch) in enumerate(train_loader):
-        x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-        optimizer.zero_grad()
-        y_pred = model(x_batch)
-        loss = criterion(y_pred, y_batch)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch_nr, batch_idx * len(x_batch), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
 
 
 def test(args, model, device, test_loader):
