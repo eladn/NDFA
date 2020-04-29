@@ -242,3 +242,13 @@ def apply_batched_embeddings_test():
         common_embeddings=common_embeddings)
     assert applied_embd.size() == with_used_common_wo_mask_expected_result.size()
     assert torch.all(applied_embd == with_used_common_wo_mask_expected_result)
+    common_embeddings_as_embedding_layer = nn.Embedding(
+        num_embeddings=common_embeddings.size()[0],
+        embedding_dim=common_embeddings.size()[1],
+        _weight=common_embeddings.float())
+    applied_embd = apply_batched_embeddings(
+        batched_embeddings=batched_embeddings.float(),
+        indices=indices_multiple_seqs_per_example_with_used_common_embeddings,
+        common_embeddings=common_embeddings_as_embedding_layer)
+    assert applied_embd.size() == with_used_common_wo_mask_expected_result.size()
+    assert torch.all(applied_embd.isclose(with_used_common_wo_mask_expected_result.float()))
