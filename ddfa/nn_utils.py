@@ -37,6 +37,9 @@ class CyclicAppendOnlyBuffer:
         return (self._buffer[self._next_insert_idx:] if self._nr_items == self._buffer_size else []) + \
                self._buffer[:self._next_insert_idx]
 
+    def __len__(self) -> int:
+        return self._nr_items
+
 
 class WindowAverage:
     def __init__(self, max_window_size: int = 5):
@@ -50,6 +53,24 @@ class WindowAverage:
         assert sub_window_size is None or sub_window_size <= self._max_window_size
         window_size = self._max_window_size if sub_window_size is None else sub_window_size
         return np.average(self._items_buffer.get_all_items()[:window_size])
+
+    def get_window_avg_wo_outliers(self, nr_outliers: int = 3, sub_window_size: Optional[int] = None):
+        assert sub_window_size is None or sub_window_size <= self._max_window_size
+        window_size = self._max_window_size if sub_window_size is None else sub_window_size
+        assert nr_outliers < window_size
+        nr_outliers_wrt_windows_size_max_ratio = nr_outliers / window_size
+        assert nr_outliers_wrt_windows_size_max_ratio < 1
+        eff_window_size = min(len(self._items_buffer), window_size)
+        if eff_window_size < window_size and nr_outliers >= eff_window_size * nr_outliers_wrt_windows_size_max_ratio:
+            nr_outliers = int(eff_window_size * nr_outliers_wrt_windows_size_max_ratio)
+        assert nr_outliers <= eff_window_size * nr_outliers_wrt_windows_size_max_ratio
+        items = np.array(self._items_buffer.get_all_items()[:eff_window_size])
+        if nr_outliers > 0:
+            median = np.median(items)
+            dist_from_median = np.abs(items - median)
+            outliers_indices = np.argpartition(dist_from_median, -nr_outliers)[-nr_outliers:]
+            items[outliers_indices] = np.nan
+        return np.nanmean(items)
 
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
@@ -70,7 +91,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             train_epoch_window_loss.update(batch_loss)
             train_data_loader_with_progress.set_postfix(
                 {'loss (epoch avg)': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}',
-                 'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}'})
+                 'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
+                 'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
 
         if valid_loader is not None:
             model.eval()
