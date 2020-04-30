@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import typing
+import shelve
 import itertools
 import functools
 import torch.nn as nn
@@ -195,28 +196,29 @@ class ModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-class LoggingCallsDataset(IterableDataset):
+class LoggingCallsDataset(Dataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
         self.datafold = datafold
         self.pp_data_path = pp_data_path
-
-    def __iter__(self):
+        self.pp_data_filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.pt')
+        self._kvstore_file = shelve.open(self.pp_data_filepath, 'r')
+        self._len = self._kvstore_file['len']
         # TODO: read correctly files splitted into chunks
         # TODO: add hash of task props & model HPs to perprocessed file name.
-        pp_data_filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.pt')
-        with open(pp_data_filepath, 'br') as pp_data_file:
-            while True:
-                try:
-                    example: TaggedExample = torch.load(pp_data_file)
-                    assert all(hasattr(example, field) for field in TaggedExample._fields)
-                    assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
-                    assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
-                               for field in ModelInput._fields if field != 'is_batched')
-                    yield TaggedExample(
-                        model_input=ModelInput(**example.model_input._asdict()),
-                        target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
-                except (EOFError, torch.serialization.pickle.UnpicklingError):
-                    break
+
+    def __len__(self):
+        return self._len
+
+    def __getitem__(self, idx):
+        assert isinstance(idx, int) and idx <= self._len
+        example = self._kvstore_file[str(idx)]
+        assert all(hasattr(example, field) for field in TaggedExample._fields)
+        assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
+        assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
+                   for field in ModelInput._fields if field != 'is_batched')
+        return TaggedExample(
+            model_input=ModelInput(**example.model_input._asdict()),
+            target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
 
 
 def non_identifier_token_to_token_vocab_word(token: SerToken):
@@ -273,13 +275,17 @@ def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_dat
         if os.path.isfile(pp_data_filepath):
             raise ValueError(
                 f'Preprocessed file `{pp_data_filepath}` already exists. Please choose another `--pp-data` path.')
-        with open(pp_data_filepath, 'bw') as pp_data_file:
+        with shelve.open(pp_data_filepath, 'c') as pp_data_file:
+            next_example_idx = 0
             for logging_call, _, method_pdg in \
                     _iterate_raw_logging_calls_examples(dataset_path=raw_dataset_path):
                 pp_example = preprocess_example(
                     model_hps=model_hps, vocabs=vocabs, logging_call=logging_call, method_pdg=method_pdg)
                 if pp_example is not None:
-                    torch.save(pp_example, pp_data_file)
+                    pp_data_file[str(next_example_idx)] = pp_example
+                    next_example_idx += 1
+                    # torch.save(pp_example, pp_data_file)
+            pp_data_file['len'] = next_example_idx
 
 
 def preprocess_example(
