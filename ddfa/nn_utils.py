@@ -81,7 +81,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_window_loss = WindowAverage(max_window_size=15)
-        train_data_loader_with_progress = tqdm(train_loader)
+        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
         for x_batch, y_batch in iter(train_data_loader_with_progress):
             batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
@@ -100,7 +100,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 losses, nums = zip(
                     *(perform_loss_step_for_batch(
                         device=device, x_batch=x_batch, y_batch=y_batch, model=model, criterion=criterion)
-                      for x_batch, y_batch in tqdm(valid_loader)))
+                      for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True)))
             val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
             print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
 
