@@ -39,9 +39,9 @@ class IdentifierEncoder(nn.Module):
             sub_identifiers_embeddings = self.sub_identifiers_embedding_layer(sub_identifiers_indices)  # (nr_sub_identifiers, bs*nr_identifiers, embedding_dim)
             assert sub_identifiers_embeddings.size() == (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example, self.embedding_dim)
             if sub_identifiers_mask is not None:
-                sub_identifiers_mask = sub_identifiers_mask.flatten(0, 1)  # (bs*nr_identifiers, nr_sub_identifiers)
+                sub_identifiers_mask = ~sub_identifiers_mask.flatten(0, 1)  # (bs*nr_identifiers, nr_sub_identifiers)
             sub_identifiers_encoded = self.transformer_encoder(
-                sub_identifiers_embeddings, src_key_padding_mask=~sub_identifiers_mask).sum(dim=0)  # (bs*nr_identifiers, embedding_dim)
+                sub_identifiers_embeddings, src_key_padding_mask=sub_identifiers_mask).sum(dim=0)  # (bs*nr_identifiers, embedding_dim)
             assert sub_identifiers_encoded.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
             return sub_identifiers_encoded.view(batch_size, nr_identifiers_in_example, self.embedding_dim)
 

@@ -72,6 +72,7 @@ class ModelInput(NamedTuple):
     cfg_nodes_mask: torch.BoolTensor
     cfg_nodes_control_kind: torch.LongTensor
     cfg_nodes_expressions: torch.LongTensor
+    cfg_nodes_expressions_mask: torch.BoolTensor
     cfg_edges: torch.LongTensor
     cfg_edges_mask: torch.BoolTensor
     cfg_edges_attrs: torch.LongTensor
@@ -150,6 +151,7 @@ class Model(nn.Module):
             sub_identifiers_mask=x.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
         encoded_cfg_nodes = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
+            cfg_nodes_expressions_mask=x.cfg_nodes_expressions_mask,
             cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
 
         symbol_pad_embed = self.symbols_special_words_embedding(
@@ -358,6 +360,14 @@ def preprocess_example(
         if pdg_node.code is not None and pdg_node.idx != logging_call.pdg_node_idx else padding_expression
         for pdg_node in method_pdg.pdg_nodes],
         max_length=MAX_NR_PDG_NODES, pad_word=padding_expression)), dtype=torch.long)
+    cfg_nodes_expressions_mask = torch.tensor(
+        [([1] * min(len(pdg_node.code.tokenized), (MAX_NR_TOKENS_IN_EXPRESSION + 1)) +
+         [0] * ((MAX_NR_TOKENS_IN_EXPRESSION + 1) - min(len(pdg_node.code.tokenized), (MAX_NR_TOKENS_IN_EXPRESSION + 1))))
+         if pdg_node.code is not None else [1] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)
+         for pdg_node in itertools.islice(method_pdg.pdg_nodes, MAX_NR_PDG_NODES)] +
+        [[1] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)] *
+        (MAX_NR_PDG_NODES - min(len(method_pdg.pdg_nodes), MAX_NR_PDG_NODES)),
+        dtype=torch.bool)
     cfg_edges_mask = torch.cat([
         torch.ones(nr_edges, dtype=torch.bool),
         torch.zeros(MAX_NR_PDG_EDGES - nr_edges, dtype=torch.bool)])
@@ -403,6 +413,7 @@ def preprocess_example(
             cfg_nodes_mask=cfg_nodes_mask,
             cfg_nodes_control_kind=cfg_nodes_control_kind,
             cfg_nodes_expressions=cfg_nodes_expressions,
+            cfg_nodes_expressions_mask=cfg_nodes_expressions_mask,
             cfg_edges=cfg_edges,
             cfg_edges_mask=cfg_edges_mask,
             cfg_edges_attrs=cfg_edges_attrs,

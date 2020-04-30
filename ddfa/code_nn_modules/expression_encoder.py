@@ -30,12 +30,14 @@ class ExpressionEncoder(nn.Module):
         self.transformer_encoder = TransformerEncoder(
             encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
 
-    def forward(self, expressions: torch.Tensor, encoded_identifiers: torch.Tensor):  # Union[torch.Tensor, nn.utils.rnn.PackedSequence]
+    def forward(self, expressions: torch.Tensor, expressions_mask: Optional[torch.BoolTensor],
+                encoded_identifiers: torch.Tensor):  # Union[torch.Tensor, nn.utils.rnn.PackedSequence]
         assert len(expressions.size()) == 4 and expressions.size()[-1] == 2
         batch_size, nr_exprs, nr_tokens_in_expr, _ = expressions.size()
         assert len(encoded_identifiers.size()) == 3
         nr_identifiers_in_example = encoded_identifiers.size()[1]
         assert encoded_identifiers.size() == (batch_size, nr_identifiers_in_example, self.tokens_embedding_dim)
+        assert expressions_mask is None or expressions_mask.size() == (batch_size, nr_exprs, nr_tokens_in_expr)
 
         expressions_tokens_kinds = expressions[:, :, :, 0]  # (batch_size, nr_exprs, nr_tokens_in_expr)
         expressions_idxs = expressions[:, :, :, 1]  # (batch_size, nr_exprs, nr_tokens_in_expr)
@@ -80,6 +82,10 @@ class ExpressionEncoder(nn.Module):
         expr_embeddings = torch.cat([token_kinds_embeddings, embeddings], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim + token_kind_embedding_dim)
         expr_embeddings_projected = self.projection_linear_layer(expr_embeddings.flatten(0, 2))\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.expr_encoding_dim)
-        expr_encoded = self.transformer_encoder(expr_embeddings_projected.flatten(0, 1).permute(1, 0, 2))\
+        if expressions_mask is not None:
+            expressions_mask = ~expressions_mask.flatten(0, 1)  # (bs*nr_exprs, nr_tokens_in_expr)
+        expr_encoded = self.transformer_encoder(
+            expr_embeddings_projected.flatten(0, 1).permute(1, 0, 2),
+            src_key_padding_mask=expressions_mask)\
             .sum(dim=0).view(batch_size, nr_exprs, -1)
         return expr_encoded
