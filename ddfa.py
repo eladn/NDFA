@@ -1,9 +1,12 @@
 import numpy as np
 import os
+import base64
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
+from typing import Optional
+import itertools
 
 from ddfa.execution_parameters import ModelExecutionParams
 from ddfa.ddfa_model_hyper_parameters import DDFAModelTrainingHyperParams
@@ -22,11 +25,39 @@ def main():
         load_from_args=True, load_from_yaml=True, verify_confclass=True)
     device = torch.device("cuda" if exec_params.use_gpu_if_available and torch.cuda.is_available() else "cpu")
 
+    expr_settings_hash_base64 = base64.b64encode(str(hash(exec_params.experiment_setting)).encode('utf8'))\
+        .strip().decode('ascii').strip('=')
+
     loaded_checkpoint = None
     if exec_params.should_load_model:
-        loaded_checkpoint = torch.load(exec_params.model_load_path)
+        ckpt_filepath = None
+        if os.path.isfile(exec_params.model_load_path):
+            ckpt_filepath = exec_params.model_load_path
+        elif not os.path.isdir(exec_params.model_load_path):
+            raise ValueError(f'No model to load ')
+        else:
+            for epoch_nr in itertools.count():
+                # FIXME: it won't be found if the `epoch_nr` is encoded in the experiment setting...
+                #  we should change the `epoch_nr` param in the `exec_params.experiment_setting` so it would be found.
+                # TODO: consider getting all the models and find the model whose hps are 'adaptable' with the parsed
+                #  `exec_params.experiment_setting` of the current run.
+                tst_ckpt_filename = f'model_{expr_settings_hash_base64}_ep={epoch_nr}_.ckpt'
+                if os.path.isfile(exec_params.model_load_path):
+                    ckpt_filename = tst_ckpt_filename
+                    ckpt_filepath = os.path.join(exec_params.model_load_path, ckpt_filename)
+                else:
+                    break
+        if ckpt_filepath is None:
+            raise ValueError(
+                f'No model to load in dir {exec_params.model_load_path} that matches the chosen experiment setting.')
+        with open(exec_params.model_load_path, 'bw') as checkpoint_file:
+            loaded_checkpoint = torch.load(checkpoint_file)
         # TODO: Modify `exec_params.experiment_setting` according to `loaded_checkpoint['experiment_setting']`.
         #       Verify overridden arguments and raise ArgumentException if needed.
+        expr_settings_hash_base64 = base64.b64encode(str(hash(exec_params.experiment_setting)).encode('utf8')) \
+            .strip().decode('ascii').strip('=')
+
+    # TODO: print the `experiment_setting`.
 
     if exec_params.seed is not None:
         np.random.seed(exec_params.seed)
@@ -51,6 +82,8 @@ def main():
         model_hps=exec_params.experiment_setting.model_hyper_params,
         pp_data_path=exec_params.pp_data_dir_path)
 
+    print(f'Model built. #params: {sum(weight.nelement() for weight in model.parameters()):,}')
+
     if loaded_checkpoint:
         model.load_state_dict(loaded_checkpoint['model_state_dict'])
 
@@ -58,6 +91,19 @@ def main():
         optimizer = create_optimizer(model, exec_params.experiment_setting.train_hyper_params)
         if loaded_checkpoint:
             optimizer.load_state_dict(loaded_checkpoint['optimizer_state_dict'])
+
+        def save_checkpoint(model: nn.Module, optimizer: Optimizer, epoch_nr: int, step_nr: Optional[int] = None):
+            assert exec_params.should_save_model
+            os.makedirs(exec_params.model_save_path, exist_ok=True)
+            ckpt_filepath = os.path.join(exec_params.model_save_path, f'model_{expr_settings_hash_base64}_ep={epoch_nr}_.ckpt')
+            with open(ckpt_filepath, 'bw') as checkpoint_file:
+                model.state_dict()
+                torch.save({  # FIXME: we might want to modify these params
+                    'experiment_setting': exec_params.experiment_setting,
+                    'epoch_nr': epoch_nr,
+                    'step_nr': step_nr,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict()}, checkpoint_file)
 
         train_dataset = task.create_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
@@ -79,6 +125,7 @@ def main():
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
+        print('Starting training.')
         fit(
             nr_epochs=exec_params.experiment_setting.train_hyper_params.nr_epochs,
             model=model,
@@ -86,7 +133,8 @@ def main():
             train_loader=train_loader,
             valid_loader=eval_loader,
             optimizer=optimizer,
-            criterion=criterion)
+            criterion=criterion,
+            save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         raise NotImplementedError()  # TODO: implement!

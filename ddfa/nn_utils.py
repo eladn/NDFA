@@ -4,7 +4,7 @@ from torch.optim.optimizer import Optimizer
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 import numpy as np
 
 
@@ -74,7 +74,8 @@ class WindowAverage:
 
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
-        valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss):
+        valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
+        save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None):
     model.to(device)
     for epoch_nr in range(1, nr_epochs + 1):
         model.train()
@@ -93,6 +94,9 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 {'loss (epoch avg)': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}',
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
                  'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
+
+        if save_checkpoint_fn is not None:
+            save_checkpoint_fn(model, optimizer, epoch_nr)
 
         if valid_loader is not None:
             model.eval()

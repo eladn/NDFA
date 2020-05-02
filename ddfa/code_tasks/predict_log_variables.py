@@ -10,7 +10,7 @@ import numpy as np
 import torch.nn as nn
 from collections import defaultdict
 from warnings import warn
-from torch.utils.data.dataset import Dataset, IterableDataset
+from torch.utils.data.dataset import Dataset
 from typing import NamedTuple, Iterable, Collection
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
