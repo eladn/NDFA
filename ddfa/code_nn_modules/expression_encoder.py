@@ -69,10 +69,12 @@ class ExpressionEncoder(nn.Module):
 
         # TODO: we could treat the tokens-embedding & identifiers-encodings as PERPETUAL to each others (concat - other dims for each)
         assert selected_encoded_identifiers.size() == selected_tokens_encoding.size()
+        use_identifier_vocab_condition_expanded_to_encodings = use_identifier_vocab_condition.unsqueeze(-1)\
+            .expand_as(selected_encoded_identifiers)
         embeddings = torch.where(
-            use_identifier_vocab_condition.unsqueeze(-1).repeat(1, 1, 1, self.tokens_embedding_dim),  # TODO: can we use `expand()` instead of `repeat()` here? it uses less memory.
+            use_identifier_vocab_condition_expanded_to_encodings,
             selected_encoded_identifiers, torch.where(
-                use_tokens_vocab_condition.unsqueeze(-1).repeat(1, 1, 1, self.tokens_embedding_dim),  # TODO: can we use `expand()` instead of `repeat()` here? it uses less memory.
+                use_identifier_vocab_condition_expanded_to_encodings,
                 selected_tokens_encoding, torch.zeros_like(selected_tokens_encoding)))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
         assert embeddings.size() == (batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
 

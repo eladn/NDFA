@@ -148,7 +148,7 @@ def apply_batched_embeddings(
     indices_flattened = indices.flatten().type(dtype=torch.long)  # (batch_size * nr_indices_per_example,)
     assert indices_flattened.size() == (batch_size * nr_indices_per_example,)
     indices_offsets_fixes = (torch.arange(batch_size, dtype=torch.long, device=indices_device) * nr_words_per_example)\
-        .repeat((nr_indices_per_example, 1)).T.flatten().type_as(indices)  #  = [0,0,...,0,1,1,...,1, ...]  # TODO: can we use `expand()` instead of `repeat()` here? it uses less memory.
+        .unsqueeze(0).expand(nr_indices_per_example, -1).T.flatten().type_as(indices)  #  = [0,0,...,0,1,1,...,1, ...]
     assert indices_flattened.size() == indices_offsets_fixes.size()
     embeddings_flattened = batched_embeddings.flatten(0, 1)  # (batch_size * nr_words_per_example, embedding_dim)
     if common_embeddings is None and mask is None:
