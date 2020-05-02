@@ -1,10 +1,12 @@
 import os
 import json
 import torch
+import pickle
 import typing
 import shelve
 import itertools
 import functools
+import numpy as np
 import torch.nn as nn
 from collections import defaultdict
 from warnings import warn
@@ -200,18 +202,42 @@ class LoggingCallsDataset(Dataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
         self.datafold = datafold
         self.pp_data_path = pp_data_path
-        self.pp_data_filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.pt')
-        self._kvstore_file = shelve.open(self.pp_data_filepath, 'r')
-        self._len = self._kvstore_file['len']
-        # TODO: read correctly files splitted into chunks
+        self._pp_data_chunks_filepaths = []
+        self._kvstore_chunks = []
+        self._kvstore_chunks_lengths = []
+        for chunk_idx in itertools.count():
+            filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
+            if not os.path.isfile(filepath):
+                break
+            self._pp_data_chunks_filepaths.append(filepath)
+            kvstore = shelve.open(filepath, 'r')
+            self._kvstore_chunks.append(kvstore)
+            self._kvstore_chunks_lengths.append(kvstore['len'])
+        self._len = sum(self._kvstore_chunks_lengths)
+        self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
+        self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
+        self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
         # TODO: add hash of task props & model HPs to perprocessed file name.
+
+    def _get_chunk_idx_contains_item(self, item_idx: int) -> int:
+        assert item_idx < self._len
+        cond = self._kvstore_chunks_start_indices <= item_idx & item_idx < self._kvstore_chunks_stop_indices
+        assert np.sum(cond) == 1
+        found_idx = np.where(cond)
+        assert len(found_idx) == 1
+        return int(found_idx[0])
 
     def __len__(self):
         return self._len
 
+    def __del__(self):
+        for chunk_kvstore in self._kvstore_chunks:
+            chunk_kvstore.close()
+
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len
-        example = self._kvstore_file[str(idx)]
+        chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
+        example = chunk_kvstore[str(idx)]
         assert all(hasattr(example, field) for field in TaggedExample._fields)
         assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
         assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
@@ -258,6 +284,75 @@ def nullable_lists_concat(*args) -> list:
     return ret_list
 
 
+class ChunksExamplesWriter:
+    KB_IN_BYTES = 1024
+    MB_IN_BYTES = 1024 * 1024
+    GB_IN_BYTES = 1024 * 1024 * 1024
+
+    def __init__(self, pp_data_path: str, datafold: DataFold, max_chunk_size_in_bytes: int = GB_IN_BYTES):
+        self.pp_data_path: str = pp_data_path
+        self.datafold: DataFold = datafold
+        self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
+        self.next_example_idx: int = 0
+        self.cur_chunk_idx: Optional[int] = None
+        self.cur_chunk_size_in_bytes: Optional[int] = None
+        self.cur_chunk_nr_examples: Optional[int] = None
+        self.cur_chunk_file: Optional[shelve.Shelf] = None
+        self.cur_chunk_filepath: Optional[str] = None
+
+    @property
+    def total_nr_examples(self) -> int:
+        return self.next_example_idx
+
+    def write_example(self, example):
+        example_size_in_bytes = len(pickle.dumps(example))
+        chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
+        chunk_file[str(self.next_example_idx)] = example
+        self.next_example_idx += 1
+        self.cur_chunk_nr_examples += 1
+        self.cur_chunk_size_in_bytes += example_size_in_bytes
+        assert self.cur_chunk_size_in_bytes <= self.max_chunk_size_in_bytes
+
+    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> shelve.Shelf:
+        assert example_size_in_bytes < self.max_chunk_size_in_bytes
+        if self.cur_chunk_file is None or self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
+            if self.cur_chunk_idx is None:
+                self.cur_chunk_idx = 0
+            else:
+                self.cur_chunk_idx += 1
+                self.close_last_written_chunk()
+            self.cur_chunk_filepath = self._get_chunk_filepath(self.cur_chunk_idx)
+            if os.path.isfile(self.cur_chunk_filepath):
+                if self.cur_chunk_idx == 0:
+                    raise ValueError(f'Preprocessed file `{self.cur_chunk_filepath}` already exists. '
+                                     f'Please choose another `--pp-data` path or manually delete it.')
+                else:
+                    warn(f'Overwriting existing preprocessed file `{self.cur_chunk_filepath}`.')
+                    os.remove(self.cur_chunk_filepath)
+            self.cur_chunk_file = shelve.open(self.cur_chunk_filepath, 'c')
+            self.cur_chunk_size_in_bytes = 0
+            self.cur_chunk_nr_examples = 0
+        return self.cur_chunk_file
+
+    def close_last_written_chunk(self):
+        assert self.cur_chunk_nr_examples > 0
+        self.cur_chunk_file['len'] = self.cur_chunk_nr_examples
+        self.cur_chunk_file.close()
+        self.cur_chunk_file = None
+
+    def _get_chunk_filepath(self, chunk_idx: int) -> str:
+        return os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
+
+    def enforce_no_further_chunks(self):
+        # Remove old extra file chunks
+        for chunk_idx_to_remove in itertools.count(start=self.cur_chunk_idx + 1):
+            chunk_filepath = self._get_chunk_filepath(chunk_idx_to_remove)
+            if not os.path.isfile(chunk_filepath):
+                break
+            warn(f'Removing existing preprocessed file `{chunk_filepath}`.')
+            os.remove(chunk_filepath)
+
+
 def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
                raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
     vocabs = load_or_create_vocabs(
@@ -269,23 +364,20 @@ def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_dat
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:
             continue
-        # TODO: split file into chunks after it is too big
         # TODO: add hash of task props & model HPs to perprocessed file name.
-        pp_data_filepath = os.path.join(pp_data_path, f'pp_{datafold.value.lower()}.pt')
-        if os.path.isfile(pp_data_filepath):
-            raise ValueError(
-                f'Preprocessed file `{pp_data_filepath}` already exists. Please choose another `--pp-data` path.')
-        with shelve.open(pp_data_filepath, 'c') as pp_data_file:
-            next_example_idx = 0
-            for logging_call, _, method_pdg in \
-                    _iterate_raw_logging_calls_examples(dataset_path=raw_dataset_path):
-                pp_example = preprocess_example(
-                    model_hps=model_hps, vocabs=vocabs, logging_call=logging_call, method_pdg=method_pdg)
-                if pp_example is not None:
-                    pp_data_file[str(next_example_idx)] = pp_example
-                    next_example_idx += 1
-                    # torch.save(pp_example, pp_data_file)
-            pp_data_file['len'] = next_example_idx
+        chunks_examples_writer = ChunksExamplesWriter(
+            pp_data_path=pp_data_path, datafold=datafold,
+            max_chunk_size_in_bytes=ChunksExamplesWriter.MB_IN_BYTES * 500)
+        for logging_call, _, method_pdg in \
+                _iterate_raw_logging_calls_examples(dataset_path=raw_dataset_path):
+            pp_example = preprocess_example(
+                model_hps=model_hps, vocabs=vocabs, logging_call=logging_call, method_pdg=method_pdg)
+            if pp_example is None:
+                continue
+            chunks_examples_writer.write_example(pp_example)
+
+        chunks_examples_writer.close_last_written_chunk()
+        chunks_examples_writer.enforce_no_further_chunks()
 
 
 def preprocess_example(
@@ -310,9 +402,6 @@ def preprocess_example(
                    for pdg_node in method_pdg.pdg_nodes)
     if nr_edges > MAX_NR_PDG_EDGES:
         return None
-
-    # TODO: fix tensor sizes (pad) for:
-    #  cfg_nodes_control_kind, cfg_nodes_expressions, cfg_edges, cfg_edges_attrs
 
     symbols_idxs_used_in_logging_call = list(
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
