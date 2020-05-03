@@ -66,11 +66,7 @@ def main():
     task = CodeTaskBase.load_task(exec_params.experiment_setting.task)
 
     if exec_params.perform_preprocessing:
-        os.makedirs(exec_params.raw_train_data_path, exist_ok=True)
-        if exec_params.raw_eval_data_path is not None:
-            os.makedirs(exec_params.raw_eval_data_path, exist_ok=True)
-        if exec_params.raw_test_data_path is not None:
-            os.makedirs(exec_params.raw_test_data_path, exist_ok=True)
+        os.makedirs(exec_params.pp_data_dir_path, exist_ok=True)
         task.preprocess(
             model_hps=exec_params.experiment_setting.model_hyper_params,
             pp_data_path=exec_params.pp_data_dir_path,
