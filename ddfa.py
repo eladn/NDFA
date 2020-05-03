@@ -92,7 +92,9 @@ def main():
         if loaded_checkpoint:
             optimizer.load_state_dict(loaded_checkpoint['optimizer_state_dict'])
 
+        saved_ckpts = []
         def save_checkpoint(model: nn.Module, optimizer: Optimizer, epoch_nr: int, step_nr: Optional[int] = None):
+            global saved_ckpts
             assert exec_params.should_save_model
             os.makedirs(exec_params.model_save_path, exist_ok=True)
             ckpt_filepath = os.path.join(exec_params.model_save_path, f'model_{expr_settings_hash_base64}_ep={epoch_nr}_.ckpt')
@@ -104,6 +106,13 @@ def main():
                     'step_nr': step_nr,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict()}, checkpoint_file)
+            saved_ckpts.append((epoch_nr, ckpt_filepath))
+            if exec_params.max_latest_checkpoints_to_keep is not None and \
+                    len(saved_ckpts) > exec_params.max_latest_checkpoints_to_keep:
+                ckpts_to_remove = saved_ckpts[:-exec_params.max_latest_checkpoints_to_keep]
+                for epoch_idx, ckpt_filepath in ckpts_to_remove:
+                    os.remove(ckpt_filepath)
+                saved_ckpts = saved_ckpts[-exec_params.max_latest_checkpoints_to_keep:]
 
         train_dataset = task.create_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
