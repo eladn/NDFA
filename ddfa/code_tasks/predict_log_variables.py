@@ -610,14 +610,22 @@ def _iterate_raw_logging_calls_examples(dataset_path: str) \
             open(os.path.join(dataset_path, 'method_ast.txt')) as method_ast_file, \
             open(os.path.join(dataset_path, 'method_pdg.txt')) as method_pdg_file:
 
-        for logging_call_json, method_ast_json, method_pdg_json in \
-                zip(logging_call_file, method_ast_file, method_pdg_file):
+        for example_idx, (logging_call_json, method_ast_json, method_pdg_json) in \
+                enumerate(zip(logging_call_file, method_ast_file, method_pdg_file)):
             logging_call_dict = json.loads(logging_call_json.strip())
             logging_call = SerLoggingCall.from_dict(logging_call_dict)
             method_ast_dict = json.loads(method_ast_json.strip())
             method_ast = SerMethodAST.from_dict(method_ast_dict)
             method_pdg_dict = json.loads(method_pdg_json.strip())
             method_pdg = SerMethodPDG.from_dict(method_pdg_dict)
+            if method_ast.method_hash != logging_call.method_ref.hash:
+                raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                                 f'logging_call.method_ref.hash={logging_call.method_ref.hash},'
+                                 f' while method_pdg.method_hash={method_ast.method_hash}')
+            if method_pdg.method_hash != logging_call.method_ref.hash:
+                raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                                 f'logging_call.method_ref.hash={logging_call.method_ref.hash},'
+                                 f' while method_pdg.method_hash={method_pdg.method_hash}')
 
             if logging_call.pdg_node_idx is None:
                 # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
