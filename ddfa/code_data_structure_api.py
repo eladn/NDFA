@@ -529,6 +529,7 @@ class SerTokenOperatorKind(Enum):
     GREATER = "Greater"
     GREATER_EQUALS = "GreaterEquals"
     INCREMENT = "Increment"
+    LAMBDA = "Lambda"
     LEFT_SHIFT = "LeftShift"
     LESS = "Less"
     LESS_EQUALS = "LessEquals"
@@ -541,6 +542,7 @@ class SerTokenOperatorKind(Enum):
     PLUS = "Plus"
     REMINDER = "Reminder"
     SIGNED_RIGHT_SHIFT = "SignedRightShift"
+    STATIC_MEMBER_ACCESS = "StaticMemberAccess"
     UNSIGNED_RIGHT_SHIFT = "UnsignedRightShift"
     XOR = "XOR"
 
@@ -1484,6 +1486,7 @@ class SerASTNodeType(Enum):
     INSTANCE_OF_EXPR = "InstanceOfExpr"
     INTEGER_LITERAL_EXPR = "IntegerLiteralExpr"
     INTEGER_LITERAL_MIN_VALUE_EXPR = "IntegerLiteralMinValueExpr"
+    INTERSECTION_TYPE = "IntersectionType"
     JAVADOC_COMMENT = "JavadocComment"
     LABELED_STMT = "LabeledStmt"
     LAMBDA_EXPR = "LambdaExpr"
