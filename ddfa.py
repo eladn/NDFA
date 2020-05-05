@@ -23,7 +23,11 @@ def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) 
 def main():
     exec_params: ModelExecutionParams = ModelExecutionParams.factory(
         load_from_args=True, load_from_yaml=True, verify_confclass=True)
-    device = torch.device("cuda" if exec_params.use_gpu_if_available and torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if exec_params.use_gpu_if_available and torch.cuda.is_available() else "cpu")  # TODO: fix confclass issues (the bool default to true doesn't work)
+    print(f'Device: {device}')
+
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
     expr_settings_hash_base64 = base64.b64encode(str(hash(exec_params.experiment_setting)).encode('utf8'))\
         .strip().decode('ascii').strip('=')
