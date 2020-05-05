@@ -353,7 +353,7 @@ class ChunksExamplesWriter:
             os.remove(chunk_filepath)
 
 
-def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
+def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None,
                raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
     vocabs = load_or_create_vocabs(
         model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
@@ -532,7 +532,7 @@ def load_or_create_vocabs(
     print('Loading / creating vocabularies ..')
     vocabs_pad_unk_special_words = ('<PAD>', '<UNK>')
 
-    sub_identifiers_carpus_generator = lambda: (
+    sub_identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
         sub_identifier
         for logging_call, method_ast, method_pdg
         in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
@@ -543,7 +543,7 @@ def load_or_create_vocabs(
         special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<EOI>',), min_word_freq=40,
         max_vocab_size_wo_specials=1000, carpus_generator=sub_identifiers_carpus_generator)
 
-    tokens_carpus_generator = lambda: (
+    tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
         non_identifier_token_to_token_vocab_word(token)
         for _, _, method_pdg
         in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
@@ -556,7 +556,7 @@ def load_or_create_vocabs(
         special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=tokens_carpus_generator)
 
-    pdg_node_control_kinds_carpus_generator = lambda: (
+    pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
         pdg_node.control_kind.value
         for _, _, method_pdg
         in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
@@ -566,7 +566,7 @@ def load_or_create_vocabs(
         special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
         carpus_generator=pdg_node_control_kinds_carpus_generator)
 
-    tokens_kinds_carpus_generator = lambda: (
+    tokens_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
         token.kind.value
         for _, _, method_pdg
         in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
@@ -578,7 +578,7 @@ def load_or_create_vocabs(
         special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
         carpus_generator=tokens_kinds_carpus_generator)
 
-    pdg_control_flow_edge_types_carpus_generator = lambda: (
+    pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
         edge.type.value
         for _, _, method_pdg
         in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
@@ -628,6 +628,7 @@ def _iterate_raw_logging_calls_examples(dataset_path: str) \
                                  f' while method_pdg.method_hash={method_pdg.method_hash}')
 
             if logging_call.pdg_node_idx is None:
+                # TODO: put it back (after finishing implementing the PDG)
                 # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
                 continue
             assert logging_call.pdg_node_idx < len(method_pdg.pdg_nodes)

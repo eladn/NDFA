@@ -90,7 +90,7 @@ class Vocabulary:
             raise ValueError(
                 f'Error while trying to load or create a vocabulary ({vocab_name}): '
                 f'Neither a stored vocabulary found nor a stored carpus words frequencies found nor '
-                f'a carpus generator is supplied.')
+                f'a carpus generator is supplied (have you supplied the raw training dataset?).')
         return all_carpus_words_with_freqs
 
 
