@@ -10,6 +10,7 @@ import numpy as np
 
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
                                 criterion: nn.Module, optimizer: Optional[Optimizer] = None):
+    # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
     y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch)
