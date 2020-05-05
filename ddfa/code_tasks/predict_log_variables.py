@@ -137,8 +137,8 @@ class Model(nn.Module):
             tokens_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
         self.cfg_node_encoder = CFGNodeEncoder(
             expression_encoder=expression_encoder, pdg_node_control_kinds_vocab=vocabs.pdg_node_control_kinds)
-        self.encoder_decoder_inbetween_dense_layers = [
-            nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)]
+        self.encoder_decoder_inbetween_dense_layers = nn.ModuleList([
+            nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)])
         self.symbols_special_words_embedding = nn.Embedding(
             num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim)
         self.symbols_decoder = SymbolsDecoder(
@@ -158,7 +158,8 @@ class Model(nn.Module):
             cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
 
         symbol_pad_embed = self.symbols_special_words_embedding(
-                self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>', as_tensor=True)).view(-1)
+                torch.tensor([self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>')],
+                             dtype=torch.long, device=encoded_identifiers.device)).view(-1)
         all_symbols_encodings = apply_batched_embeddings(
             batched_embeddings=encoded_identifiers, indices=x.identifiers_idxs_of_all_symbols,
             mask=x.identifiers_idxs_of_all_symbols_mask,
@@ -207,7 +208,7 @@ class LoggingCallsDataset(Dataset):
         self._kvstore_chunks_lengths = []
         for chunk_idx in itertools.count():
             filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
-            if not os.path.isfile(filepath):
+            if not os.path.isfile(filepath) and not os.path.isfile(filepath + '.dat'):
                 break
             self._pp_data_chunks_filepaths.append(filepath)
             kvstore = shelve.open(filepath, 'r')
@@ -221,7 +222,7 @@ class LoggingCallsDataset(Dataset):
 
     def _get_chunk_idx_contains_item(self, item_idx: int) -> int:
         assert item_idx < self._len
-        cond = self._kvstore_chunks_start_indices <= item_idx & item_idx < self._kvstore_chunks_stop_indices
+        cond = (self._kvstore_chunks_start_indices <= item_idx) & (self._kvstore_chunks_stop_indices > item_idx)
         assert np.sum(cond) == 1
         found_idx = np.where(cond)
         assert len(found_idx) == 1
