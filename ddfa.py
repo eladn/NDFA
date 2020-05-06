@@ -23,8 +23,9 @@ def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) 
 def main():
     exec_params: ModelExecutionParams = ModelExecutionParams.factory(
         load_from_args=True, load_from_yaml=True, verify_confclass=True)
-    device = torch.device("cuda" if exec_params.use_gpu_if_available and torch.cuda.is_available() else "cpu")  # TODO: fix confclass issues (the bool default to true doesn't work)
-    print(f'Device: {device}')
+    use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()  # TODO: fix confclass issues (the bool default to true doesn't work)
+    device = torch.device("cuda" if use_gpu else "cpu")
+    print(f'Using device: {device} (is CUDA available: {torch.cuda.is_available()})')
 
     if device.type == 'cuda':
         torch.cuda.empty_cache()
