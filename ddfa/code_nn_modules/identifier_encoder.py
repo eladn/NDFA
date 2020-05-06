@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder, LayerNorm
+from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
+from torch.nn.modules.normalization import LayerNorm
 from typing import Union, Optional
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary

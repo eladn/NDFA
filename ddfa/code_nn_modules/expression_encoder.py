@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from functools import reduce
-from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder, LayerNorm
+from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
+from torch.nn.modules.normalization import LayerNorm
 from torch.nn.utils.rnn import pack_padded_sequence
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
@@ -12,7 +13,7 @@ from ddfa.nn_utils import apply_batched_embeddings
 class ExpressionEncoder(nn.Module):
     def __init__(self, tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary, tokens_embedding_dim: int = 256,
                  expr_encoding_dim: int = 1028, token_kind_embedding_dim: int = 4,
-                 method: str = 'transformer_encoder'):
+                 method: str = 'bi-lstm'):
         assert method in {'bi-lstm', 'transformer_encoder'}
         super(ExpressionEncoder, self).__init__()
         self.tokens_vocab = tokens_vocab
