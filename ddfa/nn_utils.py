@@ -152,6 +152,7 @@ def apply_batched_embeddings(
         .unsqueeze(0).expand(nr_indices_per_example, -1).T.flatten().type_as(indices)  #  = [0,0,...,0,1,1,...,1, ...]
     assert indices_flattened.size() == indices_offsets_fixes.size()
     embeddings_flattened = batched_embeddings.flatten(0, 1)  # (batch_size * nr_words_per_example, embedding_dim)
+    zeros_tensor = torch.zeros(1, dtype=torch.long, device=indices_device)
     if common_embeddings is None and mask is None:
         indices_flattened_with_fixed_offsets = indices_flattened + indices_offsets_fixes
         selected_embedding_vectors_flattened = embeddings_flattened[
@@ -162,7 +163,8 @@ def apply_batched_embeddings(
         indices_flattened_with_fixed_offsets = torch.where(
             mask_flattened,
             indices_flattened + indices_offsets_fixes,
-            torch.zeros_like(indices_flattened)).view(batch_size * nr_indices_per_example)
+            zeros_tensor  # torch.zeros_like(indices_flattened)
+        ).view(batch_size * nr_indices_per_example)
         selected_embedding_vectors_flattened = torch.where(
             mask_flattened.view(-1, 1),
             embeddings_flattened[indices_flattened_with_fixed_offsets],
@@ -177,12 +179,12 @@ def apply_batched_embeddings(
             indices_flattened + indices_offsets_fixes - nr_common_embeddings)
         embeddings_indices = torch.where(
                 use_common_embeddings_mask,
-                torch.zeros_like(indices_flattened_with_fixed_offsets),  # avoid accessing invalid index
+                zeros_tensor,  # torch.zeros_like(indices_flattened_with_fixed_offsets)  #avoid accessing invalid index
                 indices_flattened_with_fixed_offsets)
         common_embeddings_indices = torch.where(
                 use_common_embeddings_mask,
                 indices_flattened_with_fixed_offsets,
-                torch.zeros_like(indices_flattened_with_fixed_offsets))  # avoid accessing invalid index
+                zeros_tensor)  # torch.zeros_like(indices_flattened_with_fixed_offsets)  # avoid accessing invalid index
         applied_common_embeddings = common_embeddings(common_embeddings_indices) \
             if isinstance(common_embeddings, nn.Embedding) else common_embeddings[common_embeddings_indices]
         selected_embedding_vectors_flattened = torch.where(
