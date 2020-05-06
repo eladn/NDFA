@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder, LayerNorm
+from torch.nn.utils.rnn import pack_padded_sequence
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.code_data_structure_api import *
@@ -10,25 +11,34 @@ from ddfa.nn_utils import apply_batched_embeddings
 
 class ExpressionEncoder(nn.Module):
     def __init__(self, tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary, tokens_embedding_dim: int = 256,
-                 expr_encoding_dim: int = 1028, token_kind_embedding_dim: int = 4):
+                 expr_encoding_dim: int = 1028, token_kind_embedding_dim: int = 4,
+                 method: str = 'transformer_encoder'):
+        assert method in {'bi-lstm', 'transformer_encoder'}
         super(ExpressionEncoder, self).__init__()
         self.tokens_vocab = tokens_vocab
         self.tokens_kinds_vocab = tokens_kinds_vocab
         self.tokens_embedding_dim = tokens_embedding_dim
         self.expr_encoding_dim = expr_encoding_dim
+        self.method = method
         self.tokens_embedding_layer = nn.Embedding(
-            num_embeddings=len(tokens_vocab), embedding_dim=self.tokens_embedding_dim)
+            num_embeddings=len(tokens_vocab), embedding_dim=self.tokens_embedding_dim,
+            padding_idx=tokens_vocab.get_word_idx_or_unk('<PAD>'))
         self.token_kind_embedding_dim = token_kind_embedding_dim
         self.tokens_kinds_embedding_layer = nn.Embedding(
-            num_embeddings=len(tokens_kinds_vocab), embedding_dim=self.token_kind_embedding_dim)
+            num_embeddings=len(tokens_kinds_vocab), embedding_dim=self.token_kind_embedding_dim,
+            padding_idx=tokens_kinds_vocab.get_word_idx_or_unk('<PAD>'))
 
         self.projection_linear_layer = nn.Linear(
             self.tokens_embedding_dim + self.token_kind_embedding_dim, self.expr_encoding_dim)
-        transformer_encoder_layer = TransformerEncoderLayer(
-            d_model=self.expr_encoding_dim, nhead=1)
-        encoder_norm = LayerNorm(self.expr_encoding_dim)
-        self.transformer_encoder = TransformerEncoder(
-            encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
+
+        if method == 'transformer_encoder':
+            transformer_encoder_layer = TransformerEncoderLayer(
+                d_model=self.expr_encoding_dim, nhead=1)
+            encoder_norm = LayerNorm(self.expr_encoding_dim)
+            self.transformer_encoder = TransformerEncoder(
+                encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
+        elif method == 'bi-lstm':
+            self.lstm_layer = nn.LSTM(self.expr_encoding_dim, self.expr_encoding_dim, bidirectional=True, num_layers=2)
 
     def forward(self, expressions: torch.Tensor, expressions_mask: Optional[torch.BoolTensor],
                 encoded_identifiers: torch.Tensor):  # Union[torch.Tensor, nn.utils.rnn.PackedSequence]
@@ -84,10 +94,21 @@ class ExpressionEncoder(nn.Module):
         expr_embeddings = torch.cat([token_kinds_embeddings, embeddings], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim + token_kind_embedding_dim)
         expr_embeddings_projected = self.projection_linear_layer(expr_embeddings.flatten(0, 2))\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.expr_encoding_dim)
-        if expressions_mask is not None:
-            expressions_mask = ~expressions_mask.flatten(0, 1)  # (bs*nr_exprs, nr_tokens_in_expr)
-        expr_encoded = self.transformer_encoder(
-            expr_embeddings_projected.flatten(0, 1).permute(1, 0, 2),
-            src_key_padding_mask=expressions_mask)\
-            .sum(dim=0).view(batch_size, nr_exprs, -1)
+        expr_embeddings_projected_SNE = expr_embeddings_projected.flatten(0, 1).permute(1, 0, 2)  # (nr_tokens_in_expr, bsz, embedding_dim)
+        if self.method == 'transformer_encoder':
+            if expressions_mask is not None:
+                expressions_mask = ~expressions_mask.flatten(0, 1)  # (bsz * nr_exprs, nr_tokens_in_expr)
+            expr_encoded = self.transformer_encoder(
+                expr_embeddings_projected_SNE,
+                src_key_padding_mask=expressions_mask)\
+                .sum(dim=0).view(batch_size, nr_exprs, -1)
+        elif self.method == 'bi-lstm':
+            lengths = None if expressions_mask is None else expressions_mask.flatten(0, 1).long().sum(dim=1)
+            packed_input = pack_padded_sequence(expr_embeddings_projected_SNE, lengths=lengths, enforce_sorted=False)
+            _, (last_hidden_out, _) = self.lstm_layer(packed_input)
+            assert last_hidden_out.size() == (2*2, batch_size * nr_exprs, self.expr_encoding_dim)
+            last_hidden_out = last_hidden_out.view(2, 2, batch_size * nr_exprs, self.expr_encoding_dim)[-1, :, :, :]\
+                .squeeze(0).sum(dim=0)
+            assert last_hidden_out.size() == (batch_size * nr_exprs, self.expr_encoding_dim)
+            expr_encoded = last_hidden_out.view(batch_size, nr_exprs, self.expr_encoding_dim)
         return expr_encoded

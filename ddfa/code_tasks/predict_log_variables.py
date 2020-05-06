@@ -140,7 +140,8 @@ class Model(nn.Module):
         self.encoder_decoder_inbetween_dense_layers = nn.ModuleList([
             nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)])
         self.symbols_special_words_embedding = nn.Embedding(
-            num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim)
+            num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim,
+            padding_idx=self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_vocab=self.vocabs.symbols_special_words,
             symbols_special_words_embedding=self.symbols_special_words_embedding, input_len=MAX_NR_PDG_NODES,
