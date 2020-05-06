@@ -120,9 +120,10 @@ def main():
             dataset_props=exec_params.experiment_setting.dataset,
             datafold=DataFold.Train,
             pp_data_path=exec_params.pp_data_dir_path)
+        dataloader_cuda_kwargs = {'num_workers': 3, 'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
         train_loader = DataLoader(
             train_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size,
-            collate_fn=task.collate_examples, shuffle=True, num_workers=3, pin_memory=True)  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
+            collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
         eval_loader = None
         if exec_params.perform_evaluation:
             eval_dataset = task.create_dataset(
@@ -131,7 +132,8 @@ def main():
                 datafold=DataFold.Validation,
                 pp_data_path=exec_params.eval_data_path)
             eval_loader = DataLoader(
-                eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2)
+                eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2,
+                **dataloader_cuda_kwargs)
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
