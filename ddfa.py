@@ -12,7 +12,7 @@ from ddfa.execution_parameters import ModelExecutionParams
 from ddfa.ddfa_model_hyper_parameters import DDFAModelTrainingHyperParams
 from ddfa.code_tasks.code_task_base import CodeTaskBase
 from ddfa.dataset_properties import DataFold
-from ddfa.nn_utils import fit
+from ddfa.nn_utils.train_loop import fit
 
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:

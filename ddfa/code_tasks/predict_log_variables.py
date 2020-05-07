@@ -15,14 +15,14 @@ from typing import NamedTuple, Iterable, Collection
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
-from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties
+from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, EvaluationMetric
 from ddfa.code_data_structure_api import *
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
-from ddfa.nn_utils import apply_batched_embeddings
+from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 
 
 __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsDataset']
@@ -67,6 +67,9 @@ class PredictLogVariablesTask(CodeTaskBase):
                 is_batched=True),
             target_symbols_idxs_used_in_logging_call=torch.cat(
                 tuple(example.target_symbols_idxs_used_in_logging_call.unsqueeze(0) for example in examples), dim=0))
+
+    def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
+        raise NotImplementedError  # TODO: implemente!
 
 
 class ModelInput(NamedTuple):
@@ -388,6 +391,9 @@ def preprocess_example(
     logging_call_pdg_node = method_pdg.pdg_nodes[logging_call.pdg_node_idx]
     sub_identifiers_pad = [vocabs.sub_identifiers.get_word_idx_or_unk('<PAD>')] * MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER
     if len(method_pdg.sub_identifiers_by_idx) > MAX_NR_IDENTIFIERS:
+        return None
+    if any(len(sub_identifiers_in_identifier) < 1 for sub_identifiers_in_identifier in method_pdg.sub_identifiers_by_idx):
+        warn(f'Found logging call {logging_call.hash} with an empty identifier (no sub-identifiers). ignoring.')
         return None
     if len(method_pdg.pdg_nodes) > MAX_NR_PDG_NODES:
         return None

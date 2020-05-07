@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import typing
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.nn_utils import apply_batched_embeddings
+from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 
 
 class SymbolsDecoder(nn.Module):

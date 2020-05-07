@@ -1,129 +1,10 @@
-import torch
-from torch.utils.data.dataloader import DataLoader
-from torch.optim.optimizer import Optimizer
-import torch.nn as nn
-import torch.nn.functional as F
-from tqdm import tqdm
-from typing import Optional, Union, Callable
 import numpy as np
+import torch
+import torch.nn as nn
+from typing import Optional, Union
 
 
-def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
-                                criterion: nn.Module, optimizer: Optional[Optimizer] = None,
-                                batch_idx: Optional[int] = None, minibatch_size: Optional[int] = None):
-    # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
-    x_batch, y_batch = x_batch.to(device), y_batch.to(device)
-    y_pred = model(x_batch, y_batch)
-    loss = criterion(y_pred, y_batch)
-    if optimizer is not None:
-        loss.backward()
-        if minibatch_size is None or (batch_idx % minibatch_size) == minibatch_size - 1:
-            optimizer.step()
-            optimizer.zero_grad()
-    return loss.item(), len(x_batch)
-
-
-class CyclicAppendOnlyBuffer:
-    def __init__(self, buffer_size: int):
-        assert buffer_size > 0
-        self._buffer_size = buffer_size
-        self._nr_items = 0
-        self._buffer = [None] * buffer_size
-        self._next_insert_idx = 0
-
-    def insert(self, item):
-        self._buffer[self._next_insert_idx] = item
-        self._next_insert_idx = (self._next_insert_idx + 1) % self._buffer_size
-        self._nr_items = min(self._nr_items + 1, self._buffer_size)
-
-    def get_all_items(self):
-        return (self._buffer[self._next_insert_idx:] if self._nr_items == self._buffer_size else []) + \
-               self._buffer[:self._next_insert_idx]
-
-    def __len__(self) -> int:
-        return self._nr_items
-
-
-class WindowAverage:
-    def __init__(self, max_window_size: int = 5):
-        self._max_window_size = max_window_size
-        self._items_buffer = CyclicAppendOnlyBuffer(buffer_size=max_window_size)
-
-    def update(self, number: float):
-        self._items_buffer.insert(number)
-
-    def get_window_avg(self, sub_window_size: Optional[int] = None):
-        assert sub_window_size is None or sub_window_size <= self._max_window_size
-        window_size = self._max_window_size if sub_window_size is None else sub_window_size
-        return np.average(self._items_buffer.get_all_items()[:window_size])
-
-    def get_window_avg_wo_outliers(self, nr_outliers: int = 3, sub_window_size: Optional[int] = None):
-        assert sub_window_size is None or sub_window_size <= self._max_window_size
-        window_size = self._max_window_size if sub_window_size is None else sub_window_size
-        assert nr_outliers < window_size
-        nr_outliers_wrt_windows_size_max_ratio = nr_outliers / window_size
-        assert nr_outliers_wrt_windows_size_max_ratio < 1
-        eff_window_size = min(len(self._items_buffer), window_size)
-        if eff_window_size < window_size and nr_outliers >= eff_window_size * nr_outliers_wrt_windows_size_max_ratio:
-            nr_outliers = int(eff_window_size * nr_outliers_wrt_windows_size_max_ratio)
-        assert nr_outliers <= eff_window_size * nr_outliers_wrt_windows_size_max_ratio
-        items = np.array(self._items_buffer.get_all_items()[:eff_window_size])
-        if nr_outliers > 0:
-            median = np.median(items)
-            dist_from_median = np.abs(items - median)
-            outliers_indices = np.argpartition(dist_from_median, -nr_outliers)[-nr_outliers:]
-            items[outliers_indices] = np.nan
-        return np.nanmean(items)
-
-
-def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
-        valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
-        minibatch_size: Optional[int] = None,
-        save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None):
-    model.to(device)
-    for epoch_nr in range(1, nr_epochs + 1):
-        model.train()
-        train_epoch_loss_sum = 0
-        train_epoch_nr_examples = 0
-        train_epoch_window_loss = WindowAverage(max_window_size=15)
-        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
-        for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
-            batch_loss, batch_nr_examples = perform_loss_step_for_batch(
-                device=device, x_batch=x_batch, y_batch=y_batch, model=model,
-                criterion=criterion, optimizer=optimizer, batch_idx=batch_idx, minibatch_size=minibatch_size)
-            train_epoch_loss_sum += batch_loss * batch_nr_examples
-            train_epoch_nr_examples += batch_nr_examples
-            train_epoch_window_loss.update(batch_loss)
-            train_data_loader_with_progress.set_postfix(
-                {'loss (epoch avg)': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}',
-                 'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
-                 'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
-
-        if save_checkpoint_fn is not None:
-            save_checkpoint_fn(model, optimizer, epoch_nr)
-
-        if valid_loader is not None:
-            model.eval()
-            with torch.no_grad():
-                losses, nums = zip(
-                    *(perform_loss_step_for_batch(
-                        device=device, x_batch=x_batch, y_batch=y_batch, model=model, criterion=criterion)
-                      for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True)))
-            val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
-            print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
-
-
-def test(args, model, device, test_loader):
-    model.eval()
-    test_loss = 0
-    correct = 0
-    with torch.no_grad():
-        for x_batch, y_batch in test_loader:
-            data, target = x_batch.to(device), y_batch.to(device)
-            output = model(data)
-            test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
-            pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
-            correct += pred.eq(target.view_as(pred)).sum().item()
+__all__ = ['apply_batched_embeddings']
 
 
 def apply_batched_embeddings(
@@ -306,3 +187,7 @@ def apply_batched_embeddings_test():
         common_embeddings=common_embeddings_as_embedding_layer)
     assert applied_embd.size() == with_used_common_wo_mask_expected_result.size()
     assert torch.all(applied_embd.isclose(with_used_common_wo_mask_expected_result.float()))
+
+
+if __name__ == '__main__':
+    apply_batched_embeddings_test()

@@ -1,7 +1,7 @@
 import abc
 import torch
 from torch.utils.data.dataset import Dataset
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Type, Dict
 from confclass import confclass, confparam
 import torch.nn as nn
 
@@ -9,10 +9,20 @@ from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
 
 
-__all__ = ['task_names', 'CodeTaskProperties', 'CodeTaskBase']
+__all__ = ['task_names', 'CodeTaskProperties', 'CodeTaskBase', 'EvaluationMetric']
 
 
 task_names = ('pred-log-vars',)
+
+
+class EvaluationMetric(abc.ABC):
+    @abc.abstractmethod
+    def update(self, y_hat, target):
+        ...
+
+    @abc.abstractmethod
+    def get_metrics(self) -> Dict[str, float]:
+        ...
 
 
 @confclass
@@ -57,4 +67,8 @@ class CodeTaskBase(abc.ABC):
 
     @abc.abstractmethod
     def collate_examples(self, examples: List[Any]):
+        ...
+
+    @abc.abstractmethod
+    def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
         ...
