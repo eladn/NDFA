@@ -9,15 +9,17 @@ import numpy as np
 
 
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
-                                criterion: nn.Module, optimizer: Optional[Optimizer] = None):
+                                criterion: nn.Module, optimizer: Optional[Optimizer] = None,
+                                batch_idx: Optional[int] = None, minibatch_size: Optional[int] = None):
     # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
     y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch)
     if optimizer is not None:
         loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+        if minibatch_size is None or (batch_idx % minibatch_size) == minibatch_size - 1:
+            optimizer.step()
+            optimizer.zero_grad()
     return loss.item(), len(x_batch)
 
 
@@ -76,6 +78,7 @@ class WindowAverage:
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
+        minibatch_size: Optional[int] = None,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None):
     model.to(device)
     for epoch_nr in range(1, nr_epochs + 1):
@@ -84,10 +87,10 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_nr_examples = 0
         train_epoch_window_loss = WindowAverage(max_window_size=15)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
-        for x_batch, y_batch in iter(train_data_loader_with_progress):
+        for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
-                criterion=criterion, optimizer=optimizer)
+                criterion=criterion, optimizer=optimizer, batch_idx=batch_idx, minibatch_size=minibatch_size)
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
             train_epoch_window_loss.update(batch_loss)

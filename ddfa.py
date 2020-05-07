@@ -146,6 +146,7 @@ def main():
             valid_loader=eval_loader,
             optimizer=optimizer,
             criterion=criterion,
+            minibatch_size=8,  # TODO: make a train HP
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
