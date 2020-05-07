@@ -105,6 +105,8 @@ class ExpressionEncoder(nn.Module):
                 .sum(dim=0).view(batch_size, nr_exprs, -1)
         elif self.method == 'bi-lstm':
             lengths = None if expressions_mask is None else expressions_mask.flatten(0, 1).long().sum(dim=1)
+            lengths = torch.where(lengths <= torch.zeros(1, dtype=torch.long, device=lengths.device),
+                                  torch.ones(1, dtype=torch.long, device=lengths.device), lengths)
             packed_input = pack_padded_sequence(expr_embeddings_projected_SNE, lengths=lengths, enforce_sorted=False)
             _, (last_hidden_out, _) = self.lstm_layer(packed_input)
             assert last_hidden_out.size() == (2*2, batch_size * nr_exprs, self.expr_encoding_dim)
