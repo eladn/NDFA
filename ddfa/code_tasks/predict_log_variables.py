@@ -132,7 +132,7 @@ class Model(nn.Module):
         self.model_hps = model_hps
         self.vocabs = vocabs
         self.identifier_embedding_dim = 256  # TODO: plug-in model hps
-        self.expr_encoding_dim = 1028  # TODO: plug-in model hps
+        self.expr_encoding_dim = 2048  # TODO: plug-in model hps
         self.identifier_encoder = IdentifierEncoder(
             sub_identifiers_vocab=vocabs.sub_identifiers, embedding_dim=self.identifier_embedding_dim)
         expression_encoder = ExpressionEncoder(
@@ -146,9 +146,8 @@ class Model(nn.Module):
             num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim,
             padding_idx=self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))
         self.symbols_decoder = SymbolsDecoder(
-            symbols_special_words_vocab=self.vocabs.symbols_special_words,
-            symbols_special_words_embedding=self.symbols_special_words_embedding, input_len=MAX_NR_PDG_NODES,
-            input_dim=self.cfg_node_encoder.output_dim, symbols_encoding_dim=self.identifier_embedding_dim)
+            symbols_special_words_embedding=self.symbols_special_words_embedding, encoder_output_len=MAX_NR_PDG_NODES,
+            encoder_output_dim=self.cfg_node_encoder.output_dim, symbols_encoding_dim=self.identifier_embedding_dim)
 
     def forward(self, x: ModelInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor]):
         # x = tagged_example.model_input
