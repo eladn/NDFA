@@ -39,7 +39,7 @@ def main():
         if os.path.isfile(exec_params.model_load_path):
             ckpt_filepath = exec_params.model_load_path
         elif not os.path.isdir(exec_params.model_load_path):
-            raise ValueError(f'No model to load ')
+            raise ValueError(f'The model to load path provided does not exist (`{exec_params.model_load_path}`).')
         else:
             for epoch_nr in itertools.count():
                 # FIXME: it won't be found if the `epoch_nr` is encoded in the experiment setting...
@@ -145,7 +145,8 @@ def main():
             optimizer=optimizer,
             criterion=criterion,
             minibatch_size=8,  # TODO: make a train HP
-            save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None)
+            save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
+            evaluation_metrics_types=task.evaluation_metrics())
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         raise NotImplementedError()  # TODO: implement!

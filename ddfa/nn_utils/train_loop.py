@@ -4,10 +4,11 @@ from torch.optim.optimizer import Optimizer
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from typing import Optional, Callable
+from typing import Optional, Callable, List, Type
 import numpy as np
 
 from ddfa.nn_utils.window_average import WindowAverage
+from ddfa.code_tasks.code_task_base import EvaluationMetric
 
 
 __all__ = ['fit']
@@ -27,13 +28,14 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
                 (nr_batches is not None and batch_idx == nr_batches - 1):
             optimizer.step()
             optimizer.zero_grad()
-    return loss.item(), len(x_batch)
+    return y_pred, loss.item(), len(x_batch)
 
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
         minibatch_size: Optional[int] = None,
-        save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None):
+        save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
+        evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None):
     model.to(device)
     for epoch_nr in range(1, nr_epochs + 1):
         model.train()
@@ -42,7 +44,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_window_loss = WindowAverage(max_window_size=15)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
-            batch_loss, batch_nr_examples = perform_loss_step_for_batch(
+            _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
                 nr_batches=len(train_data_loader_with_progress), minibatch_size=minibatch_size)
@@ -58,14 +60,25 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             save_checkpoint_fn(model, optimizer, epoch_nr)
 
         if valid_loader is not None:
+            print(f'Performing evaluation (over validation) after epoch #{epoch_nr}:')
             model.eval()
+            metrics = [metric() for metric in evaluation_metrics_types]
+            eval_epoch_loss_sum = eval_epoch_nr_examples = 0
             with torch.no_grad():
-                losses, nums = zip(
-                    *(perform_loss_step_for_batch(
+                for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True):
+                    y_hat, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                         device=device, x_batch=x_batch, y_batch=y_batch, model=model, criterion=criterion)
-                      for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True)))
-            val_loss = np.sum(np.multiply(losses, nums)) / np.sum(nums)
-            print(f'Train Epoch #{epoch_nr} -- validation loss: {val_loss:.4f}')
+                    for metric in metrics:
+                        metric.update(y_hat=y_hat.item(), target=y_batch)
+                    eval_epoch_loss_sum += batch_loss * batch_nr_examples
+                    eval_epoch_nr_examples += batch_nr_examples
+            val_loss = eval_epoch_loss_sum / eval_epoch_nr_examples
+            metrics_results = {}
+            for metric in metrics:
+                metrics_results.update(metric.get_metrics())
+            print(f'Completed performing training & evaluation for epoch #{epoch_nr}.'
+                  f'\n\t validation loss: {val_loss:.4f}'
+                  f'\n\t validation metrics: {metrics_results}')
 
 
 def test(args, model, device, test_loader):

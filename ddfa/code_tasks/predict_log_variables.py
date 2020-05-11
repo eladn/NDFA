@@ -69,7 +69,62 @@ class PredictLogVariablesTask(CodeTaskBase):
                 tuple(example.target_symbols_idxs_used_in_logging_call.unsqueeze(0) for example in examples), dim=0))
 
     def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
-        raise NotImplementedError  # TODO: implemente!
+        return [F1EvaluationMetric]
+
+
+class F1EvaluationMetric(EvaluationMetric):
+    def __init__(self):
+        self.nr_true_positives = 0
+        self.nr_false_positives = 0
+        self.nr_false_negatives = 0
+        self.nr_predictions = 0
+
+    def update(self, y_hat, target):
+        pred_symbol_names = set()
+        groundtrue_symbol_names = set()
+        self.nr_true_positives += len(groundtrue_symbol_names & pred_symbol_names)
+        self.nr_false_positives += len(pred_symbol_names - groundtrue_symbol_names)
+        self.nr_false_negatives += len(groundtrue_symbol_names - pred_symbol_names)
+        self.nr_predictions += 1
+
+    def get_metrics(self) -> Dict[str, float]:
+        return {
+            'tp': self.true_positive_rate,
+            'fp': self.false_positive_rate,
+            'fn': self.false_negative_rate,
+            'precision': self.precision,
+            'recall': self.recall,
+            'f1': self.f1}
+
+    @property
+    def total_nr_tokens(self) -> int:
+        return self.nr_true_positives + self.nr_false_positives + self.nr_false_negatives
+
+    @property
+    def true_positive_rate(self) -> float:
+        return self.nr_true_positives / (self.total_nr_tokens + np.finfo(np.float32).eps)
+
+    @property
+    def false_positive_rate(self) -> float:
+        return self.nr_false_positives / (self.total_nr_tokens + np.finfo(np.float32).eps)
+
+    @property
+    def false_negative_rate(self) -> float:
+        return self.nr_false_negatives / (self.total_nr_tokens + np.finfo(np.float32).eps)
+
+    @property
+    def precision(self) -> float:
+        return self.nr_true_positives / (self.nr_true_positives + self.nr_false_positives + np.finfo(np.float32).eps)
+
+    @property
+    def recall(self) -> float:
+        return self.nr_true_positives / (self.nr_true_positives + self.nr_false_negatives + np.finfo(np.float32).eps)
+
+    @property
+    def f1(self) -> float:
+        precision = self.precision
+        recall = self.recall
+        return (2 * precision * recall) / (precision + recall + np.finfo(np.float32).eps)
 
 
 class ModelInput(NamedTuple):
@@ -146,7 +201,9 @@ class Model(nn.Module):
             num_embeddings=len(self.vocabs.symbols_special_words), embedding_dim=self.identifier_embedding_dim,
             padding_idx=self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))
         self.symbols_decoder = SymbolsDecoder(
-            symbols_special_words_embedding=self.symbols_special_words_embedding, encoder_output_len=MAX_NR_PDG_NODES,
+            symbols_special_words_embedding=self.symbols_special_words_embedding,
+            symbols_special_words_vocab=self.vocabs.symbols_special_words,
+            max_nr_taget_symbols=MAX_NR_TARGET_SYMBOLS + 2, encoder_output_len=MAX_NR_PDG_NODES,
             encoder_output_dim=self.cfg_node_encoder.output_dim, symbols_encoding_dim=self.identifier_embedding_dim)
 
     def forward(self, x: ModelInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor]):
