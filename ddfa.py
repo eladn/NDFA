@@ -17,7 +17,7 @@ from ddfa.nn_utils.train_loop import fit
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
     # TODO: fully implement (choose optimizer and lr)!
-    return torch.optim.Adam(model.parameters())
+    return torch.optim.Adam(model.parameters(), lr=0.0005)
 
 
 def main():
@@ -144,7 +144,7 @@ def main():
             valid_loader=eval_loader,
             optimizer=optimizer,
             criterion=criterion,
-            minibatch_size=8,  # TODO: make a train HP
+            minibatch_size=16,  # TODO: make a train HP
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
             evaluation_metrics_types=task.evaluation_metrics())
 
