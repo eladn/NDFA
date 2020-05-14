@@ -77,8 +77,6 @@ class AttnRNNDecoder(nn.Module):
             assert target_idxs is not None
             assert len(target_idxs.size()) == 2 and target_idxs.size()[0] == batch_size
             target_seq_len = target_idxs.size()[1]
-            if target_seq_len > self.max_target_seq_len:  # TODO: REMOVE!
-                print(target_seq_len, self.max_target_seq_len)  # TODO: REMOVE!
             assert target_seq_len <= self.max_target_seq_len
             target_encodings = apply_batched_embeddings(
                 batched_embeddings=output_batched_encodings, indices=target_idxs,
@@ -152,6 +150,7 @@ class AttnRNNDecoder(nn.Module):
 
             if not self.training:
                 _, prev_cell_output_idx = rnn_cell_output.topk(1, dim=1)
+                prev_cell_output_idx = prev_cell_output_idx.squeeze(dim=1)
                 assert prev_cell_output_idx.size() == (batch_size,) and prev_cell_output_idx.dtype == torch.long
 
         outputs = torch.stack(outputs).permute(1, 0, 2)

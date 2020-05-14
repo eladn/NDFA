@@ -12,7 +12,7 @@ from ddfa.execution_parameters import ModelExecutionParams
 from ddfa.ddfa_model_hyper_parameters import DDFAModelTrainingHyperParams
 from ddfa.code_tasks.code_task_base import CodeTaskBase
 from ddfa.dataset_properties import DataFold
-from ddfa.nn_utils.train_loop import fit
+from ddfa.nn_utils.train_loop import fit, evaluate
 
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
@@ -55,7 +55,7 @@ def main():
         if ckpt_filepath is None:
             raise ValueError(
                 f'No model to load in dir {exec_params.model_load_path} that matches the chosen experiment setting.')
-        with open(exec_params.model_load_path, 'bw') as checkpoint_file:
+        with open(exec_params.model_load_path, 'br') as checkpoint_file:
             loaded_checkpoint = torch.load(checkpoint_file)
         # TODO: Modify `exec_params.experiment_setting` according to `loaded_checkpoint['experiment_setting']`.
         #       Verify overridden arguments and raise ArgumentException if needed.
@@ -128,10 +128,10 @@ def main():
                 model_hps=exec_params.experiment_setting.model_hyper_params,
                 dataset_props=exec_params.experiment_setting.dataset,
                 datafold=DataFold.Validation,
-                pp_data_path=exec_params.eval_data_path)
+                pp_data_path=exec_params.pp_data_dir_path)
             eval_loader = DataLoader(
                 eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2,
-                **dataloader_cuda_kwargs)
+                collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
@@ -149,7 +149,26 @@ def main():
             evaluation_metrics_types=task.evaluation_metrics())
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
-        raise NotImplementedError()  # TODO: implement!
+        print('Performing evaluation (over the validation set) ..')
+        dataloader_cuda_kwargs = {'num_workers': 3, 'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
+        eval_dataset = task.create_dataset(
+            model_hps=exec_params.experiment_setting.model_hyper_params,
+            dataset_props=exec_params.experiment_setting.dataset,
+            datafold=DataFold.Validation,
+            pp_data_path=exec_params.pp_data_dir_path)
+        eval_loader = DataLoader(
+            eval_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2,
+            collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
+        criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
+        val_loss, metrics_results = evaluate(
+            model=model,
+            device=device,
+            valid_loader=eval_loader,
+            criterion=criterion,
+            evaluation_metrics_types=task.evaluation_metrics())
+        print(f'Completed performing evaluation.'
+              f'\n\t validation loss: {val_loss:.4f}'
+              f'\n\t validation metrics: {metrics_results}')
 
     if exec_params.perform_prediction:
         raise NotImplementedError()  # TODO: implement!
