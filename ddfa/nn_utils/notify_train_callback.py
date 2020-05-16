@@ -10,7 +10,7 @@ __all__ = ['NotifyCallback']
 
 
 class NotifyCallback(TrainCallback):
-    def __init__(self, notify_every_mins: Optional[int] = 10):
+    def __init__(self, notify_every_mins: Optional[int] = 5):
         self.notify_every_mins = notify_every_mins
 
         self.low_verbosity_notify = Notify()
