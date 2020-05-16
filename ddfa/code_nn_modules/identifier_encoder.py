@@ -30,27 +30,27 @@ class IdentifierEncoder(nn.Module):
 
     def forward(self, sub_identifiers_indices: Union[torch.Tensor, nn.utils.rnn.PackedSequence],
                 sub_identifiers_mask: Optional[torch.BoolTensor] = None):
+        assert isinstance(sub_identifiers_indices, torch.Tensor)
         assert sub_identifiers_indices.dtype == torch.long
+        assert len(sub_identifiers_indices.size()) == 3
         assert sub_identifiers_mask is None or (sub_identifiers_mask.dtype == torch.bool and
                                                 sub_identifiers_mask.size() == sub_identifiers_indices.size())
-
-        assert isinstance(sub_identifiers_indices, torch.Tensor)
-        assert len(sub_identifiers_indices.size()) == 3
         batch_size, nr_identifiers_in_example, nr_sub_identifiers_in_identifier = sub_identifiers_indices.size()
+
         sub_identifiers_indices = sub_identifiers_indices.flatten(0, 1)\
-            .permute(1, 0)  # (nr_sub_identifiers, bs*nr_identifiers)
+            .permute(1, 0)  # (nr_sub_identifiers, bsz * nr_identifiers_in_example)
         assert sub_identifiers_indices.size() == \
                (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example)
         sub_identifiers_embeddings = self.sub_identifiers_embedding_layer(
-            sub_identifiers_indices)  # (nr_sub_identifiers, bs*nr_identifiers, embedding_dim)
+            sub_identifiers_indices)  # (nr_sub_identifiers, bsz * nr_identifiers_in_example, embedding_dim)
         assert sub_identifiers_embeddings.size() == \
                (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example, self.embedding_dim)
 
         if self.method == 'transformer_encoder':
             if sub_identifiers_mask is not None:
-                sub_identifiers_mask = ~sub_identifiers_mask.flatten(0, 1)  # (bs*nr_identifiers, nr_sub_identifiers)
+                sub_identifiers_mask = ~sub_identifiers_mask.flatten(0, 1)  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)
             sub_identifiers_encoded = self.transformer_encoder(
-                sub_identifiers_embeddings, src_key_padding_mask=sub_identifiers_mask).sum(dim=0)  # (bs*nr_identifiers, embedding_dim)
+                sub_identifiers_embeddings, src_key_padding_mask=sub_identifiers_mask).sum(dim=0)  # (bsz * nr_identifiers_in_example, embedding_dim)
             assert sub_identifiers_encoded.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
             return sub_identifiers_encoded.view(batch_size, nr_identifiers_in_example, self.embedding_dim)
 
