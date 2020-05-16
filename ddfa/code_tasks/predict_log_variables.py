@@ -8,6 +8,7 @@ import itertools
 import functools
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import defaultdict
 from warnings import warn
 from torch.utils.data.dataset import Dataset
@@ -205,7 +206,7 @@ class Model(nn.Module):
         encoded_cfg_nodes_after_dense = encoded_cfg_nodes
         if self.encoder_decoder_inbetween_dense_layers:
             encoded_cfg_nodes_after_dense = functools.reduce(
-                lambda last_res, cur_layer: cur_layer(last_res),
+                lambda last_res, cur_layer: F.relu(cur_layer(last_res)),
                 self.encoder_decoder_inbetween_dense_layers,
                 encoded_cfg_nodes.flatten(0, 1)).view(encoded_cfg_nodes.size()[:-1] + (-1,))
 
