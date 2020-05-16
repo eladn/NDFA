@@ -90,7 +90,7 @@ class ModelExecutionParams:
         default=100,
         description="Number of training batches to complete between model evaluations on the test set.")
 
-    max_latest_checkpoints_to_keep: int = confparam(
+    max_latest_checkpoints_to_keep: Optional[int] = confparam(
         default=10,
         description="Keep this number of newest trained versions during training.")
 
@@ -108,6 +108,10 @@ class ModelExecutionParams:
 
     seed: Optional[int] = confparam(
         default=1)
+
+    use_notify: bool = confparam(
+        default=True,
+        arg_names=['--use-notify'])
 
     @property
     def perform_prediction(self):

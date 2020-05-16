@@ -1,13 +1,14 @@
+import time
 import torch
 from torch.utils.data.dataloader import DataLoader
 from torch.optim.optimizer import Optimizer
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from typing import Optional, Callable, List, Type, Tuple, Dict
-import numpy as np
+from typing import Optional, Callable, List, Type, Tuple, Dict, Collection
 
 from ddfa.nn_utils.window_average import WindowAverage
+from ddfa.nn_utils.train_callback import TrainCallback
 from ddfa.code_tasks.code_task_base import EvaluationMetric
 
 
@@ -35,38 +36,129 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
         minibatch_size: Optional[int] = None,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
-        evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None):
+        evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
+        callbacks: Optional[Collection[TrainCallback]] = None,
+        evaluation_time_consumption_ratio: float = 1/20,
+        perform_evaluation_before_starting_training: bool = True):
+    if callbacks is None:
+        callbacks = ()
     model.to(device)
+
+    evaluation_avg_duration = None
+    if valid_loader is not None and perform_evaluation_before_starting_training:
+        print(f'Performing evaluation (over validation) before starting the training:')
+        evaluate_start_time = time.time()
+        val_loss, val_metrics_results = evaluate(
+            model=model, device=device, valid_loader=valid_loader, criterion=criterion,
+            evaluation_metrics_types=evaluation_metrics_types)
+        evaluation_avg_duration = time.time() - evaluate_start_time
+        print(f'Completed performing evaluation (over validation) before starting the training.'
+              f'\n\t validation loss: {val_loss:.4f}'
+              f'\n\t validation metrics: {val_metrics_results}')
+
+    train_step_avg_time = None
+    nr_steps_performed_since_last_evaluation = 0
     for epoch_nr in range(1, nr_epochs + 1):
+        for callback in callbacks:
+            callback.epoch_start(epoch_nr=epoch_nr)
         model.train()
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
+        train_epoch_avg_loss = 0.0
         train_epoch_window_loss = WindowAverage(max_window_size=15)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
+        nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
+            for callback in callbacks:
+                callback.step_start(
+                    epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps)
+            cur_step_start_time = time.time()
             _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
-                nr_batches=len(train_data_loader_with_progress), minibatch_size=minibatch_size)
+                nr_batches=nr_steps, minibatch_size=minibatch_size)
+            cur_step_duration = time.time() - cur_step_start_time
+            train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
+                train_step_avg_time * 0.8 + cur_step_duration * 0.2
+            nr_steps_performed_since_last_evaluation += 1
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
             train_epoch_window_loss.update(batch_loss)
+            train_epoch_avg_loss = train_epoch_loss_sum/train_epoch_nr_examples
             train_data_loader_with_progress.set_postfix(
-                {'loss (epoch avg)': f'{train_epoch_loss_sum/train_epoch_nr_examples:.4f}',
+                {'loss (epoch avg)': f'{train_epoch_avg_loss:.4f}',
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
                  'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
 
+            if valid_loader is not None and batch_idx + 1 < nr_steps and \
+                    (evaluation_avg_duration / (nr_steps_performed_since_last_evaluation * train_step_avg_time)) < \
+                    evaluation_time_consumption_ratio:
+                for callback in callbacks:
+                    callback.step_end_before_evaluation(
+                        epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                        batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
+                        epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
+
+                print(f'Performing evaluation (over validation) DURING epoch #{epoch_nr} '
+                      f'(after step {batch_idx + 1}/{nr_steps}):')
+                evaluate_start_time = time.time()
+                val_loss, val_metrics_results = evaluate(
+                    model=model, device=device, valid_loader=valid_loader, criterion=criterion,
+                    evaluation_metrics_types=evaluation_metrics_types)
+                last_evaluation_duration = time.time() - evaluate_start_time
+                evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
+                    (evaluation_avg_duration + last_evaluation_duration) / 2
+                print(f'Completed performing evaluation DURING epoch #{epoch_nr} '
+                      f'(after step {batch_idx + 1}/{nr_steps}).'
+                      f'\n\t validation loss: {val_loss:.4f}'
+                      f'\n\t validation metrics: {val_metrics_results}')
+
+                for callback in callbacks:
+                    callback.step_end_after_evaluation(
+                        epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                        batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
+                        epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
+                        validation_loss=val_loss, validation_metrics_results=val_metrics_results)
+
+                nr_steps_performed_since_last_evaluation = 0
+
+            for callback in callbacks:
+                callback.step_end(
+                    epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                    batch_loss=batch_loss, batch_nr_examples=batch_nr_examples, epoch_avg_loss=train_epoch_avg_loss,
+                    epoch_moving_win_loss=train_epoch_window_loss)
+
+        # TODO: make it a callback of `epoch_end`
         if save_checkpoint_fn is not None:
-            save_checkpoint_fn(model, optimizer, epoch_nr)
+            save_checkpoint_fn(model, optimizer, epoch_nr, None)
 
         if valid_loader is not None:
+            for callback in callbacks:
+                callback.epoch_end_before_evaluation(
+                    epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                    epoch_moving_win_loss=train_epoch_window_loss)
+
             print(f'Performing evaluation (over validation) after epoch #{epoch_nr}:')
-            val_loss, metrics_results = evaluate(
+            val_loss, val_metrics_results = evaluate(
                 model=model, device=device, valid_loader=valid_loader, criterion=criterion,
                 evaluation_metrics_types=evaluation_metrics_types)
+            evaluate_start_time = time.time()
+            last_evaluation_duration = time.time() - evaluate_start_time
+            evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
+                (evaluation_avg_duration + last_evaluation_duration) / 2
             print(f'Completed performing training & evaluation for epoch #{epoch_nr}.'
                   f'\n\t validation loss: {val_loss:.4f}'
-                  f'\n\t validation metrics: {metrics_results}')
+                  f'\n\t validation metrics: {val_metrics_results}')
+
+            for callback in callbacks:
+                callback.epoch_end_after_evaluation(
+                    epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                    epoch_moving_win_loss=train_epoch_window_loss,
+                    validation_loss=val_loss, validation_metrics_results=val_metrics_results)
+
+        for callback in callbacks:
+            callback.epoch_end(
+                epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
 
 
 def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,

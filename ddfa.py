@@ -135,6 +135,11 @@ def main():
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
+        train_callbacks = []
+        if exec_params.use_notify:
+            from ddfa.nn_utils.notify_train_callback import NotifyCallback
+            train_callbacks.append(NotifyCallback())
+
         print('Starting training.')
         fit(
             nr_epochs=exec_params.experiment_setting.train_hyper_params.nr_epochs,
@@ -146,7 +151,8 @@ def main():
             criterion=criterion,
             minibatch_size=16,  # TODO: make a train HP
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
-            evaluation_metrics_types=task.evaluation_metrics())
+            evaluation_metrics_types=task.evaluation_metrics(),
+            callbacks=train_callbacks)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
