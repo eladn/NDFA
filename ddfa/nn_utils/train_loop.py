@@ -65,7 +65,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
-        train_epoch_window_loss = WindowAverage(max_window_size=15)
+        train_epoch_window_loss = WindowAverage(max_window_size=50)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
         nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
