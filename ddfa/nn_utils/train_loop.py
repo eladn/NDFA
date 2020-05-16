@@ -107,7 +107,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     evaluation_metrics_types=evaluation_metrics_types)
                 last_evaluation_duration = time.time() - evaluate_start_time
                 evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
-                    (evaluation_avg_duration + last_evaluation_duration) / 2
+                    (evaluation_avg_duration * 0.7 + last_evaluation_duration * 0.3)
                 print(f'Completed performing evaluation DURING epoch #{epoch_nr} '
                       f'(after step {batch_idx + 1}/{nr_steps}).'
                       f'\n\t validation loss: {val_loss:.4f}'
@@ -145,7 +145,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             evaluate_start_time = time.time()
             last_evaluation_duration = time.time() - evaluate_start_time
             evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
-                (evaluation_avg_duration + last_evaluation_duration) / 2
+                (evaluation_avg_duration * 0.7 + last_evaluation_duration * 0.3)
             print(f'Completed performing training & evaluation for epoch #{epoch_nr}.'
                   f'\n\t validation loss: {val_loss:.4f}'
                   f'\n\t validation metrics: {val_metrics_results}')
