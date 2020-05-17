@@ -21,9 +21,6 @@ class Attention(nn.Module):
         assert attn_key_from is None or attn_key_from.size() == (batch_size, nr_features)
         assert attn_weights is None or attn_weights.size() == (batch_size, seq_len)
         assert nr_features == self.nr_features
-        if mask.size() != (batch_size, seq_len):
-            print(mask.size())
-            print((batch_size, seq_len))
         assert mask is None or mask.size() == (batch_size, seq_len)
 
         if attn_key_from is not None:
