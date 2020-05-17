@@ -1,5 +1,6 @@
 from collections import defaultdict, OrderedDict
 from typing import Dict, Set
+import numpy as np
 
 from ddfa.code_tasks.code_task_base import EvaluationMetric
 

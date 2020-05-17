@@ -95,6 +95,7 @@ class IdentifierEncoder(nn.Module):
             assert attn_weights.size() == (max_nr_sub_identifiers * batch_size * nr_identifiers_in_example, 1, 1)
             attn_weights = attn_weights.view(max_nr_sub_identifiers, batch_size * nr_identifiers_in_example).permute(1, 0)  # (batch_size * nr_identifiers_in_example, max_nr_sub_identifiers)
             if sub_identifiers_mask is not None:
+                sub_identifiers_mask[:, 0] = True
                 # sub_identifiers_mask = sub_identifiers_mask[:, :max_nr_sub_identifiers]
                 attn_weights = attn_weights + torch.where(
                     sub_identifiers_mask,  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)

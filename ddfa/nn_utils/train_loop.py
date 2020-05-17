@@ -38,7 +38,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
         callbacks: Optional[Collection[TrainCallback]] = None,
-        evaluation_time_consumption_ratio: float = 1/20,
+        evaluation_time_consumption_ratio: float = 1/8,
         perform_evaluation_before_starting_training: bool = True):
     if callbacks is None:
         callbacks = ()
@@ -65,7 +65,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
         nr_steps_performed_since_last_evaluation = 0
-        train_epoch_window_loss = WindowAverage(max_window_size=15)
+        train_epoch_window_loss = WindowAverage(max_window_size=50)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
         nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
@@ -121,6 +121,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                         validation_loss=val_loss, validation_metrics_results=val_metrics_results)
 
                 nr_steps_performed_since_last_evaluation = 0
+                model.train()
 
             for callback in callbacks:
                 callback.step_end(

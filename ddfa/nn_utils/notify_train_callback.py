@@ -30,9 +30,12 @@ class NotifyCallback(TrainCallback):
         if self.high_verbosity_notify is None:
             return
         if self.high_verbosity_last_msg_time is None or \
-                self.high_verbosity_last_msg_time + self.notify_every_mins >= time.time():
-            self.low_verbosity_notify.send(
-                f'Ep {epoch_nr} step {step_nr}/{nr_steps}: ')
+                self.high_verbosity_last_msg_time + self.notify_every_mins * 60 <= time.time():
+            self.high_verbosity_notify.send(
+                f'Ep {epoch_nr} step {step_nr}/{nr_steps}: '
+                f'loss (epoch avg): {epoch_avg_loss:.4f} -- '
+                f'loss (win avg): {epoch_moving_win_loss.get_window_avg():.4f} -- '
+                f'loss (win stbl avg): {epoch_moving_win_loss.get_window_avg_wo_outliers():.4f}')
             self.high_verbosity_last_msg_time = time.time()
 
     def epoch_end_after_evaluation(self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
