@@ -57,7 +57,6 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
               f'\n\t validation metrics: {val_metrics_results}')
 
     train_step_avg_time = None
-    nr_steps_performed_since_last_evaluation = 0
     for epoch_nr in range(1, nr_epochs + 1):
         for callback in callbacks:
             callback.epoch_start(epoch_nr=epoch_nr)
@@ -65,6 +64,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
+        nr_steps_performed_since_last_evaluation = 0
         train_epoch_window_loss = WindowAverage(max_window_size=15)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
         nr_steps = len(train_data_loader_with_progress)
