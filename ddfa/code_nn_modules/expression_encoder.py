@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
@@ -86,10 +87,12 @@ class ExpressionEncoder(nn.Module):
         assert selected_encoded_identifiers.size() == selected_tokens_encoding.size()
         use_identifier_vocab_condition_expanded_to_encodings = use_identifier_vocab_condition.unsqueeze(-1)\
             .expand_as(selected_encoded_identifiers)
+        use_tokens_vocab_condition_expanded_to_encodings = use_tokens_vocab_condition.unsqueeze(-1)\
+            .expand_as(selected_tokens_encoding)
         embeddings = torch.where(
             use_identifier_vocab_condition_expanded_to_encodings,
             selected_encoded_identifiers, torch.where(
-                use_identifier_vocab_condition_expanded_to_encodings,
+                use_tokens_vocab_condition_expanded_to_encodings,
                 selected_tokens_encoding,
                 torch.zeros(size=(1,), dtype=selected_tokens_encoding.dtype, device=selected_tokens_encoding.device)))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
         assert embeddings.size() == (batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
@@ -98,7 +101,7 @@ class ExpressionEncoder(nn.Module):
             .view(expressions_tokens_kinds.size() + (self.token_kind_embedding_dim,))  # (batch_size, nr_exprs, nr_tokens_in_expr, token_kind_embedding_dim)
 
         expr_embeddings = torch.cat([token_kinds_embeddings, embeddings], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim + token_kind_embedding_dim)
-        expr_embeddings_projected = self.projection_linear_layer(expr_embeddings.flatten(0, 2))\
+        expr_embeddings_projected = F.relu(self.projection_linear_layer(expr_embeddings.flatten(0, 2)))\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.expr_encoding_dim)
         expr_embeddings_projected = expr_embeddings_projected.flatten(0, 1)  # (bsz * nr_exprs, nr_tokens_in_expr, embedding_dim)
         if self.method == 'transformer_encoder':
