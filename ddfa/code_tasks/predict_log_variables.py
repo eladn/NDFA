@@ -231,7 +231,10 @@ class ModelLoss(nn.Module):
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
 
     def forward(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
-        assert len(target_symbols_idxs.size()) == 2  # (batch_size, nr_target_symbols)
+        assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
+        assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
+        assert model_output.decoder_outputs.size()[0] == target_symbols_idxs.size()[0]  # bsz
+        assert model_output.decoder_outputs.size()[1] + 1 == target_symbols_idxs.size()[1]  # nr_target_symbols
         assert target_symbols_idxs.dtype == torch.long
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
