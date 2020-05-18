@@ -66,7 +66,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_avg_loss = 0.0
         nr_steps_performed_since_last_evaluation = 0
         train_epoch_window_loss = WindowAverage(max_window_size=50)
-        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True)
+        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True, position=0)
         nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             for callback in callbacks:
@@ -169,7 +169,7 @@ def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, c
     metrics = [metric() for metric in evaluation_metrics_types]
     eval_epoch_loss_sum = eval_epoch_nr_examples = 0
     with torch.no_grad():
-        for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True):
+        for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True, position=0, leave=True):
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
             y_hat = model(x_batch)
             batch_loss = criterion(y_hat, y_batch).item()
