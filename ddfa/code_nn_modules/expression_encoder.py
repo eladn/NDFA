@@ -59,7 +59,8 @@ class ExpressionEncoder(nn.Module):
         use_identifier_vocab_condition = expressions_tokens_kinds == self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.IDENTIFIER.value)
         identifiers_idxs = torch.where(
             use_identifier_vocab_condition,
-            expressions_idxs, torch.zeros_like(expressions_idxs))  # (batch_size, nr_exprs, nr_tokens_in_expr)
+            expressions_idxs,
+            torch.zeros(size=(1,), dtype=expressions_idxs.dtype, device=expressions_idxs.device))  # (batch_size, nr_exprs, nr_tokens_in_expr)
         assert identifiers_idxs.size() == expressions.size()[:-1]
 
         token_kinds_for_tokens_vocab = (
@@ -70,7 +71,8 @@ class ExpressionEncoder(nn.Module):
             torch.Tensor.__or__, (expressions_tokens_kinds == token_kind for token_kind in token_kinds_for_tokens_vocab))
         tokens_idxs = torch.where(
             use_tokens_vocab_condition,
-            expressions_idxs, torch.zeros_like(expressions_idxs))  # (batch_size, nr_exprs, nr_tokens_in_expr)
+            expressions_idxs,
+            torch.zeros(size=(1,), dtype=expressions_idxs.dtype, device=expressions_idxs.device))  # (batch_size, nr_exprs, nr_tokens_in_expr)
         assert tokens_idxs.size() == expressions.size()[:-1]
 
         selected_tokens_encoding = self.tokens_embedding_layer(tokens_idxs.flatten())\
@@ -88,7 +90,8 @@ class ExpressionEncoder(nn.Module):
             use_identifier_vocab_condition_expanded_to_encodings,
             selected_encoded_identifiers, torch.where(
                 use_identifier_vocab_condition_expanded_to_encodings,
-                selected_tokens_encoding, torch.zeros_like(selected_tokens_encoding)))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
+                selected_tokens_encoding,
+                torch.zeros(size=(1,), dtype=selected_tokens_encoding.dtype, device=selected_tokens_encoding.device)))  # (batch_size, nr_exprs, nr_tokens_in_expr, embedding_dim)
         assert embeddings.size() == (batch_size, nr_exprs, nr_tokens_in_expr, self.tokens_embedding_dim)
 
         token_kinds_embeddings = self.tokens_kinds_embedding_layer(expressions_tokens_kinds.flatten())\
