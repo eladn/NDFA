@@ -2,22 +2,20 @@ import torch
 import torch.nn as nn
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from typing import Union, Optional
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.nn_utils.attention import Attention
+from ddfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 
 
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary, method: str = 'bi-lstm', embedding_dim: int = 256,
-                 nr_rnn_layers: int = 2, apply_attn: bool = True):
+                 nr_rnn_layers: int = 2):
         assert method in {'bi-lstm', 'transformer_encoder'}
         self.method = method
         super(IdentifierEncoder, self).__init__()
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.embedding_dim = embedding_dim
-        self.apply_attn = apply_attn
         self.sub_identifiers_embedding_layer = nn.Embedding(
             num_embeddings=len(sub_identifiers_vocab), embedding_dim=self.embedding_dim,
             padding_idx=sub_identifiers_vocab.get_word_idx_or_unk('<PAD>'))
@@ -29,11 +27,9 @@ class IdentifierEncoder(nn.Module):
             self.transformer_encoder = TransformerEncoder(
                 encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
         elif method == 'bi-lstm':
-            self.nr_rnn_layers = nr_rnn_layers
-            self.lstm_layer = nn.LSTM(
-                self.embedding_dim, self.embedding_dim, bidirectional=True, num_layers=self.nr_rnn_layers)
-            if self.apply_attn:
-                self.attn_layer = Attention(nr_features=self.embedding_dim, project_key=True)
+            self.attn_rnn_encoder = AttnRNNEncoder(
+                input_dim=self.embedding_dim, hidden_dim=self.embedding_dim, rnn_type='lstm',
+                nr_rnn_layers=nr_rnn_layers, bi_direction=True)
 
     def forward(self, sub_identifiers_indices: Union[torch.Tensor, nn.utils.rnn.PackedSequence],
                 sub_identifiers_mask: Optional[torch.BoolTensor] = None):
@@ -44,62 +40,28 @@ class IdentifierEncoder(nn.Module):
                                                 sub_identifiers_mask.size() == sub_identifiers_indices.size())
         batch_size, nr_identifiers_in_example, nr_sub_identifiers_in_identifier = sub_identifiers_indices.size()
 
-        sub_identifiers_indices = sub_identifiers_indices.flatten(0, 1)\
-            .permute(1, 0)  # (nr_sub_identifiers, bsz * nr_identifiers_in_example)
+        sub_identifiers_indices = sub_identifiers_indices.flatten(0, 1)
         assert sub_identifiers_indices.size() == \
-               (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example)
-        sub_identifiers_embeddings = self.sub_identifiers_embedding_layer(
-            sub_identifiers_indices)  # (nr_sub_identifiers, bsz * nr_identifiers_in_example, embedding_dim)
+               (batch_size * nr_identifiers_in_example, nr_sub_identifiers_in_identifier)
+        sub_identifiers_embeddings = self.sub_identifiers_embedding_layer(sub_identifiers_indices)
         assert sub_identifiers_embeddings.size() == \
-               (nr_sub_identifiers_in_identifier, batch_size * nr_identifiers_in_example, self.embedding_dim)
+               (batch_size * nr_identifiers_in_example, nr_sub_identifiers_in_identifier, self.embedding_dim)
 
         if self.method == 'transformer_encoder':
+            sub_identifiers_embeddings_SNE = sub_identifiers_embeddings.permute(1, 0, 2)  # (nr_sub_identifiers, bsz * nr_identifiers_in_example, embedding_dim)
             if sub_identifiers_mask is not None:
                 sub_identifiers_mask = ~sub_identifiers_mask.flatten(0, 1)  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)
             sub_identifiers_encoded = self.transformer_encoder(
-                sub_identifiers_embeddings, src_key_padding_mask=sub_identifiers_mask).sum(dim=0)  # (bsz * nr_identifiers_in_example, embedding_dim)
+                sub_identifiers_embeddings_SNE, src_key_padding_mask=sub_identifiers_mask).sum(dim=0)  # (bsz * nr_identifiers_in_example, embedding_dim)
             assert sub_identifiers_encoded.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
             return sub_identifiers_encoded.view(batch_size, nr_identifiers_in_example, self.embedding_dim)
 
         assert self.method == 'bi-lstm'
-        sub_identifiers_mask = None if sub_identifiers_mask is None else sub_identifiers_mask.flatten(0, 1)  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)
-        lengths = None if sub_identifiers_mask is None else sub_identifiers_mask.long().sum(dim=1)
-        lengths = torch.where(lengths <= torch.zeros(1, dtype=torch.long, device=lengths.device),
-                              torch.ones(1, dtype=torch.long, device=lengths.device), lengths)
-        packed_input = pack_padded_sequence(sub_identifiers_embeddings, lengths=lengths, enforce_sorted=False)
-        sub_identifiers_rnn_outputs, (last_hidden_out, _) = self.lstm_layer(packed_input)
-        assert last_hidden_out.size() == \
-               (self.nr_rnn_layers * 2, batch_size * nr_identifiers_in_example, self.embedding_dim)
-        last_hidden_out = last_hidden_out\
-            .view(self.nr_rnn_layers, 2, batch_size * nr_identifiers_in_example, self.embedding_dim)[-1, :, :, :]\
-            .squeeze(0).sum(dim=0)
-        assert last_hidden_out.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
-
-        # Apply attention over encoded sub-identifiers using the last hidden state as the attn-key.
-        if self.apply_attn:
-            if sub_identifiers_mask is not None:
-                # quick fix for padding (no identifiers there) to avoid later attn softmax of only -inf values.
-                sub_identifiers_mask[:, 0] = True
-
-            sub_identifiers_rnn_outputs, _ = pad_packed_sequence(sequence=sub_identifiers_rnn_outputs)
-            max_nr_sub_identifiers = sub_identifiers_rnn_outputs.size()[0]
-            assert sub_identifiers_rnn_outputs.size() == \
-                   (max_nr_sub_identifiers, batch_size * nr_identifiers_in_example, 2 * self.embedding_dim)
-            sub_identifiers_rnn_outputs = sub_identifiers_rnn_outputs\
-                .view(max_nr_sub_identifiers, batch_size * nr_identifiers_in_example, 2, self.embedding_dim)\
-                .sum(dim=-2).permute(1, 0, 2)
-            assert sub_identifiers_rnn_outputs.size() == \
-                   (batch_size * nr_identifiers_in_example, max_nr_sub_identifiers, self.embedding_dim)
-
-            identifiers_encoded = self.attn_layer(
-                sequences=sub_identifiers_rnn_outputs, attn_key_from=last_hidden_out, mask=sub_identifiers_mask)
-        else:
-            identifiers_encoded = last_hidden_out
-
-        return identifiers_encoded.view(batch_size, nr_identifiers_in_example, self.embedding_dim)
-
-        # TODO: fix this implementation. it is currently not correct.
-        # assert isinstance(sub_identifiers_indices, list)
-        # assert all(isinstance(s, list) for s in sub_identifiers_indices)
-        # packed_sub_identifiers = nn.utils.rnn.pack_sequence(sub_identifiers_indices, enforce_sorted=False)
-        # return self.lstm_layer(packed_sub_identifiers)[1][0]
+        if sub_identifiers_mask is not None:
+            sub_identifiers_mask = sub_identifiers_mask.flatten(0, 1)  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)
+            # quick fix for padding (no identifiers there) to avoid later attn softmax of only -inf values.
+            sub_identifiers_mask[:, 0] = True
+        encoded_identifiers = self.attn_rnn_encoder(
+            sequence_input=sub_identifiers_embeddings, mask=sub_identifiers_mask, batch_first=True)
+        assert encoded_identifiers.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
+        return encoded_identifiers.view(batch_size, nr_identifiers_in_example, self.embedding_dim)
