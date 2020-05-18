@@ -5,12 +5,15 @@ from typing import Optional
 
 
 class Attention(nn.Module):
-    def __init__(self, nr_features: int, project_key: bool = True, key_in_features: Optional[int] = None):
+    def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
+                 key_in_features: Optional[int] = None):
         super(Attention, self).__init__()
         self.nr_features = nr_features
         self.key_linear_projection_layer = \
             nn.Linear(in_features=nr_features if key_in_features is None else key_in_features,
                       out_features=nr_features) if project_key else None
+        self.query_linear_projection_layer = \
+            nn.Linear(in_features=nr_features, out_features=nr_features) if project_query else None
 
     def forward(self, sequences: torch.Tensor, attn_key_from: Optional[torch.Tensor] = None,
                 attn_weights: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None):
@@ -26,8 +29,11 @@ class Attention(nn.Module):
         if attn_key_from is not None:
             attn_key_vector = F.relu(self.key_linear_projection_layer(attn_key_from)) \
                 if self.key_linear_projection_layer else attn_key_from  # (bsz, nr_features)
+            seq_queries = F.relu(self.query_linear_projection_layer(sequences.flatten(0, 1))) \
+                if self.query_linear_projection_layer else sequences.flatten(0, 1)  # (bsz * seq_len, nr_features)
+            assert seq_queries.size() == (batch_size * seq_len, nr_features)
             attn_weights = torch.bmm(
-                sequences.flatten(0, 1).unsqueeze(dim=1),  # (bsz * seq_len, 1, nr_features)
+                seq_queries.unsqueeze(dim=1),  # (bsz * seq_len, 1, nr_features)
                 attn_key_vector.unsqueeze(dim=1).expand(batch_size, seq_len, self.nr_features)
                     .flatten(0, 1).unsqueeze(dim=-1))  # (bsz * seq_len, nr_features, 1)
             assert attn_weights.size() == (batch_size * seq_len, 1, 1)
