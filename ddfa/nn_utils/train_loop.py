@@ -18,13 +18,17 @@ __all__ = ['fit', 'evaluate']
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
                                 criterion: nn.Module, optimizer: Optional[Optimizer] = None,
                                 batch_idx: Optional[int] = None, nr_batches: Optional[int] = None,
-                                minibatch_size: Optional[int] = None):
+                                minibatch_size: Optional[int] = None, dbg_test_grads: bool = False):
     # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
     y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch)
     if optimizer is not None:
+        if dbg_test_grads:
+            model.dbg_retain_grads()
         loss.backward()
+        if dbg_test_grads:
+            model.dbg_test_grads()
         if minibatch_size is None or (batch_idx % minibatch_size) == minibatch_size - 1 or \
                 (nr_batches is not None and batch_idx == nr_batches - 1):
             optimizer.step()

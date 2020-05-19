@@ -182,17 +182,21 @@ class Model(nn.Module):
             symbols_special_words_vocab=self.vocabs.symbols_special_words,
             max_nr_taget_symbols=MAX_NR_TARGET_SYMBOLS + 2, encoder_output_len=MAX_NR_PDG_NODES,
             encoder_output_dim=self.cfg_node_encoder.output_dim, symbols_encoding_dim=self.identifier_embedding_dim)
+        self.dbg__tensors_to_check_grads = {}
 
     def forward(self, x: ModelInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
+        self.dbg__tensors_to_check_grads = {}
         # x = tagged_example.model_input
         # target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = tagged_example.target_symbols_idxs_used_in_logging_call
         encoded_identifiers = self.identifier_encoder(
             sub_identifiers_indices=x.identifiers,
             sub_identifiers_mask=x.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
+        self.dbg__tensors_to_check_grads['encoded_identifiers'] = encoded_identifiers
         encoded_cfg_nodes = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
             cfg_nodes_expressions_mask=x.cfg_nodes_expressions_mask,
             cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
+        self.dbg__tensors_to_check_grads['encoded_cfg_nodes'] = encoded_cfg_nodes
 
         symbol_pad_embed = self.symbols_special_words_embedding(
                 torch.tensor([self.vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>')],
@@ -201,6 +205,7 @@ class Model(nn.Module):
             batched_embeddings=encoded_identifiers, indices=x.identifiers_idxs_of_all_symbols,
             mask=x.identifiers_idxs_of_all_symbols_mask,
             padding_embedding_vector=symbol_pad_embed)  # (batch_size, nr_symbols, identifier_encoding_dim)
+        self.dbg__tensors_to_check_grads['all_symbols_encodings'] = all_symbols_encodings
         assert all_symbols_encodings.size() == (x.batch_size, MAX_NR_SYMBOLS, self.identifier_embedding_dim)
 
         encoded_cfg_nodes_after_dense = encoded_cfg_nodes
@@ -209,7 +214,7 @@ class Model(nn.Module):
                 lambda last_res, cur_layer: F.relu(cur_layer(last_res)),
                 self.encoder_decoder_inbetween_dense_layers,
                 encoded_cfg_nodes.flatten(0, 1)).view(encoded_cfg_nodes.size()[:-1] + (-1,))
-
+        self.dbg__tensors_to_check_grads['encoded_cfg_nodes_after_dense'] = encoded_cfg_nodes_after_dense
         # final_cfg_node_vectors = encoded_cfg_nodes  # TODO: graph NN
         # logging_call_cfg_node_vector = final_cfg_node_vectors[x.logging_call_cfg_node_idx]
         # input_to_decoder = self.encoder_decoder_inbetween_dense(logging_call_cfg_node_vector)
@@ -220,8 +225,43 @@ class Model(nn.Module):
             symbols_encodings=all_symbols_encodings,
             symbols_encodings_mask=x.identifiers_idxs_of_all_symbols_mask,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
+        self.dbg__tensors_to_check_grads['decoder_outputs'] = decoder_outputs
 
         return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encoding=all_symbols_encodings)
+
+    def dbg_test_grads(self, grad_test_example_idx: int = 3, isclose_atol=1e-07):
+        assert all(tensor.grad.size() == tensor.size() for tensor in self.dbg__tensors_to_check_grads.values())
+        assert all(tensor.grad.size()[0] == next(iter(self.dbg__tensors_to_check_grads.values())).grad.size()[0]
+                   for tensor in self.dbg__tensors_to_check_grads.values())
+        for name, tensor in self.dbg__tensors_to_check_grads.items():
+            print(f'Checking tensor `{name}` of shape {tensor.size()}:')
+            # print(tensor.grad.cpu())
+            grad = tensor.grad.cpu()
+            batch_size = grad.size()[0]
+            if not all(grad[example_idx].allclose(torch.tensor(0.0), atol=isclose_atol) for example_idx in range(batch_size) if example_idx != grad_test_example_idx):
+                print(f'>>>>>>>> FAIL: Not all examples != #{grad_test_example_idx} has zero grad for tensor `{name}` of shape {tensor.size()}:')
+                print(grad)
+                for example_idx in range(batch_size):
+                    print(f'non-zero places in grad for example #{example_idx}:')
+                    print(grad[example_idx].isclose(torch.tensor(0.0), atol=isclose_atol))
+                    print(grad[example_idx][~grad[example_idx].isclose(torch.tensor(0.0), atol=isclose_atol)])
+            else:
+                print(f'Success: All examples != #{grad_test_example_idx} has zero grad for tensor `{name}` of shape {tensor.size()}:')
+            if grad[grad_test_example_idx].allclose(torch.tensor(0.0), atol=isclose_atol):
+                print(f'>>>>>>>> FAIL: Tensor `{name}` of shape {tensor.size()} for example #{grad_test_example_idx} is all zero:')
+                print(grad)
+            else:
+                print(f'Success: Tensor `{name}` of shape {tensor.size()} for example #{grad_test_example_idx} is not all zero.')
+                if len(tensor.size()) > 1:
+                    sub_objects_iszero = torch.tensor(
+                        [grad[grad_test_example_idx, sub_object_idx].allclose(torch.tensor(0.0), atol=isclose_atol)
+                         for sub_object_idx in range(tensor.size()[1])])
+                    print(f'sub_objects_nonzero: {~sub_objects_iszero} (sum: {(~sub_objects_iszero).sum()})')
+            print()
+
+    def dbg_retain_grads(self):
+        for tensor in self.dbg__tensors_to_check_grads.values():
+            tensor.retain_grad()
 
 
 class ModelLoss(nn.Module):
@@ -229,6 +269,16 @@ class ModelLoss(nn.Module):
         super(ModelLoss, self).__init__()
         self.model_hps = model_hps
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
+        self.dbg__example_idx_to_test_grads = 3
+
+    def dbg_forward_test_grads(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
+        # Change this to be the forward() when debugging gradients.
+        assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
+        assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
+        assert model_output.decoder_outputs.size()[0] == target_symbols_idxs.size()[0]  # bsz
+        assert model_output.decoder_outputs.size()[1] + 1 == target_symbols_idxs.size()[1]  # nr_target_symbols
+        assert target_symbols_idxs.dtype == torch.long
+        return model_output.decoder_outputs[self.dbg__example_idx_to_test_grads, :, :].sum()
 
     def forward(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
         assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
