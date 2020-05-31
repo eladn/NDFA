@@ -1,3 +1,4 @@
+import sys
 import time
 import torch
 from torch.utils.data.dataloader import DataLoader
@@ -62,6 +63,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
     train_step_avg_time = None
     for epoch_nr in range(1, nr_epochs + 1):
+        print(f'Starting training epoch #{epoch_nr} ..')
         for callback in callbacks:
             callback.epoch_start(epoch_nr=epoch_nr)
         model.train()
@@ -70,7 +72,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_avg_loss = 0.0
         nr_steps_performed_since_last_evaluation = 0
         train_epoch_window_loss = WindowAverage(max_window_size=50)
-        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True, position=0)
+        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True, position=0, leave=True)
         nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             for callback in callbacks:
@@ -90,7 +92,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             train_epoch_window_loss.update(batch_loss)
             train_epoch_avg_loss = train_epoch_loss_sum/train_epoch_nr_examples
             train_data_loader_with_progress.set_postfix(
-                {'loss (epoch avg)': f'{train_epoch_avg_loss:.4f}',
+                {'ep': f'{epoch_nr}',
+                 'loss (epoch avg)': f'{train_epoch_avg_loss:.4f}',
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
                  'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
 
@@ -105,6 +108,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
                 print(f'Performing evaluation (over validation) DURING epoch #{epoch_nr} '
                       f'(after step {batch_idx + 1}/{nr_steps}):')
+                print(file=sys.stderr, flush=True)
                 evaluate_start_time = time.time()
                 val_loss, val_metrics_results = evaluate(
                     model=model, device=device, valid_loader=valid_loader, criterion=criterion,
