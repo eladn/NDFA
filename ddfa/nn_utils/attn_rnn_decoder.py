@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from typing import Optional, Union
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
-from .apply_batched_embeddings import apply_batched_embeddings
+from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
+from ddfa.nn_utils.attention import Attention
 
 
 __all__ = ['AttnRNNDecoder']
@@ -18,7 +19,7 @@ class AttnRNNDecoder(nn.Module):
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
-        self.encoder_output_len = encoder_output_len
+        self.encoder_output_len = encoder_output_len # TODO: remove!
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim
@@ -36,12 +37,13 @@ class AttnRNNDecoder(nn.Module):
         self.decoding_rnn_layer = rnn_type(
             input_size=self.decoder_hidden_dim, hidden_size=self.decoder_hidden_dim, num_layers=self.nr_rnn_layers)
 
-        self.attn_weights_linear_layer = nn.Linear(
-            self.decoder_hidden_dim + self.decoder_output_dim, self.encoder_output_len)
         self.attn_and_input_combine_linear_layer = nn.Linear(
             self.decoder_hidden_dim + self.decoder_output_dim, self.decoder_hidden_dim)
         self.output_common_embedding_dropout_layer = None if embedding_dropout_p is None else nn.Dropout(embedding_dropout_p)
         self.out_linear_layer = nn.Linear(self.decoder_hidden_dim, self.decoder_output_dim)
+        self.attention_over_encoder_outputs = Attention(
+            nr_features=self.encoder_output_dim, project_key=True, project_query=True,
+            key_in_features=self.decoder_hidden_dim + self.decoder_output_dim)
 
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: Optional[torch.BoolTensor] = None,
@@ -58,9 +60,10 @@ class AttnRNNDecoder(nn.Module):
         nr_all_possible_output_words_encodings = nr_output_batched_words_per_example + self.nr_output_common_embeddings
         assert output_batched_encodings_mask is None or output_batched_encodings_mask.size() == \
                (batch_size, nr_output_batched_words_per_example)
-        assert encoder_output_len == self.encoder_output_len
+        assert encoder_output_len <= self.encoder_output_len
         assert encoder_output_dim == self.encoder_output_dim
-        assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, encoder_output_len)
+        assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, self.encoder_output_len)
+        encoder_outputs_mask = None if encoder_outputs_mask is None else encoder_outputs_mask[:, :encoder_output_len]
 
         # TODO: export to `init_hidden()` method.
         hidden_shape = (self.nr_rnn_layers, batch_size, self.decoder_hidden_dim)
@@ -98,20 +101,10 @@ class AttnRNNDecoder(nn.Module):
                     common_embeddings=self.output_common_embedding)
             assert prev_cell_encoding.size() == (batch_size, self.decoder_output_dim)
 
-            attn_weights = self.attn_weights_linear_layer(
-                torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1))  # (batch_size, encoder_output_len)
-            assert attn_weights.size() == (batch_size, encoder_output_len)
-            if encoder_outputs_mask is not None:
-                # attn_weights.masked_fill_(~encoder_outputs_mask, float('-inf'))
-                attn_weights = attn_weights + torch.where(
-                    encoder_outputs_mask,
-                    torch.zeros(1, dtype=torch.float, device=attn_weights.device),
-                    torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float, device=attn_weights.device))
-            attn_probs = F.softmax(attn_weights, dim=1)  # (batch_size, encoder_output_len)
-            # (batch_size, 1, encoder_output_len) * (batch_size, encoder_output_len, encoder_output_dim)
-            # = (batch_size, 1, encoder_output_dim)
-            attn_applied = torch.bmm(
-                attn_probs.unsqueeze(1), encoder_outputs).squeeze(1)  # (batch_size, encoder_output_dim)
+            attn_key_from = torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1)
+            attn_applied = self.attention_over_encoder_outputs(
+                sequences=encoder_outputs, attn_key_from=attn_key_from, mask=encoder_outputs_mask)
+            assert attn_applied.size() == (batch_size, self.encoder_output_dim)
 
             attn_applied_and_input_combine = torch.cat((prev_cell_encoding, attn_applied), dim=1)  # (batch_size, decoder_output_dim + encoder_output_dim)
             attn_applied_and_input_combine = self.attn_and_input_combine_linear_layer(attn_applied_and_input_combine)  # (batch_size, decoder_hidden_dim)
@@ -136,7 +129,7 @@ class AttnRNNDecoder(nn.Module):
             assert projection_on_batched_target_encodings_wo_common.size() == (batch_size, nr_output_batched_words_per_example)
 
             # (batch_size, decoder_output_dim) * (nr_output_common_embeddings, decoder_output_dim).T
-            # = (batch_size, nr_output_common_embeddings)
+            #   -> (batch_size, nr_output_common_embeddings)
             projection_on_output_common_embeddings = torch.mm(
                 next_output_after_linear, self.output_common_embedding.weight.t())
             assert projection_on_output_common_embeddings.size() == (batch_size, self.nr_output_common_embeddings)
