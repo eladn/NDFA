@@ -9,9 +9,9 @@ class Attention(nn.Module):
                  key_in_features: Optional[int] = None):
         super(Attention, self).__init__()
         self.nr_features = nr_features
+        self.key_in_features = nr_features if key_in_features is None else key_in_features
         self.key_linear_projection_layer = \
-            nn.Linear(in_features=nr_features if key_in_features is None else key_in_features,
-                      out_features=nr_features) if project_key else None
+            nn.Linear(in_features=self.key_in_features, out_features=nr_features) if project_key else None
         self.query_linear_projection_layer = \
             nn.Linear(in_features=nr_features, out_features=nr_features) if project_query else None
 
@@ -21,7 +21,7 @@ class Attention(nn.Module):
         assert attn_weights is None or self.key_linear_projection_layer is None
         assert len(sequences.size()) == 3  # (bsz, seq_len, nr_features)
         batch_size, seq_len, nr_features = sequences.size()
-        assert attn_key_from is None or attn_key_from.size() == (batch_size, nr_features)
+        assert attn_key_from is None or attn_key_from.size() == (batch_size, self.key_in_features)
         assert attn_weights is None or attn_weights.size() == (batch_size, seq_len)
         assert nr_features == self.nr_features
         assert mask is None or mask.size() == (batch_size, seq_len)
