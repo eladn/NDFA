@@ -88,14 +88,15 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
         nr_symbols_special_words = 3  # TODO: pass it to `__init__()` cleanly
         batch_size = batch_target_symbols_indices.shape[0]
         for example_idx_in_batch in range(batch_size):
-            example_pred_symbols_indices = set(
+            example_pred_symbols_indices = [
                 symbol_idx for symbol_idx in batch_pred_symbols_indices[example_idx_in_batch, :]
-                if symbol_idx >= nr_symbols_special_words)
-            example_target_symbols_indices = set(
+                if symbol_idx >= nr_symbols_special_words]
+            example_target_symbols_indices = [
                 symbol_idx for symbol_idx in batch_target_symbols_indices[example_idx_in_batch, :]
-                if symbol_idx >= nr_symbols_special_words)
+                if symbol_idx >= nr_symbols_special_words]
             super(LoggingCallTaskEvaluationMetric, self).update(
-                example_pred_symbols_indices, example_target_symbols_indices)
+                example_pred_symbols_indices=example_pred_symbols_indices,
+                example_target_symbols_indices=example_target_symbols_indices)
 
 
 class ModelInput(NamedTuple):
@@ -195,6 +196,7 @@ class Model(nn.Module):
         encoded_cfg_nodes = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=x.cfg_nodes_expressions,
             cfg_nodes_expressions_mask=x.cfg_nodes_expressions_mask,
+            cfg_nodes_mask=x.cfg_nodes_mask,
             cfg_nodes_control_kind=x.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
         self.dbg__tensors_to_check_grads['encoded_cfg_nodes'] = encoded_cfg_nodes
 
