@@ -42,7 +42,7 @@ class ExpressionEncoder(nn.Module):
         elif method == 'bi-lstm':
             self.attn_rnn_encoder = AttnRNNEncoder(
                 input_dim=self.expr_encoding_dim, hidden_dim=self.expr_encoding_dim, rnn_type='lstm',
-                nr_rnn_layers=nr_rnn_layers, bi_direction=True)
+                nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
 
     def forward(self, expressions: torch.Tensor, expressions_mask: Optional[torch.BoolTensor],
                 encoded_identifiers: torch.Tensor):  # Union[torch.Tensor, nn.utils.rnn.PackedSequence]

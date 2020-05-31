@@ -11,16 +11,17 @@ __all__ = ['AttnRNNEncoder']
 
 class AttnRNNEncoder(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: Optional[int] = None, rnn_type: str = 'lstm',
-                 nr_rnn_layers: int = 2, bi_direction: bool = True):
+                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNEncoder, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = input_dim if hidden_dim is None else hidden_dim
         self.nr_rnn_layers = nr_rnn_layers
-        self.nr_rnn_directions = 2 if bi_direction else 1
+        self.nr_rnn_directions = 2 if rnn_bi_direction else 1
         rnn_type = nn.LSTM if rnn_type == 'lstm' else nn.GRU
         self.rnn_layer = rnn_type(
-            input_size=self.input_dim, hidden_size=self.hidden_dim, bidirectional=True, num_layers=self.nr_rnn_layers)
+            input_size=self.input_dim, hidden_size=self.hidden_dim,
+            bidirectional=rnn_bi_direction, num_layers=self.nr_rnn_layers)
         self.attn_layer = Attention(nr_features=self.hidden_dim, project_key=True)
 
     def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,

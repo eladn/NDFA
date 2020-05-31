@@ -29,7 +29,7 @@ class IdentifierEncoder(nn.Module):
         elif method == 'bi-lstm':
             self.attn_rnn_encoder = AttnRNNEncoder(
                 input_dim=self.embedding_dim, hidden_dim=self.embedding_dim, rnn_type='lstm',
-                nr_rnn_layers=nr_rnn_layers, bi_direction=True)
+                nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
 
     def forward(self, sub_identifiers_indices: Union[torch.Tensor, nn.utils.rnn.PackedSequence],
                 sub_identifiers_mask: Optional[torch.BoolTensor] = None):
