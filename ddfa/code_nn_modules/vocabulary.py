@@ -27,6 +27,10 @@ class Vocabulary:
     def size_wo_specials(self) -> int:
         return len(self.idx2word) - len(self.special_words)
 
+    def get_word_idx(self, word: str) -> Union[int, torch.Tensor]:
+        assert word in self.word2idx
+        return self.word2idx[word]
+
     def get_word_idx_or_unk(self, word: str, unk_word: str = '<UNK>',
                             as_tensor: bool = False) -> Union[int, torch.Tensor]:
         idx = self.word2idx[word] if word in self.word2idx else self.word2idx[unk_word]

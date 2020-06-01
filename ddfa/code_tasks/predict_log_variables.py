@@ -170,7 +170,9 @@ class Model(nn.Module):
             sub_identifiers_vocab=vocabs.sub_identifiers, embedding_dim=self.identifier_embedding_dim)
         expression_encoder = ExpressionEncoder(
             tokens_vocab=vocabs.tokens, tokens_kinds_vocab=vocabs.tokens_kinds,
-            tokens_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
+            expressions_special_words_vocab=self.vocabs.expressions_special_words,
+            identifiers_special_words_vocab=self.vocabs.identifiers_special_words,
+            token_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
         self.cfg_node_encoder = CFGNodeEncoder(
             expression_encoder=expression_encoder, pdg_node_control_kinds_vocab=vocabs.pdg_node_control_kinds)
         self.encoder_decoder_inbetween_dense_layers = nn.ModuleList([
@@ -621,6 +623,8 @@ class Vocabs(NamedTuple):
     tokens_kinds: Vocabulary
     pdg_control_flow_edge_types: Vocabulary
     symbols_special_words: Vocabulary
+    expressions_special_words: Vocabulary
+    identifiers_special_words: Vocabulary
 
 
 def load_or_create_vocabs(
@@ -649,7 +653,7 @@ def load_or_create_vocabs(
         if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
     tokens_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='tokens',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<NONE>',), min_word_freq=200,
         carpus_generator=tokens_carpus_generator)
 
     pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
@@ -689,6 +693,14 @@ def load_or_create_vocabs(
         name='symbols-specials', all_words_sorted_by_idx=[], params=(),
         special_words_sorted_by_idx=('<PAD>', '<SOS>', '<EOS>'))
 
+    expressions_special_words_vocab = Vocabulary(
+        name='expressions-specials', all_words_sorted_by_idx=[], params=(),
+        special_words_sorted_by_idx=('<NONE>',))
+
+    identifiers_special_words_vocab = Vocabulary(
+        name='identifiers-specials', all_words_sorted_by_idx=[], params=(),
+        special_words_sorted_by_idx=('<NONE>',))
+
     print('Done loading / creating vocabularies.')
 
     return Vocabs(
@@ -697,7 +709,9 @@ def load_or_create_vocabs(
         pdg_node_control_kinds=pdg_node_control_kinds_vocab,
         tokens_kinds=tokens_kinds_vocab,
         pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
-        symbols_special_words=symbols_special_words_vocab)
+        symbols_special_words=symbols_special_words_vocab,
+        expressions_special_words=expressions_special_words_vocab,
+        identifiers_special_words=identifiers_special_words_vocab)
 
 
 def _iterate_raw_logging_calls_examples(dataset_path: str) \
