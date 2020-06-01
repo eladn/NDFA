@@ -84,6 +84,7 @@ def main():
         pp_data_path=exec_params.pp_data_dir_path)
 
     print(f'Model built. #params: {sum(weight.nelement() for weight in model.parameters()):,}')
+    print(model)
 
     if loaded_checkpoint:
         model.load_state_dict(loaded_checkpoint['model_state_dict'])
