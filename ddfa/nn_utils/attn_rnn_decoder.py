@@ -13,7 +13,7 @@ __all__ = ['AttnRNNDecoder']
 
 class AttnRNNDecoder(nn.Module):
     def __init__(self, encoder_output_len: int, encoder_output_dim: int, decoder_hidden_dim: int,
-                 decoder_output_dim: int, max_target_seq_len: int,  embedding_dropout_p: Optional[float] = 0.1,
+                 decoder_output_dim: int, max_target_seq_len: int,  embedding_dropout_p: Optional[float] = 0.3,
                  rnn_type: str = 'lstm', nr_rnn_layers: int = 1,
                  output_common_embedding: Optional[Union[torch.Tensor, nn.Embedding]] = None,
                  output_common_vocab: Optional[Vocabulary] = None):
@@ -85,8 +85,9 @@ class AttnRNNDecoder(nn.Module):
                 batched_embeddings=output_batched_encodings, indices=target_idxs,
                 common_embeddings=self.output_common_embedding)  # (batch_size, target_seq_len, decoder_output_dim)
             assert target_encodings.size() == (batch_size, target_seq_len, self.decoder_output_dim)
-            target_encodings = self.output_common_embedding_dropout_layer(
-                target_encodings)  # (batch_size, target_seq_len, decoder_output_dim)  # TODO: insert the dropout application into `apply_batched_embeddings()`
+            if self.output_common_embedding_dropout_layer is not None:
+                target_encodings = self.output_common_embedding_dropout_layer(
+                    target_encodings)  # (batch_size, target_seq_len, decoder_output_dim)  # TODO: insert the dropout application into `apply_batched_embeddings()`
         else:
             prev_cell_output_idx = torch.tensor(
                 [self.output_common_vocab.get_word_idx_or_unk('<SOS>')],
