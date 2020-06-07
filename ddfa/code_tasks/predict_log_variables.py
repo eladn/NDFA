@@ -1,5 +1,4 @@
 import os
-import json
 import torch
 import pickle
 import typing
@@ -18,7 +17,8 @@ from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, EvaluationMetric
 from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
-from ddfa.code_data_structure_api import *
+from ddfa.misc.code_data_structure_api import *
+from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples, RawExtractedExample
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
@@ -463,10 +463,9 @@ def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_dat
         chunks_examples_writer = ChunksExamplesWriter(
             pp_data_path=pp_data_path, datafold=datafold,
             max_chunk_size_in_bytes=ChunksExamplesWriter.MB_IN_BYTES * 500)
-        for logging_call, _, method_pdg in \
-                _iterate_raw_logging_calls_examples(dataset_path=raw_dataset_path):
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_dataset_path):
             pp_example = preprocess_example(
-                model_hps=model_hps, vocabs=vocabs, logging_call=logging_call, method_pdg=method_pdg)
+                model_hps=model_hps, vocabs=vocabs, logging_call=example.logging_call, method_pdg=example.method_pdg)
             if pp_example is None:
                 continue
             chunks_examples_writer.write_example(pp_example)
@@ -634,9 +633,8 @@ def load_or_create_vocabs(
 
     sub_identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
         sub_identifier
-        for logging_call, method_ast, method_pdg
-        in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
-        for identifier_as_sub_identifiers in method_pdg.sub_identifiers_by_idx
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+        for identifier_as_sub_identifiers in example.method_pdg.sub_identifiers_by_idx
         for sub_identifier in identifier_as_sub_identifiers)
     sub_identifiers_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='sub_identifiers',
@@ -645,9 +643,8 @@ def load_or_create_vocabs(
 
     tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
         non_identifier_token_to_token_vocab_word(token)
-        for _, _, method_pdg
-        in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
-        for pdg_node in method_pdg.pdg_nodes
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+        for pdg_node in example.method_pdg.pdg_nodes
         if pdg_node.code is not None
         for token in pdg_node.code.tokenized
         if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
@@ -658,9 +655,8 @@ def load_or_create_vocabs(
 
     pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
         pdg_node.control_kind.value
-        for _, _, method_pdg
-        in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
-        for pdg_node in method_pdg.pdg_nodes)
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+        for pdg_node in example.method_pdg.pdg_nodes)
     pdg_node_control_kinds_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_node_control_kinds',
         special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
@@ -668,9 +664,8 @@ def load_or_create_vocabs(
 
     tokens_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
         token.kind.value
-        for _, _, method_pdg
-        in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
-        for pdg_node in method_pdg.pdg_nodes
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+        for pdg_node in example.method_pdg.pdg_nodes
         if pdg_node.code is not None
         for token in pdg_node.code.tokenized)
     tokens_kinds_vocab = Vocabulary.load_or_create(
@@ -680,9 +675,8 @@ def load_or_create_vocabs(
 
     pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
         edge.type.value
-        for _, _, method_pdg
-        in _iterate_raw_logging_calls_examples(dataset_path=raw_train_data_path)
-        for pdg_node in method_pdg.pdg_nodes
+        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+        for pdg_node in example.method_pdg.pdg_nodes
         for edge in pdg_node.control_flow_out_edges)
     pdg_control_flow_edge_types_vocab = Vocabulary.load_or_create(
         preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_control_flow_edge_types',
@@ -714,37 +708,26 @@ def load_or_create_vocabs(
         identifiers_special_words=identifiers_special_words_vocab)
 
 
-def _iterate_raw_logging_calls_examples(dataset_path: str) \
-        -> typing.Iterable[typing.Tuple[SerLoggingCall, SerMethodAST, SerMethodPDG]]:
-    with open(os.path.join(dataset_path, 'logging_calls_json.txt')) as logging_call_file, \
-            open(os.path.join(dataset_path, 'method_ast.txt')) as method_ast_file, \
-            open(os.path.join(dataset_path, 'method_pdg.txt')) as method_pdg_file:
+def iter_raw_extracted_examples_and_verify(raw_extracted_data_dir: str) -> typing.Iterable[RawExtractedExample]:
+    for example_idx, example in enumerate(iter_raw_extracted_examples(raw_extracted_data_dir=raw_extracted_data_dir)):
+        if example.method_ast.method_hash != example.logging_call.method_ref.hash:
+            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
+                             f' while method_ast.method_hash={example.method_ast.method_hash}')
+        if example.method_pdg.method_hash != example.logging_call.method_ref.hash:
+            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
+                             f' while method_pdg.method_hash={example.method_pdg.method_hash}')
 
-        for example_idx, (logging_call_json, method_ast_json, method_pdg_json) in \
-                enumerate(zip(logging_call_file, method_ast_file, method_pdg_file)):
-            logging_call_dict = json.loads(logging_call_json.strip())
-            logging_call = SerLoggingCall.from_dict(logging_call_dict)
-            method_ast_dict = json.loads(method_ast_json.strip())
-            method_ast = SerMethodAST.from_dict(method_ast_dict)
-            method_pdg_dict = json.loads(method_pdg_json.strip())
-            method_pdg = SerMethodPDG.from_dict(method_pdg_dict)
-            if method_ast.method_hash != logging_call.method_ref.hash:
-                raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
-                                 f'logging_call.method_ref.hash={logging_call.method_ref.hash},'
-                                 f' while method_pdg.method_hash={method_ast.method_hash}')
-            if method_pdg.method_hash != logging_call.method_ref.hash:
-                raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
-                                 f'logging_call.method_ref.hash={logging_call.method_ref.hash},'
-                                 f' while method_pdg.method_hash={method_pdg.method_hash}')
+        if example.logging_call.pdg_node_idx is None:
+            # TODO: put this warning back (after finishing implementing the PDG);
+            #  now it is turned off because there are lots of such cases.
+            # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
+            continue
+        assert example.logging_call.pdg_node_idx < len(example.method_pdg.pdg_nodes)
+        if example.logging_call.ast_node_idx is None:
+            warn(f'LoggingCall [{example.logging_call.hash}] has no AST node.')
+            continue
+        assert example.logging_call.ast_node_idx < len(example.method_ast.nodes)
 
-            if logging_call.pdg_node_idx is None:
-                # TODO: put it back (after finishing implementing the PDG)
-                # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
-                continue
-            assert logging_call.pdg_node_idx < len(method_pdg.pdg_nodes)
-            if logging_call.ast_node_idx is None:
-                warn(f'LoggingCall [{logging_call.hash}] has no AST node.')
-                continue
-            assert logging_call.ast_node_idx < len(method_ast.nodes)
-
-            yield logging_call, method_ast, method_pdg
+        yield example

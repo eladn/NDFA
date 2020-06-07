@@ -547,6 +547,25 @@ class SerTokenOperatorKind(Enum):
     XOR = "XOR"
 
 
+@dataclass
+class SerIndexRange:
+    begin_idx: int
+    end_idx: int
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerIndexRange':
+        assert isinstance(obj, dict)
+        begin_idx = from_int(obj.get("beginIdx"))
+        end_idx = from_int(obj.get("endIdx"))
+        return SerIndexRange(begin_idx, end_idx)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["beginIdx"] = from_int(self.begin_idx)
+        result["endIdx"] = from_int(self.end_idx)
+        return result
+
+
 class SerTokenSeparatorKind(Enum):
     AT = "AT"
     COMMA = "COMMA"
@@ -564,6 +583,8 @@ class SerTokenSeparatorKind(Enum):
 @dataclass
 class SerToken:
     kind: SerTokenKind
+    position_range_in_code_snippet_str: SerIndexRange
+    position_range_in_file: SerPositionRange
     identifier_idx: Optional[int] = None
     operator: Optional[SerTokenOperatorKind] = None
     separator: Optional[SerTokenSeparatorKind] = None
@@ -574,16 +595,20 @@ class SerToken:
     def from_dict(obj: Any) -> 'SerToken':
         assert isinstance(obj, dict)
         kind = SerTokenKind(obj.get("kind"))
+        position_range_in_code_snippet_str = SerIndexRange.from_dict(obj.get("positionRangeInCodeSnippetStr"))
+        position_range_in_file = SerPositionRange.from_dict(obj.get("positionRangeInFile"))
         identifier_idx = from_union([from_int, from_none], obj.get("identifierIdx"))
         operator = from_union([SerTokenOperatorKind, from_none], obj.get("operator"))
         separator = from_union([SerTokenSeparatorKind, from_none], obj.get("separator"))
         symbol_idx = from_union([from_int, from_none], obj.get("symbolIdx"))
         text = from_union([from_str, from_none], obj.get("text"))
-        return SerToken(kind, identifier_idx, operator, separator, symbol_idx, text)
+        return SerToken(kind, position_range_in_code_snippet_str, position_range_in_file, identifier_idx, operator, separator, symbol_idx, text)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["kind"] = to_enum(SerTokenKind, self.kind)
+        result["positionRangeInCodeSnippetStr"] = to_class(SerIndexRange, self.position_range_in_code_snippet_str)
+        result["positionRangeInFile"] = to_class(SerPositionRange, self.position_range_in_file)
         result["identifierIdx"] = from_union([from_int, from_none], self.identifier_idx)
         result["operator"] = from_union([lambda x: to_enum(SerTokenOperatorKind, x), from_none], self.operator)
         result["separator"] = from_union([lambda x: to_enum(SerTokenSeparatorKind, x), from_none], self.separator)
@@ -594,22 +619,22 @@ class SerToken:
 
 @dataclass
 class SerCodeSnippet:
-    code: str
-    position: SerPositionRange
+    code_str: str
+    position_range_in_file: SerPositionRange
     tokenized: Optional[List[SerToken]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerCodeSnippet':
         assert isinstance(obj, dict)
-        code = from_str(obj.get("code"))
-        position = SerPositionRange.from_dict(obj.get("position"))
+        code_str = from_str(obj.get("codeStr"))
+        position_range_in_file = SerPositionRange.from_dict(obj.get("positionRangeInFile"))
         tokenized = from_union([lambda x: from_list(SerToken.from_dict, x), from_none], obj.get("tokenized"))
-        return SerCodeSnippet(code, position, tokenized)
+        return SerCodeSnippet(code_str, position_range_in_file, tokenized)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["code"] = from_str(self.code)
-        result["position"] = to_class(SerPositionRange, self.position)
+        result["codeStr"] = from_str(self.code_str)
+        result["positionRangeInFile"] = to_class(SerPositionRange, self.position_range_in_file)
         result["tokenized"] = from_union([lambda x: from_list(lambda x: to_class(SerToken, x), x), from_none], self.tokenized)
         return result
 
@@ -923,16 +948,34 @@ class SerNameSymbolOccurrence:
 
 
 @dataclass
+class SerSubTokenRangeRef:
+    begin_token_idx: int
+    end_token_idx: int
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerSubTokenRangeRef':
+        assert isinstance(obj, dict)
+        begin_token_idx = from_int(obj.get("beginTokenIdx"))
+        end_token_idx = from_int(obj.get("endTokenIdx"))
+        return SerSubTokenRangeRef(begin_token_idx, end_token_idx)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["beginTokenIdx"] = from_int(self.begin_token_idx)
+        result["endTokenIdx"] = from_int(self.end_token_idx)
+        return result
+
+
+@dataclass
 class SerLoggingCall:
     code: SerCodeSnippet
     contextual_scopes: SerContextualScopesContainer
     hash: str
     method_ref: SerMethodRef
+    sub_token_range_ref_in_method: SerSubTokenRangeRef
     ast_node_idx: Optional[int] = None
     calculated_features: Optional[SerCalculatedFeatures] = None
     experiments_results: Optional[List[SerExperimentResults]] = None
-    inner_method_left_context_tokenized: Optional[List[str]] = None
-    inner_method_right_context_tokenized: Optional[List[str]] = None
     lines_dist_from_closest_log_call_in_inner_scope: Optional[int] = None
     names_used_in_log_and_found_in_inner_method_scope: Optional[List[str]] = None
     name_symbols_used_in_log: Optional[List[SerNameSymbolOccurrence]] = None
@@ -945,16 +988,15 @@ class SerLoggingCall:
         contextual_scopes = SerContextualScopesContainer.from_dict(obj.get("contextualScopes"))
         hash = from_str(obj.get("hash"))
         method_ref = SerMethodRef.from_dict(obj.get("methodRef"))
+        sub_token_range_ref_in_method = SerSubTokenRangeRef.from_dict(obj.get("subTokenRangeRefInMethod"))
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
         calculated_features = from_union([SerCalculatedFeatures.from_dict, from_none], obj.get("calculatedFeatures"))
         experiments_results = from_union([lambda x: from_list(SerExperimentResults.from_dict, x), from_none], obj.get("experimentsResults"))
-        inner_method_left_context_tokenized = from_union([lambda x: from_list(from_str, x), from_none], obj.get("innerMethodLeftContextTokenized"))
-        inner_method_right_context_tokenized = from_union([lambda x: from_list(from_str, x), from_none], obj.get("innerMethodRightContextTokenized"))
         lines_dist_from_closest_log_call_in_inner_scope = from_union([from_int, from_none], obj.get("linesDistFromClosestLogCallInInnerScope"))
         names_used_in_log_and_found_in_inner_method_scope = from_union([lambda x: from_list(from_str, x), from_none], obj.get("namesUsedInLogAndFoundInInnerMethodScope"))
         name_symbols_used_in_log = from_union([lambda x: from_list(SerNameSymbolOccurrence.from_dict, x), from_none], obj.get("nameSymbolsUsedInLog"))
         pdg_node_idx = from_union([from_int, from_none], obj.get("pdgNodeIdx"))
-        return SerLoggingCall(code, contextual_scopes, hash, method_ref, ast_node_idx, calculated_features, experiments_results, inner_method_left_context_tokenized, inner_method_right_context_tokenized, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
+        return SerLoggingCall(code, contextual_scopes, hash, method_ref, sub_token_range_ref_in_method, ast_node_idx, calculated_features, experiments_results, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -962,11 +1004,10 @@ class SerLoggingCall:
         result["contextualScopes"] = to_class(SerContextualScopesContainer, self.contextual_scopes)
         result["hash"] = from_str(self.hash)
         result["methodRef"] = to_class(SerMethodRef, self.method_ref)
+        result["subTokenRangeRefInMethod"] = to_class(SerSubTokenRangeRef, self.sub_token_range_ref_in_method)
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
         result["calculatedFeatures"] = from_union([lambda x: to_class(SerCalculatedFeatures, x), from_none], self.calculated_features)
         result["experimentsResults"] = from_union([lambda x: from_list(lambda x: to_class(SerExperimentResults, x), x), from_none], self.experiments_results)
-        result["innerMethodLeftContextTokenized"] = from_union([lambda x: from_list(from_str, x), from_none], self.inner_method_left_context_tokenized)
-        result["innerMethodRightContextTokenized"] = from_union([lambda x: from_list(from_str, x), from_none], self.inner_method_right_context_tokenized)
         result["linesDistFromClosestLogCallInInnerScope"] = from_union([from_int, from_none], self.lines_dist_from_closest_log_call_in_inner_scope)
         result["namesUsedInLogAndFoundInInnerMethodScope"] = from_union([lambda x: from_list(from_str, x), from_none], self.names_used_in_log_and_found_in_inner_method_scope)
         result["nameSymbolsUsedInLog"] = from_union([lambda x: from_list(lambda x: to_class(SerNameSymbolOccurrence, x), x), from_none], self.name_symbols_used_in_log)
@@ -1316,19 +1357,22 @@ class QMethodArguments:
 
 
 @dataclass
-class SerParameter:
+class SerMethodParameter:
+    declaration_sub_token_range_ref: SerSubTokenRangeRef
     name: str
     type_name: str
 
     @staticmethod
-    def from_dict(obj: Any) -> 'SerParameter':
+    def from_dict(obj: Any) -> 'SerMethodParameter':
         assert isinstance(obj, dict)
+        declaration_sub_token_range_ref = SerSubTokenRangeRef.from_dict(obj.get("declarationSubTokenRangeRef"))
         name = from_str(obj.get("name"))
         type_name = from_str(obj.get("typeName"))
-        return SerParameter(name, type_name)
+        return SerMethodParameter(declaration_sub_token_range_ref, name, type_name)
 
     def to_dict(self) -> dict:
         result: dict = {}
+        result["declarationSubTokenRangeRef"] = to_class(SerSubTokenRangeRef, self.declaration_sub_token_range_ref)
         result["name"] = from_str(self.name)
         result["typeName"] = from_str(self.type_name)
         return result
@@ -1339,12 +1383,12 @@ class SerMethod:
     code: SerCodeSnippet
     code_filepath: str
     dataset_name: SerDatasetName
-    declaration: SerCodeSnippet
+    declaration_sub_token_range_ref: SerSubTokenRangeRef
     hash: str
     name: str
     return_type_name: str
     class_name: Optional[str] = None
-    parameters: Optional[List[SerParameter]] = None
+    parameters: Optional[List[SerMethodParameter]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerMethod':
@@ -1352,25 +1396,25 @@ class SerMethod:
         code = SerCodeSnippet.from_dict(obj.get("code"))
         code_filepath = from_str(obj.get("codeFilepath"))
         dataset_name = SerDatasetName.from_dict(obj.get("datasetName"))
-        declaration = SerCodeSnippet.from_dict(obj.get("declaration"))
+        declaration_sub_token_range_ref = SerSubTokenRangeRef.from_dict(obj.get("declarationSubTokenRangeRef"))
         hash = from_str(obj.get("hash"))
         name = from_str(obj.get("name"))
         return_type_name = from_str(obj.get("returnTypeName"))
         class_name = from_union([from_str, from_none], obj.get("className"))
-        parameters = from_union([lambda x: from_list(SerParameter.from_dict, x), from_none], obj.get("parameters"))
-        return SerMethod(code, code_filepath, dataset_name, declaration, hash, name, return_type_name, class_name, parameters)
+        parameters = from_union([lambda x: from_list(SerMethodParameter.from_dict, x), from_none], obj.get("parameters"))
+        return SerMethod(code, code_filepath, dataset_name, declaration_sub_token_range_ref, hash, name, return_type_name, class_name, parameters)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["code"] = to_class(SerCodeSnippet, self.code)
         result["codeFilepath"] = from_str(self.code_filepath)
         result["datasetName"] = to_class(SerDatasetName, self.dataset_name)
-        result["declaration"] = to_class(SerCodeSnippet, self.declaration)
+        result["declarationSubTokenRangeRef"] = to_class(SerSubTokenRangeRef, self.declaration_sub_token_range_ref)
         result["hash"] = from_str(self.hash)
         result["name"] = from_str(self.name)
         result["returnTypeName"] = from_str(self.return_type_name)
         result["className"] = from_union([from_str, from_none], self.class_name)
-        result["parameters"] = from_union([lambda x: from_list(lambda x: to_class(SerParameter, x), x), from_none], self.parameters)
+        result["parameters"] = from_union([lambda x: from_list(lambda x: to_class(SerMethodParameter, x), x), from_none], self.parameters)
         return result
 
 
@@ -1555,6 +1599,7 @@ class SerASTNode:
     type: SerASTNodeType
     child_place_at_parent: Optional[int] = None
     children_idxs: Optional[List[int]] = None
+    code_sub_token_range_ref: Optional[SerSubTokenRangeRef] = None
     identifier: Optional[str] = None
     literal_expr: Optional[str] = None
     modifier: Optional[str] = None
@@ -1569,13 +1614,14 @@ class SerASTNode:
         type = SerASTNodeType(obj.get("type"))
         child_place_at_parent = from_union([from_int, from_none], obj.get("childPlaceAtParent"))
         children_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("childrenIdxs"))
+        code_sub_token_range_ref = from_union([SerSubTokenRangeRef.from_dict, from_none], obj.get("codeSubTokenRangeRef"))
         identifier = from_union([from_str, from_none], obj.get("identifier"))
         literal_expr = from_union([from_str, from_none], obj.get("literalExpr"))
         modifier = from_union([from_str, from_none], obj.get("modifier"))
         name = from_union([from_str, from_none], obj.get("name"))
         parent_node_idx = from_union([from_int, from_none], obj.get("parentNodeIdx"))
         type_name = from_union([from_str, from_none], obj.get("typeName"))
-        return SerASTNode(idx, type, child_place_at_parent, children_idxs, identifier, literal_expr, modifier, name, parent_node_idx, type_name)
+        return SerASTNode(idx, type, child_place_at_parent, children_idxs, code_sub_token_range_ref, identifier, literal_expr, modifier, name, parent_node_idx, type_name)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -1583,6 +1629,7 @@ class SerASTNode:
         result["type"] = to_enum(SerASTNodeType, self.type)
         result["childPlaceAtParent"] = from_union([from_int, from_none], self.child_place_at_parent)
         result["childrenIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.children_idxs)
+        result["codeSubTokenRangeRef"] = from_union([lambda x: to_class(SerSubTokenRangeRef, x), from_none], self.code_sub_token_range_ref)
         result["identifier"] = from_union([from_str, from_none], self.identifier)
         result["literalExpr"] = from_union([from_str, from_none], self.literal_expr)
         result["modifier"] = from_union([from_str, from_none], self.modifier)
@@ -1866,7 +1913,7 @@ class SerPDGNode:
     ast_node_idx: Optional[int] = None
     belongs_to_control_scopes_idxs: Optional[List[int]] = None
     called_functions_names: Optional[List[str]] = None
-    code: Optional[SerCodeSnippet] = None
+    code_sub_token_range_ref: Optional[SerSubTokenRangeRef] = None
     control_flow_in_edges: Optional[List[SerPDGControlFlowEdge]] = None
     control_flow_out_edges: Optional[List[SerPDGControlFlowEdge]] = None
     data_dependency_in_edges: Optional[List[SerPDGDataDependencyEdge]] = None
@@ -1882,13 +1929,13 @@ class SerPDGNode:
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
         belongs_to_control_scopes_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("belongsToControlScopesIdxs"))
         called_functions_names = from_union([lambda x: from_list(from_str, x), from_none], obj.get("calledFunctionsNames"))
-        code = from_union([SerCodeSnippet.from_dict, from_none], obj.get("code"))
+        code_sub_token_range_ref = from_union([SerSubTokenRangeRef.from_dict, from_none], obj.get("codeSubTokenRangeRef"))
         control_flow_in_edges = from_union([lambda x: from_list(SerPDGControlFlowEdge.from_dict, x), from_none], obj.get("controlFlowInEdges"))
         control_flow_out_edges = from_union([lambda x: from_list(SerPDGControlFlowEdge.from_dict, x), from_none], obj.get("controlFlowOutEdges"))
         data_dependency_in_edges = from_union([lambda x: from_list(SerPDGDataDependencyEdge.from_dict, x), from_none], obj.get("dataDependencyInEdges"))
         data_dependency_out_edges = from_union([lambda x: from_list(SerPDGDataDependencyEdge.from_dict, x), from_none], obj.get("dataDependencyOutEdges"))
         symbols_use_def_mut = from_union([SerSymbolsUseDefMut.from_dict, from_none], obj.get("symbolsUseDefMut"))
-        return SerPDGNode(control_kind, has_expression, idx, ast_node_idx, belongs_to_control_scopes_idxs, called_functions_names, code, control_flow_in_edges, control_flow_out_edges, data_dependency_in_edges, data_dependency_out_edges, symbols_use_def_mut)
+        return SerPDGNode(control_kind, has_expression, idx, ast_node_idx, belongs_to_control_scopes_idxs, called_functions_names, code_sub_token_range_ref, control_flow_in_edges, control_flow_out_edges, data_dependency_in_edges, data_dependency_out_edges, symbols_use_def_mut)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -1898,7 +1945,7 @@ class SerPDGNode:
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
         result["belongsToControlScopesIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.belongs_to_control_scopes_idxs)
         result["calledFunctionsNames"] = from_union([lambda x: from_list(from_str, x), from_none], self.called_functions_names)
-        result["code"] = from_union([lambda x: to_class(SerCodeSnippet, x), from_none], self.code)
+        result["codeSubTokenRangeRef"] = from_union([lambda x: to_class(SerSubTokenRangeRef, x), from_none], self.code_sub_token_range_ref)
         result["controlFlowInEdges"] = from_union([lambda x: from_list(lambda x: to_class(SerPDGControlFlowEdge, x), x), from_none], self.control_flow_in_edges)
         result["controlFlowOutEdges"] = from_union([lambda x: from_list(lambda x: to_class(SerPDGControlFlowEdge, x), x), from_none], self.control_flow_out_edges)
         result["dataDependencyInEdges"] = from_union([lambda x: from_list(lambda x: to_class(SerPDGDataDependencyEdge, x), x), from_none], self.data_dependency_in_edges)
