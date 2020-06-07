@@ -6,7 +6,7 @@ from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEnc
 from torch.nn.modules.normalization import LayerNorm
 
 from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.code_data_structure_api import *
+from ddfa.misc.code_data_structure_api import *
 from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 from ddfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 

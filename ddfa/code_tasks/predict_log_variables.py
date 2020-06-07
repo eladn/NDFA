@@ -1,11 +1,7 @@
-import os
 import torch
-import pickle
 import typing
-import shelve
 import itertools
 import functools
-import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
@@ -19,6 +15,7 @@ from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, Eva
 from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ddfa.misc.code_data_structure_api import *
 from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples, RawExtractedExample
+from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter, ChunksKVStoresDataset
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
@@ -293,46 +290,13 @@ class ModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-class LoggingCallsDataset(Dataset):
+class LoggingCallsDataset(ChunksKVStoresDataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
-        self.datafold = datafold
-        self.pp_data_path = pp_data_path
-        self._pp_data_chunks_filepaths = []
-        self._kvstore_chunks = []
-        self._kvstore_chunks_lengths = []
-        for chunk_idx in itertools.count():
-            filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
-            if not os.path.isfile(filepath) and not os.path.isfile(filepath + '.dat'):
-                break
-            self._pp_data_chunks_filepaths.append(filepath)
-            kvstore = shelve.open(filepath, 'r')
-            self._kvstore_chunks.append(kvstore)
-            self._kvstore_chunks_lengths.append(kvstore['len'])
-        self._len = sum(self._kvstore_chunks_lengths)
-        self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
-        self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
-        self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
+        super(LoggingCallsDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
-    def _get_chunk_idx_contains_item(self, item_idx: int) -> int:
-        assert item_idx < self._len
-        cond = (self._kvstore_chunks_start_indices <= item_idx) & (self._kvstore_chunks_stop_indices > item_idx)
-        assert np.sum(cond) == 1
-        found_idx = np.where(cond)
-        assert len(found_idx) == 1
-        return int(found_idx[0])
-
-    def __len__(self):
-        return self._len
-
-    def __del__(self):
-        for chunk_kvstore in self._kvstore_chunks:
-            chunk_kvstore.close()
-
     def __getitem__(self, idx):
-        assert isinstance(idx, int) and idx <= self._len
-        chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
-        example = chunk_kvstore[str(idx)]
+        example = super(LoggingCallsDataset, self).__getitem__(idx)
         assert all(hasattr(example, field) for field in TaggedExample._fields)
         assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
         assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
@@ -371,98 +335,21 @@ def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>
     return itertools.chain(itertools.islice(vector, max_length), (pad_word for _ in range(padding_len)))
 
 
-def nullable_lists_concat(*args) -> list:
-    ret_list = []
-    for lst in args:
-        if lst is not None:
-            ret_list.extend(lst)
-    return ret_list
-
-
-class ChunksExamplesWriter:
-    KB_IN_BYTES = 1024
-    MB_IN_BYTES = 1024 * 1024
-    GB_IN_BYTES = 1024 * 1024 * 1024
-
-    def __init__(self, pp_data_path: str, datafold: DataFold, max_chunk_size_in_bytes: int = GB_IN_BYTES):
-        self.pp_data_path: str = pp_data_path
-        self.datafold: DataFold = datafold
-        self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
-        self.next_example_idx: int = 0
-        self.cur_chunk_idx: Optional[int] = None
-        self.cur_chunk_size_in_bytes: Optional[int] = None
-        self.cur_chunk_nr_examples: Optional[int] = None
-        self.cur_chunk_file: Optional[shelve.Shelf] = None
-        self.cur_chunk_filepath: Optional[str] = None
-
-    @property
-    def total_nr_examples(self) -> int:
-        return self.next_example_idx
-
-    def write_example(self, example):
-        example_size_in_bytes = len(pickle.dumps(example))
-        chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
-        chunk_file[str(self.next_example_idx)] = example
-        self.next_example_idx += 1
-        self.cur_chunk_nr_examples += 1
-        self.cur_chunk_size_in_bytes += example_size_in_bytes
-        assert self.cur_chunk_size_in_bytes <= self.max_chunk_size_in_bytes
-
-    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> shelve.Shelf:
-        assert example_size_in_bytes < self.max_chunk_size_in_bytes
-        if self.cur_chunk_file is None or self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
-            if self.cur_chunk_idx is None:
-                self.cur_chunk_idx = 0
-            else:
-                self.cur_chunk_idx += 1
-                self.close_last_written_chunk()
-            self.cur_chunk_filepath = self._get_chunk_filepath(self.cur_chunk_idx)
-            if os.path.isfile(self.cur_chunk_filepath):
-                if self.cur_chunk_idx == 0:
-                    raise ValueError(f'Preprocessed file `{self.cur_chunk_filepath}` already exists. '
-                                     f'Please choose another `--pp-data` path or manually delete it.')
-                else:
-                    warn(f'Overwriting existing preprocessed file `{self.cur_chunk_filepath}`.')
-                    os.remove(self.cur_chunk_filepath)
-            self.cur_chunk_file = shelve.open(self.cur_chunk_filepath, 'c')
-            self.cur_chunk_size_in_bytes = 0
-            self.cur_chunk_nr_examples = 0
-        return self.cur_chunk_file
-
-    def close_last_written_chunk(self):
-        assert self.cur_chunk_nr_examples > 0
-        self.cur_chunk_file['len'] = self.cur_chunk_nr_examples
-        self.cur_chunk_file.close()
-        self.cur_chunk_file = None
-
-    def _get_chunk_filepath(self, chunk_idx: int) -> str:
-        return os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
-
-    def enforce_no_further_chunks(self):
-        # Remove old extra file chunks
-        for chunk_idx_to_remove in itertools.count(start=self.cur_chunk_idx + 1):
-            chunk_filepath = self._get_chunk_filepath(chunk_idx_to_remove)
-            if not os.path.isfile(chunk_filepath):
-                break
-            warn(f'Removing existing preprocessed file `{chunk_filepath}`.')
-            os.remove(chunk_filepath)
-
-
 def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None,
                raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
     vocabs = load_or_create_vocabs(
         model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
     datafolds = (
-        (SerDataFoldType.TRAIN, raw_train_data_path),
-        (SerDataFoldType.VALIDATION, raw_eval_data_path),
-        (SerDataFoldType.TEST, raw_test_data_path))
+        (DataFold.Train, raw_train_data_path),
+        (DataFold.Validation, raw_eval_data_path),
+        (DataFold.Test, raw_test_data_path))
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:
             continue
         # TODO: add hash of task props & model HPs to perprocessed file name.
-        chunks_examples_writer = ChunksExamplesWriter(
+        chunks_examples_writer = ChunksKVStoreDatasetWriter(
             pp_data_path=pp_data_path, datafold=datafold,
-            max_chunk_size_in_bytes=ChunksExamplesWriter.MB_IN_BYTES * 500)
+            max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
         for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_dataset_path):
             pp_example = preprocess_example(
                 model_hps=model_hps, vocabs=vocabs, logging_call=example.logging_call, method_pdg=example.method_pdg)
