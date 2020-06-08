@@ -14,9 +14,9 @@ from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, EvaluationMetric
 from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ddfa.misc.code_data_structure_api import *
-from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples, RawExtractedExample
+from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
 from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter, ChunksKVStoresDataset
-from ddfa.code_nn_modules.vocabulary import Vocabulary
+from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, non_identifier_token_to_token_vocab_word
 from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
@@ -24,7 +24,7 @@ from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 
 
-__all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsDataset']
+__all__ = ['PredictLogVariablesTask', 'TaggedExample', 'ModelInput', 'LoggingCallsTaskDataset']
 
 
 class PredictLogVariablesTask(CodeTaskBase):
@@ -38,12 +38,12 @@ class PredictLogVariablesTask(CodeTaskBase):
                    raw_eval_data_path=raw_eval_data_path, raw_test_data_path=raw_test_data_path)
 
     def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
-        vocabs = load_or_create_vocabs(model_hps=model_hps, pp_data_path=pp_data_path)
+        vocabs = CodeTaskVocabs.load_or_create(model_hps=model_hps, pp_data_path=pp_data_path)
         return Model(model_hps=model_hps, vocabs=vocabs)
 
     def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
-        return LoggingCallsDataset(datafold=datafold, pp_data_path=pp_data_path)
+        return LoggingCallsTaskDataset(datafold=datafold, pp_data_path=pp_data_path)
 
     def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
         return ModelLoss(model_hps=model_hps)
@@ -290,13 +290,13 @@ class ModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-class LoggingCallsDataset(ChunksKVStoresDataset):
+class LoggingCallsTaskDataset(ChunksKVStoresDataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
-        super(LoggingCallsDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
+        super(LoggingCallsTaskDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def __getitem__(self, idx):
-        example = super(LoggingCallsDataset, self).__getitem__(idx)
+        example = super(LoggingCallsTaskDataset, self).__getitem__(idx)
         assert all(hasattr(example, field) for field in TaggedExample._fields)
         assert all(hasattr(example.model_input, field) for field in ModelInput._fields)
         assert all(isinstance(getattr(example.model_input, field), torch.Tensor)
@@ -304,16 +304,6 @@ class LoggingCallsDataset(ChunksKVStoresDataset):
         return TaggedExample(
             model_input=ModelInput(**example.model_input._asdict()),
             target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
-
-
-def non_identifier_token_to_token_vocab_word(token: SerToken):
-    assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR}
-    if token.kind == SerTokenKind.KEYWORD:
-        return f'kwrd_{token.text}'
-    elif token.kind == SerTokenKind.OPERATOR:
-        return f'op_{token.operator.value}'
-    elif token.kind == SerTokenKind.SEPARATOR:
-        return f'sep_{token.separator.value}'
 
 
 def token_to_input_vector(token: SerToken, vocabs: 'Vocabs'):
@@ -337,7 +327,7 @@ def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>
 
 def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None,
                raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
-    vocabs = load_or_create_vocabs(
+    vocabs = CodeTaskVocabs.load_or_create(
         model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
     datafolds = (
         (DataFold.Train, raw_train_data_path),
@@ -500,121 +490,3 @@ def preprocess_example(
             identifiers_idxs_of_all_symbols_mask=symbols_identifier_mask,
             logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)
-
-
-class Vocabs(NamedTuple):
-    sub_identifiers: Vocabulary
-    tokens: Vocabulary
-    pdg_node_control_kinds: Vocabulary
-    tokens_kinds: Vocabulary
-    pdg_control_flow_edge_types: Vocabulary
-    symbols_special_words: Vocabulary
-    expressions_special_words: Vocabulary
-    identifiers_special_words: Vocabulary
-
-
-def load_or_create_vocabs(
-        model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None) -> Vocabs:
-    print('Loading / creating vocabularies ..')
-    vocabs_pad_unk_special_words = ('<PAD>', '<UNK>')
-
-    sub_identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
-        sub_identifier
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
-        for identifier_as_sub_identifiers in example.method_pdg.sub_identifiers_by_idx
-        for sub_identifier in identifier_as_sub_identifiers)
-    sub_identifiers_vocab = Vocabulary.load_or_create(
-        preprocessed_data_dir_path=pp_data_path, vocab_name='sub_identifiers',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<EOI>',), min_word_freq=40,
-        max_vocab_size_wo_specials=1000, carpus_generator=sub_identifiers_carpus_generator)
-
-    tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
-        non_identifier_token_to_token_vocab_word(token)
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
-        for pdg_node in example.method_pdg.pdg_nodes
-        if pdg_node.code is not None
-        for token in pdg_node.code.tokenized
-        if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
-    tokens_vocab = Vocabulary.load_or_create(
-        preprocessed_data_dir_path=pp_data_path, vocab_name='tokens',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<NONE>',), min_word_freq=200,
-        carpus_generator=tokens_carpus_generator)
-
-    pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
-        pdg_node.control_kind.value
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
-        for pdg_node in example.method_pdg.pdg_nodes)
-    pdg_node_control_kinds_vocab = Vocabulary.load_or_create(
-        preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_node_control_kinds',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
-        carpus_generator=pdg_node_control_kinds_carpus_generator)
-
-    tokens_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
-        token.kind.value
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
-        for pdg_node in example.method_pdg.pdg_nodes
-        if pdg_node.code is not None
-        for token in pdg_node.code.tokenized)
-    tokens_kinds_vocab = Vocabulary.load_or_create(
-        preprocessed_data_dir_path=pp_data_path, vocab_name='tokens_kinds',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
-        carpus_generator=tokens_kinds_carpus_generator)
-
-    pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
-        edge.type.value
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
-        for pdg_node in example.method_pdg.pdg_nodes
-        for edge in pdg_node.control_flow_out_edges)
-    pdg_control_flow_edge_types_vocab = Vocabulary.load_or_create(
-        preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_control_flow_edge_types',
-        special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
-        carpus_generator=pdg_control_flow_edge_types_carpus_generator)
-
-    symbols_special_words_vocab = Vocabulary(
-        name='symbols-specials', all_words_sorted_by_idx=[], params=(),
-        special_words_sorted_by_idx=('<PAD>', '<SOS>', '<EOS>'))
-
-    expressions_special_words_vocab = Vocabulary(
-        name='expressions-specials', all_words_sorted_by_idx=[], params=(),
-        special_words_sorted_by_idx=('<NONE>',))
-
-    identifiers_special_words_vocab = Vocabulary(
-        name='identifiers-specials', all_words_sorted_by_idx=[], params=(),
-        special_words_sorted_by_idx=('<NONE>',))
-
-    print('Done loading / creating vocabularies.')
-
-    return Vocabs(
-        sub_identifiers=sub_identifiers_vocab,
-        tokens=tokens_vocab,
-        pdg_node_control_kinds=pdg_node_control_kinds_vocab,
-        tokens_kinds=tokens_kinds_vocab,
-        pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
-        symbols_special_words=symbols_special_words_vocab,
-        expressions_special_words=expressions_special_words_vocab,
-        identifiers_special_words=identifiers_special_words_vocab)
-
-
-def iter_raw_extracted_examples_and_verify(raw_extracted_data_dir: str) -> typing.Iterable[RawExtractedExample]:
-    for example_idx, example in enumerate(iter_raw_extracted_examples(raw_extracted_data_dir=raw_extracted_data_dir)):
-        if example.method_ast.method_hash != example.logging_call.method_ref.hash:
-            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
-                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
-                             f' while method_ast.method_hash={example.method_ast.method_hash}')
-        if example.method_pdg.method_hash != example.logging_call.method_ref.hash:
-            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
-                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
-                             f' while method_pdg.method_hash={example.method_pdg.method_hash}')
-
-        if example.logging_call.pdg_node_idx is None:
-            # TODO: put this warning back (after finishing implementing the PDG);
-            #  now it is turned off because there are lots of such cases.
-            # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
-            continue
-        assert example.logging_call.pdg_node_idx < len(example.method_pdg.pdg_nodes)
-        if example.logging_call.ast_node_idx is None:
-            warn(f'LoggingCall [{example.logging_call.hash}] has no AST node.')
-            continue
-        assert example.logging_call.ast_node_idx < len(example.method_ast.nodes)
-
-        yield example

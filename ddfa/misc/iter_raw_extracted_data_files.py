@@ -11,7 +11,7 @@ from itertools import takewhile, repeat
 from ddfa.misc.code_data_structure_api import *
 
 
-__all__ = ['RawExtractedExample', 'iter_raw_extracted_examples']
+__all__ = ['RawExtractedExample', 'iter_raw_extracted_examples', 'iter_raw_extracted_examples_and_verify']
 
 
 @dataclasses.dataclass
@@ -168,3 +168,28 @@ def count_lines_in_file(file_path: str):
     with open(file_path, 'rb') as f:
         bufgen = takewhile(lambda x: x, (f.raw.read(1024 * 1024) for _ in repeat(None)))
         return sum(buf.count(b'\n') for buf in bufgen)
+
+
+def iter_raw_extracted_examples_and_verify(raw_extracted_data_dir: str) -> typing.Iterable[RawExtractedExample]:
+    for example_idx, example in enumerate(iter_raw_extracted_examples(raw_extracted_data_dir=raw_extracted_data_dir)):
+        if example.method_ast.method_hash != example.logging_call.method_ref.hash:
+            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
+                             f' while method_ast.method_hash={example.method_ast.method_hash}')
+        if example.method_pdg.method_hash != example.logging_call.method_ref.hash:
+            raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
+                             f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
+                             f' while method_pdg.method_hash={example.method_pdg.method_hash}')
+
+        if example.logging_call.pdg_node_idx is None:
+            # TODO: put this warning back (after finishing implementing the PDG);
+            #  now it is turned off because there are lots of such cases.
+            # warn(f'LoggingCall [{logging_call.hash}] has no PDG node.')
+            continue
+        assert example.logging_call.pdg_node_idx < len(example.method_pdg.pdg_nodes)
+        if example.logging_call.ast_node_idx is None:
+            warn(f'LoggingCall [{example.logging_call.hash}] has no AST node.')
+            continue
+        assert example.logging_call.ast_node_idx < len(example.method_ast.nodes)
+
+        yield example
