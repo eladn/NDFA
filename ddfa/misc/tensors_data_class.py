@@ -33,6 +33,9 @@ class TensorsDataClass:
         assert len(code_task_inputs) > 0
         assert any(isinstance(getattr(code_task_inputs[0], field.name), torch.Tensor)
                    for field in dataclasses.fields(cls))
+
+        # TODO: when collating tensors, pad it to match the longest seq in the batch, and add lengths vector.
+        # TODO: remove this check! it is actually ok.
         for field in dataclasses.fields(cls):
             if not isinstance(getattr(code_task_inputs[0], field.name), torch.Tensor):
                 continue
