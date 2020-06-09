@@ -9,7 +9,7 @@ from ddfa.code_nn_modules.vocabulary import Vocabulary
 class SymbolsDecoder(nn.Module):
     def __init__(self, symbols_special_words_embedding: nn.Embedding, symbols_special_words_vocab: Vocabulary,
                  max_nr_taget_symbols: int, encoder_output_len: int = 80, encoder_output_dim: int = 256,
-                 symbols_encoding_dim: int = 256, symbols_emb_dropout_p: float = 0.1):
+                 symbols_encoding_dim: int = 256, symbols_emb_dropout_p: float = 0.3):
         super(SymbolsDecoder, self).__init__()
         self.attn_rnn_decoder = AttnRNNDecoder(
             encoder_output_len=encoder_output_len, encoder_output_dim=encoder_output_dim,

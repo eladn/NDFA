@@ -10,3 +10,4 @@ confclass
 # torch-cluster==latest+cpu
 # torch-spline-conv==latest+
 torch-geometric
+typing_extensions

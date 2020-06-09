@@ -1,24 +1,25 @@
 import torch
 import typing
-import itertools
+import dataclasses
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import defaultdict
-from warnings import warn
 from torch.utils.data.dataset import Dataset
-from typing import NamedTuple, Iterable, Collection
+from typing import NamedTuple
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, EvaluationMetric
 from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ddfa.misc.code_data_structure_api import *
-from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
-from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter, ChunksKVStoresDataset
-from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, non_identifier_token_to_token_vocab_word
+from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
+from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoresDataset
+from ddfa.misc.tensors_data_class import TensorsDataClass
+from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ddfa.code_nn_modules.code_task_encoder import CodeTaskEncoder, EncodedCode
 from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
-from ddfa.code_nn_modules.code_task_input import CodeTaskInput
+from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, preprocess_code_task_example, \
+    truncate_and_pad, PreprocessLimitExceedError
 
 
 __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'LoggingCallsTaskDataset', 'ModelInput']
@@ -31,8 +32,11 @@ class PredictLogVariablesTask(CodeTaskBase):
 
     def preprocess(self, model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
                    raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
-        preprocess(model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path,
-                   raw_eval_data_path=raw_eval_data_path, raw_test_data_path=raw_test_data_path)
+        preprocess_code_task_dataset(
+            model_hps=model_hps, pp_data_path=pp_data_path,
+            raw_extracted_examples_generator=iter_raw_extracted_examples_and_verify,
+            pp_example_fn=preprocess_logging_call_example, raw_train_data_path=raw_train_data_path,
+            raw_eval_data_path=raw_eval_data_path, raw_test_data_path=raw_test_data_path)
 
     def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
         vocabs = CodeTaskVocabs.load_or_create(model_hps=model_hps, pp_data_path=pp_data_path)
@@ -47,10 +51,7 @@ class PredictLogVariablesTask(CodeTaskBase):
 
     def collate_examples(self, examples: List['TaggedExample']):
         assert all(isinstance(example, TaggedExample) for example in examples)
-        return TaggedExample(
-            code_task_input=CodeTaskInput.collate(list(example.code_task_input for example in examples)),
-            target_symbols_idxs_used_in_logging_call=torch.cat(
-                tuple(example.target_symbols_idxs_used_in_logging_call.unsqueeze(0) for example in examples), dim=0))
+        return TaggedExample.collate(examples)
 
     def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
         return [LoggingCallTaskEvaluationMetric]
@@ -82,7 +83,7 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
 
 
 # TODO: remove! after next pp.. (it is here only to support old preprocessed files)
-class ModelInput(CodeTaskInput):
+class ModelInput(MethodCodeInputToEncoder):
     pass
 
 
@@ -97,26 +98,11 @@ class ModelOutput(NamedTuple):
         return ModelOutput(**{field: getattr(self, field).cpu() for field in ModelOutput._fields})
 
 
-class TaggedExample(NamedTuple):
-    code_task_input: CodeTaskInput
+@dataclasses.dataclass
+class TaggedExample(TensorsDataClass):
+    logging_call_hash: str
+    code_task_input: MethodCodeInputToEncoder
     target_symbols_idxs_used_in_logging_call: torch.Tensor
-
-    def to(self, device):
-        return TaggedExample(
-            code_task_input=self.code_task_input.to(device),
-            target_symbols_idxs_used_in_logging_call=self.target_symbols_idxs_used_in_logging_call.to(device))
-
-
-MAX_NR_PDG_EDGES = 300  # TODO: move to model hyper-parameters!
-MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES = 6  # TODO: move to model hyper-parameters!
-MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER = 5  # TODO: move to model hyper-parameters!
-MIN_NR_TARGET_SYMBOLS = 1  # TODO: move to model hyper-parameters!
-MAX_NR_TARGET_SYMBOLS = 4  # TODO: move to model hyper-parameters!
-MAX_NR_IDENTIFIERS = 110  # TODO: move to model hyper-parameters!
-MAX_NR_SYMBOLS = 55  # TODO: move to model hyper-parameters!
-MIN_NR_SYMBOLS = 2  # TODO: move to model hyper-parameters!
-MAX_NR_TOKENS_IN_EXPRESSION = 30  # TODO: move to model hyper-parameters!
-MAX_NR_PDG_NODES = 80  # TODO: move to model hyper-parameters!
 
 
 class PredictLoggingCallVarsTaskModel(nn.Module):
@@ -139,12 +125,13 @@ class PredictLoggingCallVarsTaskModel(nn.Module):
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.symbols_special_words_embedding,
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
-            max_nr_taget_symbols=MAX_NR_TARGET_SYMBOLS + 2, encoder_output_len=MAX_NR_PDG_NODES,
+            max_nr_taget_symbols=model_hps.method_code_encoder.max_nr_target_symbols + 2,
+            encoder_output_len=model_hps.method_code_encoder.max_nr_pdg_nodes,
             encoder_output_dim=self.code_task_encoder.cfg_node_encoder.output_dim,
             symbols_encoding_dim=self.identifier_embedding_dim)
         self.dbg__tensors_to_check_grads = {}
 
-    def forward(self, code_task_input: CodeTaskInput, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
+    def forward(self, code_task_input: MethodCodeInputToEncoder, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
         self.dbg__tensors_to_check_grads = {}
 
         encoded_code: EncodedCode = self.code_task_encoder(code_task_input=code_task_input)
@@ -230,195 +217,42 @@ class LoggingCallsTaskDataset(ChunksKVStoresDataset):
 
     def __getitem__(self, idx):
         example = super(LoggingCallsTaskDataset, self).__getitem__(idx)
-        assert all(hasattr(example, field) for field in TaggedExample._fields)
-        assert all(hasattr(example.code_task_input, field) for field in CodeTaskInput._fields)
-        assert all(isinstance(getattr(example.code_task_input, field), torch.Tensor)
-                   for field in CodeTaskInput._fields if field != 'is_batched')
+        assert isinstance(example, TaggedExample)
+        assert all(hasattr(example, field.name) for field in dataclasses.fields(TaggedExample))
+        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputToEncoder))
+        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputToEncoder))
         return TaggedExample(
-            code_task_input=CodeTaskInput(**example.code_task_input._asdict()),
+            code_task_input=MethodCodeInputToEncoder(**dataclasses.asdict(example.code_task_input)),
             target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
 
 
-def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
-    assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR,
-                          SerTokenKind.IDENTIFIER, SerTokenKind.LITERAL}
-    if token.kind == SerTokenKind.IDENTIFIER:
-        return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-                token.identifier_idx]
-    if token.kind == SerTokenKind.LITERAL:
-        return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.tokens.get_word_idx_or_unk('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
-    return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.tokens.get_word_idx_or_unk(non_identifier_token_to_token_vocab_word(token))]
+def preprocess_logging_call_example(
+        model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+        example: RawExtractedExample) -> typing.Optional[TaggedExample]:
+    code_task_input = preprocess_code_task_example(
+        model_hps=model_hps, code_task_vocabs=code_task_vocabs,
+        method=example.method, method_pdg=example.method_pdg, method_ast=example.method_ast,
+        remove_edges_from_pdg_nodes_idxs={example.logging_call.pdg_node_idx},
+        pdg_nodes_to_mask={example.logging_call.pdg_node_idx: '<LOG_PRED>'})
 
-
-def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>') -> Iterable:
-    vector_truncated_len = min(len(vector), max_length)
-    padding_len = max_length - vector_truncated_len
-    return itertools.chain(itertools.islice(vector, max_length), (pad_word for _ in range(padding_len)))
-
-
-def preprocess(model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: Optional[str] = None,
-               raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
-    vocabs = CodeTaskVocabs.load_or_create(
-        model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
-    datafolds = (
-        (DataFold.Train, raw_train_data_path),
-        (DataFold.Validation, raw_eval_data_path),
-        (DataFold.Test, raw_test_data_path))
-    for datafold, raw_dataset_path in datafolds:
-        if raw_dataset_path is None:
-            continue
-        # TODO: add hash of task props & model HPs to perprocessed file name.
-        chunks_examples_writer = ChunksKVStoreDatasetWriter(
-            pp_data_path=pp_data_path, datafold=datafold,
-            max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
-        for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_dataset_path):
-            pp_example = preprocess_example(
-                model_hps=model_hps, vocabs=vocabs, logging_call=example.logging_call, method_pdg=example.method_pdg)
-            if pp_example is None:
-                continue
-            chunks_examples_writer.write_example(pp_example)
-
-        chunks_examples_writer.close_last_written_chunk()
-        chunks_examples_writer.enforce_no_further_chunks()
-
-
-def preprocess_example(
-        model_hps: DDFAModelHyperParams, vocabs: CodeTaskVocabs,
-        logging_call: SerLoggingCall, method_pdg: SerMethodPDG) -> typing.Optional[TaggedExample]:
-    logging_call_pdg_node = method_pdg.pdg_nodes[logging_call.pdg_node_idx]
-    sub_identifiers_pad = [vocabs.sub_identifiers.get_word_idx_or_unk('<PAD>')] * MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER
-    if len(method_pdg.sub_identifiers_by_idx) > MAX_NR_IDENTIFIERS:
-        return None
-    if any(len(sub_identifiers_in_identifier) < 1 for sub_identifiers_in_identifier in method_pdg.sub_identifiers_by_idx):
-        warn(f'Found logging call {logging_call.hash} with an empty identifier (no sub-identifiers). ignoring.')
-        return None
-    if len(method_pdg.pdg_nodes) > MAX_NR_PDG_NODES:
-        return None
-    if any(len(pdg_node.code.tokenized) > MAX_NR_TOKENS_IN_EXPRESSION
-           for pdg_node in method_pdg.pdg_nodes if pdg_node.code is not None):
-        return None
-    all_symbols = [symbol for symbols_scope in method_pdg.symbols_scopes
-                   for symbol in symbols_scope.symbols]
-    nr_symbols = len(all_symbols)
-    if nr_symbols > MAX_NR_SYMBOLS or nr_symbols < MIN_NR_SYMBOLS:
-        return None
-    nr_edges = sum(len(pdg_node.control_flow_out_edges) +
-                   sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
-                   for pdg_node in method_pdg.pdg_nodes)
-    if nr_edges > MAX_NR_PDG_EDGES:
-        return None
-
+    logging_call_pdg_node = example.method_pdg.pdg_nodes[example.logging_call.pdg_node_idx]
     symbols_idxs_used_in_logging_call = list(
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.may))
-    if len(symbols_idxs_used_in_logging_call) > MAX_NR_TARGET_SYMBOLS or \
-            len(symbols_idxs_used_in_logging_call) < MIN_NR_TARGET_SYMBOLS:
-        return None
+    nr_target_symbols = len(symbols_idxs_used_in_logging_call)
+    if nr_target_symbols < model_hps.method_code_encoder.min_nr_target_symbols:
+        raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) < MIN_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.min_nr_target_symbols})')
+    if nr_target_symbols > model_hps.method_code_encoder.max_nr_target_symbols:
+        raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) > MAX_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.max_nr_target_symbols})')
     target_symbols_idxs_used_in_logging_call = torch.tensor(list(truncate_and_pad(
-        [vocabs.symbols_special_words.get_word_idx_or_unk('<SOS>')] +
-        [symbol_idx_wo_specials + len(vocabs.symbols_special_words)
+        [code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<SOS>')] +
+        [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
          for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
-        [vocabs.symbols_special_words.get_word_idx_or_unk('<EOS>')],
-        max_length=MAX_NR_TARGET_SYMBOLS + 2,
-        pad_word=vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
-
-    identifiers = torch.tensor(
-        [[vocabs.sub_identifiers.get_word_idx_or_unk(sub_identifier_str)
-          for sub_identifier_str in truncate_and_pad(sub_identifiers, MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER)]
-         for sub_identifiers in itertools.islice(method_pdg.sub_identifiers_by_idx, MAX_NR_IDENTIFIERS)] +
-        [sub_identifiers_pad
-         for _ in range(MAX_NR_IDENTIFIERS - min(len(method_pdg.sub_identifiers_by_idx), MAX_NR_IDENTIFIERS))],
-        dtype=torch.long)
-    sub_identifiers_mask = torch.tensor(
-        [[1] * min(len(sub_identifiers), MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER) +
-         [0] * (MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER - min(len(sub_identifiers), MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER))
-         for sub_identifiers in itertools.islice(method_pdg.sub_identifiers_by_idx, MAX_NR_IDENTIFIERS)] +
-        [[1] * MAX_NR_SUB_IDENTIFIERS_IN_IDENTIFIER] *
-        (MAX_NR_IDENTIFIERS - min(len(method_pdg.sub_identifiers_by_idx), MAX_NR_IDENTIFIERS)),
-        dtype=torch.bool)
-    symbols_identifier_idxs = torch.tensor(
-        [symbol.identifier_idx for symbol in all_symbols] +
-        ([0] * (MAX_NR_SYMBOLS - len(all_symbols))), dtype=torch.long)
-    symbols_identifier_mask = torch.cat([
-        torch.ones(nr_symbols, dtype=torch.bool),
-        torch.zeros(MAX_NR_SYMBOLS - nr_symbols, dtype=torch.bool)])
-    cfg_nodes_mask = torch.cat([
-        torch.ones(len(method_pdg.pdg_nodes), dtype=torch.bool),
-        torch.zeros(MAX_NR_PDG_NODES - len(method_pdg.pdg_nodes), dtype=torch.bool)])
-    cfg_nodes_control_kind = torch.tensor(list(truncate_and_pad([
-        vocabs.pdg_node_control_kinds.get_word_idx_or_unk(
-            pdg_node.control_kind.value if pdg_node.idx != logging_call.pdg_node_idx else '<LOG_PRED>')
-        for pdg_node in method_pdg.pdg_nodes], max_length=MAX_NR_PDG_NODES,
-        pad_word=vocabs.pdg_node_control_kinds.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
-    padding_expression = [[vocabs.tokens_kinds.get_word_idx_or_unk('<PAD>'),
-                vocabs.tokens.get_word_idx_or_unk('<PAD>')]] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)
-    cfg_nodes_expressions = torch.tensor(list(truncate_and_pad([
-        list(truncate_and_pad(
-            [token_to_input_vector(token, vocabs) for token in pdg_node.code.tokenized],
-            max_length=MAX_NR_TOKENS_IN_EXPRESSION + 1, pad_word=padding_expression[0]))
-        if pdg_node.code is not None and pdg_node.idx != logging_call.pdg_node_idx else padding_expression
-        for pdg_node in method_pdg.pdg_nodes],
-        max_length=MAX_NR_PDG_NODES, pad_word=padding_expression)), dtype=torch.long)
-    cfg_nodes_expressions_mask = torch.tensor(
-        [([1] * min(len(pdg_node.code.tokenized), (MAX_NR_TOKENS_IN_EXPRESSION + 1)) +
-         [0] * ((MAX_NR_TOKENS_IN_EXPRESSION + 1) - min(len(pdg_node.code.tokenized), (MAX_NR_TOKENS_IN_EXPRESSION + 1))))
-         if pdg_node.code is not None else [1] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)
-         for pdg_node in itertools.islice(method_pdg.pdg_nodes, MAX_NR_PDG_NODES)] +
-        [[1] * (MAX_NR_TOKENS_IN_EXPRESSION + 1)] *
-        (MAX_NR_PDG_NODES - min(len(method_pdg.pdg_nodes), MAX_NR_PDG_NODES)),
-        dtype=torch.bool)
-    cfg_edges_mask = torch.cat([
-        torch.ones(nr_edges, dtype=torch.bool),
-        torch.zeros(MAX_NR_PDG_EDGES - nr_edges, dtype=torch.bool)])
-    control_flow_edges = {}
-    data_dependency_edges = defaultdict(set)
-    for src_pdg_node in method_pdg.pdg_nodes:
-        for edge in src_pdg_node.control_flow_out_edges:
-            control_flow_edges[(src_pdg_node.idx, edge.pgd_node_idx)] = edge
-    for src_pdg_node in method_pdg.pdg_nodes:
-        for edge in src_pdg_node.data_dependency_out_edges:
-            if src_pdg_node.idx == logging_call.pdg_node_idx or edge.pgd_node_idx == logging_call.pdg_node_idx:
-                continue
-            data_dependency_edges[(src_pdg_node.idx, edge.pgd_node_idx)].update(
-                symbol.identifier_idx for symbol in edge.symbols)
-    edges = list(set(control_flow_edges.keys()) | set(data_dependency_edges.keys()))
-    cfg_edges = torch.tensor(list(truncate_and_pad([
-        [src_pdg_node_idx, dst_pdg_node_idx]
-        for src_pdg_node_idx, dst_pdg_node_idx in edges],
-        max_length=MAX_NR_PDG_EDGES, pad_word=[-1, -1])), dtype=torch.long)
-
-    pad_edge_attrs_vector = [vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<PAD>')] + \
-                            ([-1] * MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES)
-    def build_edge_attrs_vector(edge_vertices) -> List[int]:
-        control_flow_edge_attrs = [
-            vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk(
-                control_flow_edges[edge_vertices].type.value)] \
-            if edge_vertices in control_flow_edges else \
-            [vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<UNK>')]
-        data_dependency_edge_attrs = list(truncate_and_pad(
-            data_dependency_edges[edge_vertices], MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES, -1)) \
-            if edge_vertices in data_dependency_edges else \
-            ([-1] * MAX_NR_DATA_DEPENDENCY_EDGES_BETWEEN_PDG_NODES)
-        return control_flow_edge_attrs + data_dependency_edge_attrs
-
-    cfg_edges_attrs = torch.tensor(list(truncate_and_pad([
-        build_edge_attrs_vector(edge_vertices)
-        for edge_vertices in edges], max_length=MAX_NR_PDG_EDGES, pad_word=pad_edge_attrs_vector)), dtype=torch.long)
+        [code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<EOS>')],
+        max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
+        pad_word=code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
 
     return TaggedExample(
-        code_task_input=CodeTaskInput(
-            identifiers=identifiers,
-            sub_identifiers_mask=sub_identifiers_mask,
-            cfg_nodes_mask=cfg_nodes_mask,
-            cfg_nodes_control_kind=cfg_nodes_control_kind,
-            cfg_nodes_expressions=cfg_nodes_expressions,
-            cfg_nodes_expressions_mask=cfg_nodes_expressions_mask,
-            cfg_edges=cfg_edges,
-            cfg_edges_mask=cfg_edges_mask,
-            cfg_edges_attrs=cfg_edges_attrs,
-            identifiers_idxs_of_all_symbols=symbols_identifier_idxs,
-            identifiers_idxs_of_all_symbols_mask=symbols_identifier_mask,
-            logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
+        logging_call_hash=example.logging_call.hash,
+        code_task_input=code_task_input,  # TODO: put logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)

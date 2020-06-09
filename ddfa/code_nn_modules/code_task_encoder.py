@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import NamedTuple
 
-from ddfa.code_nn_modules.code_task_input import CodeTaskInput
+from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
@@ -41,7 +41,7 @@ class CodeTaskEncoder(nn.Module):
             nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)
             for _ in range(nr_encoder_decoder_bridge_layers)]) if nr_encoder_decoder_bridge_layers else None
 
-    def forward(self, code_task_input: CodeTaskInput) -> EncodedCode:
+    def forward(self, code_task_input: MethodCodeInputToEncoder) -> EncodedCode:
         encoded_identifiers = self.identifier_encoder(
             sub_identifiers_indices=code_task_input.identifiers,
             sub_identifiers_mask=code_task_input.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
