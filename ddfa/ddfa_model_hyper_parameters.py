@@ -9,8 +9,13 @@ __all__ = ['MethodCodeEncoderParams', 'DDFAModelHyperParams', 'DDFAModelTraining
 class MethodCodeEncoderParams:
     encoder_type: str = confparam(
         default='cfg-paths',
-        choices=('linear', 'ast-paths', 'ast', 'cfg-paths', 'cfg'),
+        choices=('linear-seq', 'ast-paths', 'ast', 'cfg-paths', 'cfg'),
         description="Representation type of the code (architecture of the code-encoder).")
+    pdg_expression_encoder_type: str = confparam(
+        default='method-linear-seq',
+        choices=('linear-seq', 'method-linear-seq', 'ast-paths', 'ast'),
+        description="Representation type of the expression of a PDG node "
+                    "(part of the architecture of the code-encoder).")
 
     # preprocess params
     # TODO: put the preprocess params in a dedicated nested confclass.
