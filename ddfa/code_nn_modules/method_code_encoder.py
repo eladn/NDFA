@@ -12,20 +12,20 @@ from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ddfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 
 
-__all__ = ['CodeTaskEncoder', 'EncodedCode']
+__all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
 
 
-class EncodedCode(NamedTuple):
+class EncodedMethodCode(NamedTuple):
     encoded_identifiers: torch.Tensor
     encoded_cfg_nodes: torch.Tensor
     encoded_symbols: torch.Tensor
     encoded_cfg_nodes_after_bridge: torch.Tensor
 
 
-class CodeTaskEncoder(nn.Module):
+class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int = 256,
                  expr_encoding_dim: int = 1028, nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3):
-        super(CodeTaskEncoder, self).__init__()
+        super(MethodCodeEncoder, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
         self.expr_encoding_dim = expr_encoding_dim
         self.identifier_encoder = IdentifierEncoder(
@@ -45,7 +45,7 @@ class CodeTaskEncoder(nn.Module):
             symbol_embedding_dim=self.identifier_embedding_dim)  # it might change...
         self.dropout_layer = nn.Dropout(dropout_p)
 
-    def forward(self, code_task_input: MethodCodeInputToEncoder) -> EncodedCode:
+    def forward(self, code_task_input: MethodCodeInputToEncoder) -> EncodedMethodCode:
         encoded_identifiers = self.identifier_encoder(
             sub_identifiers_indices=code_task_input.identifiers,
             sub_identifiers_mask=code_task_input.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
@@ -67,7 +67,7 @@ class CodeTaskEncoder(nn.Module):
                 self.encoder_decoder_bridge_dense_layers,
                 encoded_cfg_nodes.flatten(0, 1)).view(encoded_cfg_nodes.size()[:-1] + (-1,))
 
-        return EncodedCode(
+        return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes,
             encoded_symbols=encoded_symbols,

@@ -14,7 +14,7 @@ from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_
 from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoresDataset
 from ddfa.misc.tensors_data_class import TensorsDataClass
 from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
-from ddfa.code_nn_modules.code_task_encoder import CodeTaskEncoder, EncodedCode
+from ddfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
 from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, preprocess_code_task_example, \
@@ -115,7 +115,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         self.identifier_embedding_dim = 256  # TODO: plug-in model hps
         self.expr_encoding_dim = 1028  # TODO: plug-in model hps
 
-        self.code_task_encoder = CodeTaskEncoder(
+        self.code_task_encoder = MethodCodeEncoder(
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
             expr_encoding_dim=self.expr_encoding_dim)  # TODO: plug-in model hps
@@ -131,7 +131,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
     def forward(self, code_task_input: MethodCodeInputToEncoder, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
         self.dbg_log_new_fwd()
 
-        encoded_code: EncodedCode = self.code_task_encoder(code_task_input=code_task_input)
+        encoded_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
         self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_code.encoded_cfg_nodes)
         self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
