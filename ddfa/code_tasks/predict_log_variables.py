@@ -20,6 +20,7 @@ from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, preprocess_code_task_example, \
     truncate_and_pad, PreprocessLimitExceedError
+from ddfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
 
 
 __all__ = ['PredictLogVariablesTask', 'TaggedExample', 'LoggingCallsTaskDataset', 'ModelInput']
@@ -53,11 +54,19 @@ class PredictLogVariablesTask(CodeTaskBase):
         assert all(isinstance(example, TaggedExample) for example in examples)
         return TaggedExample.collate(examples)
 
-    def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
-        return [LoggingCallTaskEvaluationMetric]
+    def evaluation_metrics(self, model_hps: DDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
+        class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):
+            def __init__(self):
+                super(LoggingCallTaskEvaluationMetric_, self).__init__(
+                    nr_symbols_special_words=3)  # TODO: get `nr_symbols_special_words` from `model_hps` !
+        return [LoggingCallTaskEvaluationMetric_]
 
 
 class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
+    def __init__(self, nr_symbols_special_words: int):
+        super(LoggingCallTaskEvaluationMetric, self).__init__()
+        self.nr_symbols_special_words = nr_symbols_special_words
+
     def update(self, y_hat: 'ModelOutput', target: torch.Tensor):
         batch_target_symbols_indices = target
         _, batch_pred_symbols_indices = y_hat.decoder_outputs.topk(k=1, dim=-1)
@@ -68,34 +77,28 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
             1]  # seq_len; prefix `<SOS>` is not predicted.
         batch_pred_symbols_indices = batch_pred_symbols_indices.numpy()
         batch_target_symbols_indices = batch_target_symbols_indices.numpy()
-        nr_symbols_special_words = 3  # TODO: pass it to `__init__()` cleanly
         batch_size = batch_target_symbols_indices.shape[0]
         for example_idx_in_batch in range(batch_size):
             example_pred_symbols_indices = [
                 symbol_idx for symbol_idx in batch_pred_symbols_indices[example_idx_in_batch, :]
-                if symbol_idx >= nr_symbols_special_words]
+                if symbol_idx >= self.nr_symbols_special_words]
             example_target_symbols_indices = [
                 symbol_idx for symbol_idx in batch_target_symbols_indices[example_idx_in_batch, :]
-                if symbol_idx >= nr_symbols_special_words]
+                if symbol_idx >= self.nr_symbols_special_words]
             super(LoggingCallTaskEvaluationMetric, self).update(
                 example_pred_symbols_indices=example_pred_symbols_indices,
                 example_target_symbols_indices=example_target_symbols_indices)
 
 
-# TODO: remove! after next pp.. (it is here only to support old preprocessed files)
+# TODO: REMOVE! after next pp.. (it is here only to support old preprocessed files)
 class ModelInput(MethodCodeInputToEncoder):
     pass
 
 
-class ModelOutput(NamedTuple):
+@dataclasses.dataclass
+class ModelOutput(TensorsDataClass):
     decoder_outputs: torch.Tensor
     all_symbols_encodings: torch.Tensor
-
-    def numpy(self):
-        return ModelOutput(**{field: getattr(self, field).cpu().numpy() for field in ModelOutput._fields})
-
-    def cpu(self):
-        return ModelOutput(**{field: getattr(self, field).cpu() for field in ModelOutput._fields})
 
 
 @dataclasses.dataclass
@@ -105,7 +108,7 @@ class TaggedExample(TensorsDataClass):
     target_symbols_idxs_used_in_logging_call: torch.Tensor
 
 
-class PredictLoggingCallVarsTaskModel(nn.Module):
+class PredictLoggingCallVarsTaskModel(nn.Module, ModuleWithDbgTestGrads):
     def __init__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs):
         super(PredictLoggingCallVarsTaskModel, self).__init__()
         self.model_hps = model_hps
@@ -129,16 +132,15 @@ class PredictLoggingCallVarsTaskModel(nn.Module):
             encoder_output_len=model_hps.method_code_encoder.max_nr_pdg_nodes,
             encoder_output_dim=self.code_task_encoder.cfg_node_encoder.output_dim,
             symbols_encoding_dim=self.identifier_embedding_dim)
-        self.dbg__tensors_to_check_grads = {}
 
     def forward(self, code_task_input: MethodCodeInputToEncoder, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
-        self.dbg__tensors_to_check_grads = {}
+        self.dbg_log_new_fwd()
 
         encoded_code: EncodedCode = self.code_task_encoder(code_task_input=code_task_input)
-        self.dbg__tensors_to_check_grads['encoded_identifiers'] = encoded_code.encoded_identifiers
-        self.dbg__tensors_to_check_grads['encoded_cfg_nodes'] = encoded_code.encoded_cfg_nodes
-        self.dbg__tensors_to_check_grads['all_symbols_encodings'] = encoded_code.all_symbols_encodings
-        self.dbg__tensors_to_check_grads['encoded_cfg_nodes_after_bridge'] = encoded_code.encoded_cfg_nodes_after_bridge
+        self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
+        self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_code.encoded_cfg_nodes)
+        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.all_symbols_encodings)
+        self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
 
         decoder_outputs = self.symbols_decoder(
             encoder_outputs=encoded_code.encoded_cfg_nodes_after_bridge,
@@ -146,43 +148,9 @@ class PredictLoggingCallVarsTaskModel(nn.Module):
             symbols_encodings=encoded_code.all_symbols_encodings,
             symbols_encodings_mask=code_task_input.identifiers_idxs_of_all_symbols_mask,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
-        self.dbg__tensors_to_check_grads['decoder_outputs'] = decoder_outputs
+        self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
 
         return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encodings=encoded_code.all_symbols_encodings)
-
-    def dbg_test_grads(self, grad_test_example_idx: int = 3, isclose_atol=1e-07):
-        assert all(tensor.grad.size() == tensor.size() for tensor in self.dbg__tensors_to_check_grads.values())
-        assert all(tensor.grad.size()[0] == next(iter(self.dbg__tensors_to_check_grads.values())).grad.size()[0]
-                   for tensor in self.dbg__tensors_to_check_grads.values())
-        for name, tensor in self.dbg__tensors_to_check_grads.items():
-            print(f'Checking tensor `{name}` of shape {tensor.size()}:')
-            # print(tensor.grad.cpu())
-            grad = tensor.grad.cpu()
-            batch_size = grad.size()[0]
-            if not all(grad[example_idx].allclose(torch.tensor(0.0), atol=isclose_atol) for example_idx in range(batch_size) if example_idx != grad_test_example_idx):
-                print(f'>>>>>>>> FAIL: Not all examples != #{grad_test_example_idx} has zero grad for tensor `{name}` of shape {tensor.size()}:')
-                print(grad)
-                for example_idx in range(batch_size):
-                    print(f'non-zero places in grad for example #{example_idx}:')
-                    print(grad[example_idx].isclose(torch.tensor(0.0), atol=isclose_atol))
-                    print(grad[example_idx][~grad[example_idx].isclose(torch.tensor(0.0), atol=isclose_atol)])
-            else:
-                print(f'Success: All examples != #{grad_test_example_idx} has zero grad for tensor `{name}` of shape {tensor.size()}:')
-            if grad[grad_test_example_idx].allclose(torch.tensor(0.0), atol=isclose_atol):
-                print(f'>>>>>>>> FAIL: Tensor `{name}` of shape {tensor.size()} for example #{grad_test_example_idx} is all zero:')
-                print(grad)
-            else:
-                print(f'Success: Tensor `{name}` of shape {tensor.size()} for example #{grad_test_example_idx} is not all zero.')
-                if len(tensor.size()) > 1:
-                    sub_objects_iszero = torch.tensor(
-                        [grad[grad_test_example_idx, sub_object_idx].allclose(torch.tensor(0.0), atol=isclose_atol)
-                         for sub_object_idx in range(tensor.size()[1])])
-                    print(f'sub_objects_nonzero: {~sub_objects_iszero} (sum: {(~sub_objects_iszero).sum()})')
-            print()
-
-    def dbg_retain_grads(self):
-        for tensor in self.dbg__tensors_to_check_grads.values():
-            tensor.retain_grad()
 
 
 class ModelLoss(nn.Module):
@@ -219,11 +187,9 @@ class LoggingCallsTaskDataset(ChunksKVStoresDataset):
         example = super(LoggingCallsTaskDataset, self).__getitem__(idx)
         assert isinstance(example, TaggedExample)
         assert all(hasattr(example, field.name) for field in dataclasses.fields(TaggedExample))
+        assert isinstance(example.code_task_input, MethodCodeInputToEncoder)
         assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputToEncoder))
-        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputToEncoder))
-        return TaggedExample(
-            code_task_input=MethodCodeInputToEncoder(**dataclasses.asdict(example.code_task_input)),
-            target_symbols_idxs_used_in_logging_call=example.target_symbols_idxs_used_in_logging_call)
+        return example
 
 
 def preprocess_logging_call_example(

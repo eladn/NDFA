@@ -27,6 +27,23 @@ class TensorsDataClass:
                 getattr(self, field.name)
             for field in dataclasses.fields(self)})
 
+    def cpu(self):
+        return self.__class__.__new__(**{
+            field.name:
+                getattr(self, field.name).cpu()
+                if hasattr(getattr(self, field.name), 'cpu') else
+                getattr(self, field.name)
+            for field in dataclasses.fields(self)})
+
+    def numpy(self):
+        cpu = self.cpu()
+        return self.__class__.__new__(**{
+            field.name:
+                getattr(cpu, field.name).numpy()
+                if hasattr(getattr(cpu, field.name), 'numpy') else
+                getattr(cpu, field.name)
+            for field in dataclasses.fields(cpu)})
+
     @classmethod
     def collate(cls, code_task_inputs: List['TensorsDataClass']):
         assert all(not code_task_input.is_batched for code_task_input in code_task_inputs)
@@ -57,7 +74,7 @@ class TensorsDataClass:
                 return torch.cat(tuple(tensor.unsqueeze(0) for tensor in values_as_tuple), dim=0)
             return values_as_tuple
 
-        batched_obj = cls(
+        batched_obj = cls.__new__(
             **{field.name: collate_field(
                 field.name, (getattr(code_task_input, field.name) for code_task_input in code_task_inputs))
                 for field in dataclasses.fields(cls)})

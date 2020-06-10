@@ -70,5 +70,5 @@ class CodeTaskBase(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def evaluation_metrics(self) -> List[Type[EvaluationMetric]]:
+    def evaluation_metrics(self, model_hps: DDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         ...

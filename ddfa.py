@@ -152,7 +152,8 @@ def main():
             criterion=criterion,
             minibatch_size=16,  # TODO: make a train HP
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
-            evaluation_metrics_types=task.evaluation_metrics(),
+            evaluation_metrics_types=task.evaluation_metrics(
+                model_hps=exec_params.experiment_setting.model_hyper_params),
             callbacks=train_callbacks)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
@@ -172,7 +173,8 @@ def main():
             device=device,
             valid_loader=eval_loader,
             criterion=criterion,
-            evaluation_metrics_types=task.evaluation_metrics())
+            evaluation_metrics_types=task.evaluation_metrics(
+                model_hps=exec_params.experiment_setting.model_hyper_params))
         print(f'Completed performing evaluation.'
               f'\n\t validation loss: {val_loss:.4f}'
               f'\n\t validation metrics: {metrics_results}')
