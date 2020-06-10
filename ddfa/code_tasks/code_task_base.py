@@ -61,8 +61,8 @@ class CodeTaskBase(abc.ABC):
         assert task_props.name in task_names
         task_class = None
         if task_props.name == 'pred-log-vars':
-            from ddfa.code_tasks.predict_log_variables import PredictLogVariablesTask
-            task_class = PredictLogVariablesTask
+            from ddfa.code_tasks.predict_log_variables import PredictLogVarsTask
+            task_class = PredictLogVarsTask
         return task_class(task_props)
 
     @abc.abstractmethod

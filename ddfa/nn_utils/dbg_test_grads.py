@@ -6,22 +6,22 @@ __all__ = ['ModuleWithDbgTestGrads']
 
 class ModuleWithDbgTestGrads:
     def __init__(self, is_enabled: bool = True):
-        self.is_enabled = is_enabled
+        self.is_grads_dbg_enabled = is_enabled
         self._dbg__tensors_to_check_grads = {}
 
     def dbg_log_new_fwd(self):
-        if not self.is_enabled:
+        if not self.is_grads_dbg_enabled:
             return
         self._dbg__tensors_to_check_grads = {}
 
     def dbg_log_tensor_during_fwd(self, name: str, tensor: torch.Tensor):
-        if not self.is_enabled:
+        if not self.is_grads_dbg_enabled:
             return
         assert name not in self._dbg__tensors_to_check_grads
         self._dbg__tensors_to_check_grads[name] = tensor
 
     def dbg_test_grads_after_bwd(self, grad_test_example_idx: int = 3, isclose_atol=1e-07):
-        assert self.is_enabled
+        assert self.is_grads_dbg_enabled
         assert all(tensor.grad.size() == tensor.size() for tensor in self._dbg__tensors_to_check_grads.values())
         assert all(tensor.grad.size()[0] == next(iter(self._dbg__tensors_to_check_grads.values())).grad.size()[0]
                    for tensor in self._dbg__tensors_to_check_grads.values())
@@ -57,6 +57,6 @@ class ModuleWithDbgTestGrads:
             print()
 
     def dbg_retain_grads_before_bwd(self):
-        assert self.is_enabled
+        assert self.is_grads_dbg_enabled
         for tensor in self._dbg__tensors_to_check_grads.values():
             tensor.retain_grad()

@@ -4,7 +4,6 @@ import dataclasses
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data.dataset import Dataset
-from typing import NamedTuple
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
@@ -23,12 +22,12 @@ from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_da
 from ddfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
 
 
-__all__ = ['PredictLogVariablesTask', 'TaggedExample', 'LoggingCallsTaskDataset', 'ModelInput']
+__all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
 
 
-class PredictLogVariablesTask(CodeTaskBase):
+class PredictLogVarsTask(CodeTaskBase):
     def __init__(self, task_props: CodeTaskProperties):
-        super(PredictLogVariablesTask, self).__init__(task_props)
+        super(PredictLogVarsTask, self).__init__(task_props)
         # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
     def preprocess(self, model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
@@ -41,18 +40,18 @@ class PredictLogVariablesTask(CodeTaskBase):
 
     def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
         vocabs = CodeTaskVocabs.load_or_create(model_hps=model_hps, pp_data_path=pp_data_path)
-        return PredictLoggingCallVarsTaskModel(model_hps=model_hps, code_task_vocabs=vocabs)
+        return PredictLogVarsModel(model_hps=model_hps, code_task_vocabs=vocabs)
 
     def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
-        return LoggingCallsTaskDataset(datafold=datafold, pp_data_path=pp_data_path)
+        return PredictLogVarsTaskDataset(datafold=datafold, pp_data_path=pp_data_path)
 
     def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
-        return ModelLoss(model_hps=model_hps)
+        return PredictLogVarsModelLoss(model_hps=model_hps)
 
-    def collate_examples(self, examples: List['TaggedExample']):
-        assert all(isinstance(example, TaggedExample) for example in examples)
-        return TaggedExample.collate(examples)
+    def collate_examples(self, examples: List['PredictLogVarsTaggedExample']):
+        assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
+        return PredictLogVarsTaggedExample.collate(examples)
 
     def evaluation_metrics(self, model_hps: DDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):
@@ -67,7 +66,7 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
         super(LoggingCallTaskEvaluationMetric, self).__init__()
         self.nr_symbols_special_words = nr_symbols_special_words
 
-    def update(self, y_hat: 'ModelOutput', target: torch.Tensor):
+    def update(self, y_hat: 'PredictLoggingCallVarsModelOutput', target: torch.Tensor):
         batch_target_symbols_indices = target
         _, batch_pred_symbols_indices = y_hat.decoder_outputs.topk(k=1, dim=-1)
         batch_pred_symbols_indices = batch_pred_symbols_indices.squeeze(dim=-1)
@@ -90,27 +89,27 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
                 example_target_symbols_indices=example_target_symbols_indices)
 
 
-# TODO: REMOVE! after next pp.. (it is here only to support old preprocessed files)
-class ModelInput(MethodCodeInputToEncoder):
-    pass
-
-
 @dataclasses.dataclass
-class ModelOutput(TensorsDataClass):
+class PredictLoggingCallVarsModelOutput(TensorsDataClass):
     decoder_outputs: torch.Tensor
     all_symbols_encodings: torch.Tensor
 
 
 @dataclasses.dataclass
-class TaggedExample(TensorsDataClass):
+class PredictLogVarsTaggedExample(TensorsDataClass):
     logging_call_hash: str
     code_task_input: MethodCodeInputToEncoder
     target_symbols_idxs_used_in_logging_call: torch.Tensor
 
+    def __iter__(self):  # To support unpacking into (x_batch, y_batch)
+        yield self.code_task_input
+        yield self.target_symbols_idxs_used_in_logging_call
 
-class PredictLoggingCallVarsTaskModel(nn.Module, ModuleWithDbgTestGrads):
+
+class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
     def __init__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs):
-        super(PredictLoggingCallVarsTaskModel, self).__init__()
+        super(PredictLogVarsModel, self).__init__()
+        ModuleWithDbgTestGrads.__init__(self)
         self.model_hps = model_hps
         self.code_task_vocabs = code_task_vocabs
         self.identifier_embedding_dim = 256  # TODO: plug-in model hps
@@ -121,12 +120,8 @@ class PredictLoggingCallVarsTaskModel(nn.Module, ModuleWithDbgTestGrads):
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
             expr_encoding_dim=self.expr_encoding_dim)  # TODO: plug-in model hps
 
-        self.symbols_special_words_embedding = nn.Embedding(
-            num_embeddings=len(self.code_task_vocabs.symbols_special_words),
-            embedding_dim=self.identifier_embedding_dim,
-            padding_idx=self.code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))
         self.symbols_decoder = SymbolsDecoder(
-            symbols_special_words_embedding=self.symbols_special_words_embedding,
+            symbols_special_words_embedding=self.code_task_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.method_code_encoder.max_nr_target_symbols + 2,
             encoder_output_len=model_hps.method_code_encoder.max_nr_pdg_nodes,
@@ -139,28 +134,28 @@ class PredictLoggingCallVarsTaskModel(nn.Module, ModuleWithDbgTestGrads):
         encoded_code: EncodedCode = self.code_task_encoder(code_task_input=code_task_input)
         self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_code.encoded_cfg_nodes)
-        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.all_symbols_encodings)
+        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
 
         decoder_outputs = self.symbols_decoder(
             encoder_outputs=encoded_code.encoded_cfg_nodes_after_bridge,
             encoder_outputs_mask=code_task_input.cfg_nodes_mask,
-            symbols_encodings=encoded_code.all_symbols_encodings,
+            symbols_encodings=encoded_code.encoded_symbols,
             symbols_encodings_mask=code_task_input.identifiers_idxs_of_all_symbols_mask,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
         self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
 
-        return ModelOutput(decoder_outputs=decoder_outputs, all_symbols_encodings=encoded_code.all_symbols_encodings)
+        return PredictLoggingCallVarsModelOutput(decoder_outputs=decoder_outputs, all_symbols_encodings=encoded_code.encoded_symbols)
 
 
-class ModelLoss(nn.Module):
+class PredictLogVarsModelLoss(nn.Module):
     def __init__(self, model_hps: DDFAModelHyperParams):
-        super(ModelLoss, self).__init__()
+        super(PredictLogVarsModelLoss, self).__init__()
         self.model_hps = model_hps
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
         self.dbg__example_idx_to_test_grads = 3
 
-    def dbg_forward_test_grads(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
+    def dbg_forward_test_grads(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
         # Change this to be the forward() when debugging gradients.
         assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
         assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
@@ -169,7 +164,7 @@ class ModelLoss(nn.Module):
         assert target_symbols_idxs.dtype == torch.long
         return model_output.decoder_outputs[self.dbg__example_idx_to_test_grads, :, :].sum()
 
-    def forward(self, model_output: ModelOutput, target_symbols_idxs: torch.LongTensor):
+    def forward(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
         assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
         assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
         assert model_output.decoder_outputs.size()[0] == target_symbols_idxs.size()[0]  # bsz
@@ -178,15 +173,15 @@ class ModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-class LoggingCallsTaskDataset(ChunksKVStoresDataset):
+class PredictLogVarsTaskDataset(ChunksKVStoresDataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
-        super(LoggingCallsTaskDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
+        super(PredictLogVarsTaskDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def __getitem__(self, idx):
-        example = super(LoggingCallsTaskDataset, self).__getitem__(idx)
-        assert isinstance(example, TaggedExample)
-        assert all(hasattr(example, field.name) for field in dataclasses.fields(TaggedExample))
+        example = super(PredictLogVarsTaskDataset, self).__getitem__(idx)
+        assert isinstance(example, PredictLogVarsTaggedExample)
+        assert all(hasattr(example, field.name) for field in dataclasses.fields(PredictLogVarsTaggedExample))
         assert isinstance(example.code_task_input, MethodCodeInputToEncoder)
         assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputToEncoder))
         return example
@@ -194,7 +189,7 @@ class LoggingCallsTaskDataset(ChunksKVStoresDataset):
 
 def preprocess_logging_call_example(
         model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
-        example: RawExtractedExample) -> typing.Optional[TaggedExample]:
+        example: RawExtractedExample) -> typing.Optional[PredictLogVarsTaggedExample]:
     code_task_input = preprocess_code_task_example(
         model_hps=model_hps, code_task_vocabs=code_task_vocabs,
         method=example.method, method_pdg=example.method_pdg, method_ast=example.method_ast,
@@ -218,7 +213,7 @@ def preprocess_logging_call_example(
         max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
         pad_word=code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
 
-    return TaggedExample(
+    return PredictLogVarsTaggedExample(
         logging_call_hash=example.logging_call.hash,
         code_task_input=code_task_input,  # TODO: put logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)

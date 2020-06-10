@@ -81,10 +81,10 @@ def preprocess_code_task_example(
         raise PreprocessLimitExceedError(f'#edges ({nr_edges}) > MAX_NR_PDG_EDGES ({model_hps.method_code_encoder.max_nr_pdg_edges})')
 
     sub_identifiers_pad = [code_task_vocabs.sub_identifiers.get_word_idx_or_unk(
-        '<PAD>')] * model_hps.method_code_encoder.max_sub_identifier_vocab_size
+        '<PAD>')] * model_hps.method_code_encoder.max_nr_identifier_sub_parts
     identifiers = torch.tensor(
         [[code_task_vocabs.sub_identifiers.get_word_idx_or_unk(sub_identifier_str)
-          for sub_identifier_str in truncate_and_pad(sub_identifiers, model_hps.method_code_encoder.max_sub_identifier_vocab_size)]
+          for sub_identifier_str in truncate_and_pad(sub_identifiers, model_hps.method_code_encoder.max_nr_identifier_sub_parts)]
          for sub_identifiers in itertools.islice(method_pdg.sub_identifiers_by_idx, model_hps.method_code_encoder.max_nr_identifiers)] +
         [sub_identifiers_pad
          for _ in range(model_hps.method_code_encoder.max_nr_identifiers - min(len(method_pdg.sub_identifiers_by_idx), model_hps.method_code_encoder.max_nr_identifiers))],
