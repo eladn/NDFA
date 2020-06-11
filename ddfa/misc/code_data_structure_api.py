@@ -866,6 +866,16 @@ class SerExperimentResults:
         return result
 
 
+class SerLogLevel(Enum):
+    DEBUG = "Debug"
+    ERROR = "Error"
+    FATAL = "Fatal"
+    INFO = "Info"
+    TRACE = "Trace"
+    UNKNOWN = "Unknown"
+    WARNING = "Warning"
+
+
 class SerDataFoldType(Enum):
     TEST = "Test"
     TRAIN = "Train"
@@ -971,6 +981,7 @@ class SerLoggingCall:
     code: SerCodeSnippet
     contextual_scopes: SerContextualScopesContainer
     hash: str
+    log_level: SerLogLevel
     method_ref: SerMethodRef
     sub_token_range_ref_in_method: SerSubTokenRangeRef
     ast_node_idx: Optional[int] = None
@@ -987,6 +998,7 @@ class SerLoggingCall:
         code = SerCodeSnippet.from_dict(obj.get("code"))
         contextual_scopes = SerContextualScopesContainer.from_dict(obj.get("contextualScopes"))
         hash = from_str(obj.get("hash"))
+        log_level = SerLogLevel(obj.get("logLevel"))
         method_ref = SerMethodRef.from_dict(obj.get("methodRef"))
         sub_token_range_ref_in_method = SerSubTokenRangeRef.from_dict(obj.get("subTokenRangeRefInMethod"))
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
@@ -996,13 +1008,14 @@ class SerLoggingCall:
         names_used_in_log_and_found_in_inner_method_scope = from_union([lambda x: from_list(from_str, x), from_none], obj.get("namesUsedInLogAndFoundInInnerMethodScope"))
         name_symbols_used_in_log = from_union([lambda x: from_list(SerNameSymbolOccurrence.from_dict, x), from_none], obj.get("nameSymbolsUsedInLog"))
         pdg_node_idx = from_union([from_int, from_none], obj.get("pdgNodeIdx"))
-        return SerLoggingCall(code, contextual_scopes, hash, method_ref, sub_token_range_ref_in_method, ast_node_idx, calculated_features, experiments_results, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
+        return SerLoggingCall(code, contextual_scopes, hash, log_level, method_ref, sub_token_range_ref_in_method, ast_node_idx, calculated_features, experiments_results, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["code"] = to_class(SerCodeSnippet, self.code)
         result["contextualScopes"] = to_class(SerContextualScopesContainer, self.contextual_scopes)
         result["hash"] = from_str(self.hash)
+        result["logLevel"] = to_enum(SerLogLevel, self.log_level)
         result["methodRef"] = to_class(SerMethodRef, self.method_ref)
         result["subTokenRangeRefInMethod"] = to_class(SerSubTokenRangeRef, self.sub_token_range_ref_in_method)
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
@@ -1967,6 +1980,7 @@ class SerSymbol:
     declaration_kind: SerSymbolDeclarationKind
     decl_site_pdg_node_idx: int
     identifier_idx: int
+    idx: int
     symbol_name: str
     type_name: str
     declaration_ast_node_idx: Optional[int] = None
@@ -1980,12 +1994,13 @@ class SerSymbol:
         declaration_kind = SerSymbolDeclarationKind(obj.get("declarationKind"))
         decl_site_pdg_node_idx = from_int(obj.get("declSitePDGNodeIdx"))
         identifier_idx = from_int(obj.get("identifierIdx"))
+        idx = from_int(obj.get("idx"))
         symbol_name = from_str(obj.get("symbolName"))
         type_name = from_str(obj.get("typeName"))
         declaration_ast_node_idx = from_union([from_int, from_none], obj.get("declarationASTNodeIdx"))
         def_sites_pdg_node_ids = from_union([lambda x: from_list(from_int, x), from_none], obj.get("defSitesPDGNodeIds"))
         use_sites_pdg_node_ids = from_union([lambda x: from_list(from_int, x), from_none], obj.get("useSitesPDGNodeIds"))
-        return SerSymbol(contained_in_symbols_scope_idx, declaration_kind, decl_site_pdg_node_idx, identifier_idx, symbol_name, type_name, declaration_ast_node_idx, def_sites_pdg_node_ids, use_sites_pdg_node_ids)
+        return SerSymbol(contained_in_symbols_scope_idx, declaration_kind, decl_site_pdg_node_idx, identifier_idx, idx, symbol_name, type_name, declaration_ast_node_idx, def_sites_pdg_node_ids, use_sites_pdg_node_ids)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -1993,6 +2008,7 @@ class SerSymbol:
         result["declarationKind"] = to_enum(SerSymbolDeclarationKind, self.declaration_kind)
         result["declSitePDGNodeIdx"] = from_int(self.decl_site_pdg_node_idx)
         result["identifierIdx"] = from_int(self.identifier_idx)
+        result["idx"] = from_int(self.idx)
         result["symbolName"] = from_str(self.symbol_name)
         result["typeName"] = from_str(self.type_name)
         result["declarationASTNodeIdx"] = from_union([from_int, from_none], self.declaration_ast_node_idx)
@@ -2005,21 +2021,21 @@ class SerSymbol:
 class SerSymbolsScope:
     idx: int
     parent_symbols_scope_idx: Optional[int] = None
-    symbols: Optional[List[SerSymbol]] = None
+    symbol_idxs: Optional[List[int]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerSymbolsScope':
         assert isinstance(obj, dict)
         idx = from_int(obj.get("idx"))
         parent_symbols_scope_idx = from_union([from_int, from_none], obj.get("parentSymbolsScopeIdx"))
-        symbols = from_union([lambda x: from_list(SerSymbol.from_dict, x), from_none], obj.get("symbols"))
-        return SerSymbolsScope(idx, parent_symbols_scope_idx, symbols)
+        symbol_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("symbolIdxs"))
+        return SerSymbolsScope(idx, parent_symbols_scope_idx, symbol_idxs)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["idx"] = from_int(self.idx)
         result["parentSymbolsScopeIdx"] = from_union([from_int, from_none], self.parent_symbols_scope_idx)
-        result["symbols"] = from_union([lambda x: from_list(lambda x: to_class(SerSymbol, x), x), from_none], self.symbols)
+        result["symbolIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.symbol_idxs)
         return result
 
 
@@ -2032,6 +2048,7 @@ class SerMethodPDG:
     identifier_by_idx: Optional[List[str]] = None
     pdg_nodes: Optional[List[SerPDGNode]] = None
     sub_identifiers_by_idx: Optional[List[List[str]]] = None
+    symbols: Optional[List[SerSymbol]] = None
     symbols_scopes: Optional[List[SerSymbolsScope]] = None
 
     @staticmethod
@@ -2044,8 +2061,9 @@ class SerMethodPDG:
         identifier_by_idx = from_union([lambda x: from_list(from_str, x), from_none], obj.get("identifierByIdx"))
         pdg_nodes = from_union([lambda x: from_list(SerPDGNode.from_dict, x), from_none], obj.get("pdgNodes"))
         sub_identifiers_by_idx = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], obj.get("subIdentifiersByIdx"))
+        symbols = from_union([lambda x: from_list(SerSymbol.from_dict, x), from_none], obj.get("symbols"))
         symbols_scopes = from_union([lambda x: from_list(SerSymbolsScope.from_dict, x), from_none], obj.get("symbolsScopes"))
-        return SerMethodPDG(entry_pdg_node_idx, exit_pdg_node_idx, method_hash, control_scopes, identifier_by_idx, pdg_nodes, sub_identifiers_by_idx, symbols_scopes)
+        return SerMethodPDG(entry_pdg_node_idx, exit_pdg_node_idx, method_hash, control_scopes, identifier_by_idx, pdg_nodes, sub_identifiers_by_idx, symbols, symbols_scopes)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -2056,6 +2074,7 @@ class SerMethodPDG:
         result["identifierByIdx"] = from_union([lambda x: from_list(from_str, x), from_none], self.identifier_by_idx)
         result["pdgNodes"] = from_union([lambda x: from_list(lambda x: to_class(SerPDGNode, x), x), from_none], self.pdg_nodes)
         result["subIdentifiersByIdx"] = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], self.sub_identifiers_by_idx)
+        result["symbols"] = from_union([lambda x: from_list(lambda x: to_class(SerSymbol, x), x), from_none], self.symbols)
         result["symbolsScopes"] = from_union([lambda x: from_list(lambda x: to_class(SerSymbolsScope, x), x), from_none], self.symbols_scopes)
         return result
 

@@ -67,9 +67,7 @@ def preprocess_code_task_example(
     if any(len(get_pdg_node_tokenized_expression(method, pdg_node)) > model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression
            for pdg_node in method_pdg.pdg_nodes if pdg_node.code_sub_token_range_ref is not None):
         raise PreprocessLimitExceedError(f'Too long tokenized expression for one of the PDG nodes.')
-    all_symbols = [symbol for symbols_scope in method_pdg.symbols_scopes
-                   for symbol in symbols_scope.symbols]
-    nr_symbols = len(all_symbols)
+    nr_symbols = len(method_pdg.symbols)
     if nr_symbols < model_hps.method_code_encoder.min_nr_symbols:
         raise PreprocessLimitExceedError(f'#symbols ({nr_symbols}) < MIN_NR_SYMBOLS ({model_hps.method_code_encoder.min_nr_symbols})')
     if nr_symbols > model_hps.method_code_encoder.max_nr_symbols:
@@ -97,8 +95,8 @@ def preprocess_code_task_example(
         (model_hps.method_code_encoder.max_nr_identifiers - min(len(method_pdg.sub_identifiers_by_idx), model_hps.method_code_encoder.max_nr_identifiers)),
         dtype=torch.bool)
     symbols_identifier_idxs = torch.tensor(
-        [symbol.identifier_idx for symbol in all_symbols] +
-        ([0] * (model_hps.method_code_encoder.max_nr_symbols - len(all_symbols))), dtype=torch.long)
+        [symbol.identifier_idx for symbol in method_pdg.symbols] +
+        ([0] * (model_hps.method_code_encoder.max_nr_symbols - len(method_pdg.symbols))), dtype=torch.long)
     symbols_identifier_mask = torch.cat([
         torch.ones(nr_symbols, dtype=torch.bool),
         torch.zeros(model_hps.method_code_encoder.max_nr_symbols - nr_symbols, dtype=torch.bool)])

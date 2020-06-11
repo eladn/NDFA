@@ -46,13 +46,14 @@ class TensorsDataClass:
 
     @classmethod
     def collate(cls, code_task_inputs: List['TensorsDataClass']):
+        assert all(isinstance(code_task_input, cls) for code_task_input in code_task_inputs)
         assert all(not code_task_input.is_batched for code_task_input in code_task_inputs)
         assert len(code_task_inputs) > 0
         assert any(isinstance(getattr(code_task_inputs[0], field.name), torch.Tensor)
                    for field in dataclasses.fields(cls))
 
         # TODO: when collating tensors, pad it to match the longest seq in the batch, and add lengths vector.
-        # TODO: remove this check! it is actually ok.
+        # TODO: remove this check! it is actually ok to have different lengths.
         for field in dataclasses.fields(cls):
             if not isinstance(getattr(code_task_inputs[0], field.name), torch.Tensor):
                 continue
