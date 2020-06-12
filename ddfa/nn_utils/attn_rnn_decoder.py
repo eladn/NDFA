@@ -90,7 +90,7 @@ class AttnRNNDecoder(nn.Module):
                     target_encodings)  # (batch_size, target_seq_len, decoder_output_dim)  # TODO: insert the dropout application into `apply_batched_embeddings()`
         else:
             prev_cell_output_idx = torch.tensor(
-                [self.output_common_vocab.get_word_idx_or_unk('<SOS>')],
+                [self.output_common_vocab.get_word_idx('<SOS>')],
                 device=encoder_outputs.device, dtype=torch.long).expand(batch_size,)
 
         for T in range(target_seq_len - 1):  # we don't have to predict the initial `<SOS>` special word.

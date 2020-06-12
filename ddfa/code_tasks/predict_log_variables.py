@@ -206,12 +206,12 @@ def preprocess_logging_call_example(
     if nr_target_symbols > model_hps.method_code_encoder.max_nr_target_symbols:
         raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) > MAX_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.max_nr_target_symbols})')
     target_symbols_idxs_used_in_logging_call = torch.tensor(list(truncate_and_pad(
-        [code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<SOS>')] +
+        [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
         [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
          for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
-        [code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<EOS>')],
+        [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')],
         max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
-        pad_word=code_task_vocabs.symbols_special_words.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
+        pad_word=code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))), dtype=torch.long)
 
     return PredictLogVarsTaggedExample(
         logging_call_hash=example.logging_call.hash,

@@ -27,7 +27,7 @@ def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
                 token.identifier_idx]
     if token.kind == SerTokenKind.LITERAL:
         return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.tokens.get_word_idx_or_unk('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
+            vocabs.tokens.get_word_idx('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
     return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
             vocabs.tokens.get_word_idx_or_unk(non_identifier_token_to_token_vocab_word(token))]
 
@@ -110,9 +110,9 @@ def preprocess_code_task_example(
             if pdg_nodes_to_mask is None or pdg_node.idx not in pdg_nodes_to_mask else
             pdg_nodes_to_mask[pdg_node.idx])
         for pdg_node in method_pdg.pdg_nodes], max_length=model_hps.method_code_encoder.max_nr_pdg_nodes,
-        pad_word=code_task_vocabs.pdg_node_control_kinds.get_word_idx_or_unk('<PAD>'))), dtype=torch.long)
-    padding_expression = [[code_task_vocabs.tokens_kinds.get_word_idx_or_unk('<PAD>'),
-                           code_task_vocabs.tokens.get_word_idx_or_unk('<PAD>')]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
+        pad_word=code_task_vocabs.pdg_node_control_kinds.get_word_idx('<PAD>'))), dtype=torch.long)
+    padding_expression = [[code_task_vocabs.tokens_kinds.get_word_idx('<PAD>'),
+                           code_task_vocabs.tokens.get_word_idx('<PAD>')]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
     cfg_nodes_expressions = torch.tensor(list(truncate_and_pad([
         list(truncate_and_pad(
             [token_to_input_vector(token, code_task_vocabs) for token in get_pdg_node_tokenized_expression(method, pdg_node)],
@@ -151,14 +151,14 @@ def preprocess_code_task_example(
         for src_pdg_node_idx, dst_pdg_node_idx in edges],
         max_length=model_hps.method_code_encoder.max_nr_pdg_edges, pad_word=[-1, -1])), dtype=torch.long)
 
-    pad_edge_attrs_vector = [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<PAD>')] + \
+    pad_edge_attrs_vector = [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx('<PAD>')] + \
                             ([-1] * model_hps.method_code_encoder.max_nr_pdg_data_dependency_edges_between_two_nodes)
     def build_edge_attrs_vector(edge_vertices) -> List[int]:
         control_flow_edge_attrs = [
             code_task_vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk(
                 control_flow_edges[edge_vertices].type.value)] \
             if edge_vertices in control_flow_edges else \
-            [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx_or_unk('<UNK>')]
+            [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx('<UNK>')]
         data_dependency_edge_attrs = list(truncate_and_pad(
             data_dependency_edges[edge_vertices], model_hps.method_code_encoder.max_nr_pdg_data_dependency_edges_between_two_nodes, -1)) \
             if edge_vertices in data_dependency_edges else \

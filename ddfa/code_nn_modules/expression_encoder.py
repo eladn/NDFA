@@ -30,11 +30,11 @@ class ExpressionEncoder(nn.Module):
         self.method = method
         self.tokens_embedding_layer = nn.Embedding(
             num_embeddings=len(tokens_vocab), embedding_dim=self.token_embedding_dim,
-            padding_idx=tokens_vocab.get_word_idx_or_unk('<PAD>'))
+            padding_idx=tokens_vocab.get_word_idx('<PAD>'))
         self.token_kind_embedding_dim = token_kind_embedding_dim
         self.tokens_kinds_embedding_layer = nn.Embedding(
             num_embeddings=len(tokens_kinds_vocab), embedding_dim=self.token_kind_embedding_dim,
-            padding_idx=tokens_kinds_vocab.get_word_idx_or_unk('<PAD>'))
+            padding_idx=tokens_kinds_vocab.get_word_idx('<PAD>'))
         self.expressions_special_words_embedding_layer = nn.Embedding(
             num_embeddings=len(self.expressions_special_words_vocab), embedding_dim=self.expr_encoding_dim)
         self.identifiers_special_words_embedding_layer = nn.Embedding(

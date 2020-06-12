@@ -18,7 +18,7 @@ class IdentifierEncoder(nn.Module):
         self.embedding_dim = embedding_dim
         self.sub_identifiers_embedding_layer = nn.Embedding(
             num_embeddings=len(sub_identifiers_vocab), embedding_dim=self.embedding_dim,
-            padding_idx=sub_identifiers_vocab.get_word_idx_or_unk('<PAD>'))
+            padding_idx=sub_identifiers_vocab.get_word_idx('<PAD>'))
 
         if method == 'transformer_encoder':
             transformer_encoder_layer = TransformerEncoderLayer(
