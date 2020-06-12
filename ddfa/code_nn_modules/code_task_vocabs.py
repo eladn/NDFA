@@ -9,6 +9,13 @@ from ddfa.code_nn_modules.vocabulary import Vocabulary
 __all__ = ['CodeTaskVocabs', 'non_identifier_token_to_token_vocab_word']
 
 
+# TODO: put in utils
+def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
+    return method.code.tokenized[
+        pdg_node.code_sub_token_range_ref.begin_token_idx:
+        pdg_node.code_sub_token_range_ref.end_token_idx+1]
+
+
 class CodeTaskVocabs(NamedTuple):
     sub_identifiers: Vocabulary
     tokens: Vocabulary
@@ -39,8 +46,8 @@ class CodeTaskVocabs(NamedTuple):
             non_identifier_token_to_token_vocab_word(token)
             for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
             for pdg_node in example.method_pdg.pdg_nodes
-            if pdg_node.code is not None
-            for token in pdg_node.code.tokenized
+            if pdg_node.code_sub_token_range_ref is not None
+            for token in get_pdg_node_tokenized_expression(example.method, pdg_node)
             if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
         tokens_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='tokens',
@@ -61,8 +68,8 @@ class CodeTaskVocabs(NamedTuple):
             token.kind.value
             for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
             for pdg_node in example.method_pdg.pdg_nodes
-            if pdg_node.code is not None
-            for token in pdg_node.code.tokenized)
+            if pdg_node.code_sub_token_range_ref is not None
+            for token in get_pdg_node_tokenized_expression(example.method, pdg_node))
         tokens_kinds_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='tokens_kinds',
             special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,

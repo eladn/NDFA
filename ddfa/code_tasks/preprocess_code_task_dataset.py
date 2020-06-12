@@ -42,6 +42,7 @@ class PreprocessLimitExceedError(ValueError):
     pass
 
 
+# TODO: put in utils
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
     return method.code.tokenized[
         pdg_node.code_sub_token_range_ref.begin_token_idx:
