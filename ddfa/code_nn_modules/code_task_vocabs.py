@@ -6,7 +6,7 @@ from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 
 
-__all__ = ['CodeTaskVocabs', 'non_identifier_token_to_token_vocab_word']
+__all__ = ['CodeTaskVocabs', 'kos_token_to_kos_token_vocab_word']
 
 
 # TODO: put in utils
@@ -18,7 +18,7 @@ def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
 
 class CodeTaskVocabs(NamedTuple):
     sub_identifiers: Vocabulary
-    tokens: Vocabulary
+    kos_tokens: Vocabulary
     pdg_node_control_kinds: Vocabulary
     tokens_kinds: Vocabulary
     pdg_control_flow_edge_types: Vocabulary
@@ -42,17 +42,17 @@ class CodeTaskVocabs(NamedTuple):
             special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<EOI>',), min_word_freq=40,
             max_vocab_size_wo_specials=1000, carpus_generator=sub_identifiers_carpus_generator)
 
-        tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
-            non_identifier_token_to_token_vocab_word(token)
+        kos_tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
+            kos_token_to_kos_token_vocab_word(token)
             for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
             for pdg_node in example.method_pdg.pdg_nodes
             if pdg_node.code_sub_token_range_ref is not None
             for token in get_pdg_node_tokenized_expression(example.method, pdg_node)
             if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR})
-        tokens_vocab = Vocabulary.load_or_create(
-            preprocessed_data_dir_path=pp_data_path, vocab_name='tokens',
+        kos_tokens_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='kos_tokens',
             special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<NONE>',), min_word_freq=200,
-            carpus_generator=tokens_carpus_generator)
+            carpus_generator=kos_tokens_carpus_generator)
 
         pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
             pdg_node.control_kind.value
@@ -101,7 +101,7 @@ class CodeTaskVocabs(NamedTuple):
 
         return CodeTaskVocabs(
             sub_identifiers=sub_identifiers_vocab,
-            tokens=tokens_vocab,
+            kos_tokens=kos_tokens_vocab,
             pdg_node_control_kinds=pdg_node_control_kinds_vocab,
             tokens_kinds=tokens_kinds_vocab,
             pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
@@ -110,7 +110,7 @@ class CodeTaskVocabs(NamedTuple):
             identifiers_special_words=identifiers_special_words_vocab)
 
 
-def non_identifier_token_to_token_vocab_word(token: SerToken):
+def kos_token_to_kos_token_vocab_word(token: SerToken):
     assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR}
     if token.kind == SerTokenKind.KEYWORD:
         return f'kwrd_{token.text}'

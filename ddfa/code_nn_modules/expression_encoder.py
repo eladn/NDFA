@@ -12,25 +12,25 @@ from ddfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 
 
 class ExpressionEncoder(nn.Module):
-    def __init__(self, tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary,
+    def __init__(self, kos_tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary,
                  expressions_special_words_vocab: Vocabulary, identifiers_special_words_vocab: Vocabulary,
-                 token_embedding_dim: int = 256, identifiers_dim: int = 256, expr_encoding_dim: int = 1024,
+                 kos_token_embedding_dim: int = 256, identifiers_dim: int = 256, expr_encoding_dim: int = 1024,
                  token_kind_embedding_dim: int = 8, method: str = 'bi-lstm', nr_rnn_layers: int = 2,
                  nr_out_linear_layers: int = 2, dropout_rate: float = 0.3):
         assert method in {'bi-lstm', 'transformer_encoder'}
         assert nr_out_linear_layers >= 1
         super(ExpressionEncoder, self).__init__()
-        self.tokens_vocab = tokens_vocab
+        self.kos_tokens_vocab = kos_tokens_vocab
         self.tokens_kinds_vocab = tokens_kinds_vocab
         self.expressions_special_words_vocab = expressions_special_words_vocab
         self.identifiers_special_words_vocab = identifiers_special_words_vocab
-        self.token_embedding_dim = token_embedding_dim
+        self.kos_token_embedding_dim = kos_token_embedding_dim
         self.identifier_embedding_dim = identifiers_dim
         self.expr_encoding_dim = expr_encoding_dim
         self.method = method
-        self.tokens_embedding_layer = nn.Embedding(
-            num_embeddings=len(tokens_vocab), embedding_dim=self.token_embedding_dim,
-            padding_idx=tokens_vocab.get_word_idx('<PAD>'))
+        self.kos_tokens_embedding_layer = nn.Embedding(
+            num_embeddings=len(kos_tokens_vocab), embedding_dim=self.kos_token_embedding_dim,
+            padding_idx=kos_tokens_vocab.get_word_idx('<PAD>'))
         self.token_kind_embedding_dim = token_kind_embedding_dim
         self.tokens_kinds_embedding_layer = nn.Embedding(
             num_embeddings=len(tokens_kinds_vocab), embedding_dim=self.token_kind_embedding_dim,
@@ -41,7 +41,7 @@ class ExpressionEncoder(nn.Module):
             num_embeddings=len(self.identifiers_special_words_vocab), embedding_dim=self.identifier_embedding_dim)
 
         self.projection_linear_layer = nn.Linear(
-            self.token_kind_embedding_dim + self.token_embedding_dim + self.identifier_embedding_dim, self.expr_encoding_dim)
+            self.token_kind_embedding_dim + self.kos_token_embedding_dim + self.identifier_embedding_dim, self.expr_encoding_dim)
         self.additional_linear_layers = nn.ModuleList(
             [nn.Linear(self.expr_encoding_dim, self.expr_encoding_dim) for _ in range(nr_out_linear_layers - 1)])
 
@@ -64,29 +64,29 @@ class ExpressionEncoder(nn.Module):
         batch_size, nr_exprs, nr_tokens_in_expr, _ = expressions.size()
         assert len(encoded_identifiers.size()) == 3
         nr_identifiers_in_example = encoded_identifiers.size()[1]
-        assert encoded_identifiers.size() == (batch_size, nr_identifiers_in_example, self.token_embedding_dim)
+        assert encoded_identifiers.size() == (batch_size, nr_identifiers_in_example, self.kos_token_embedding_dim)
         assert expressions_mask is None or expressions_mask.size() == (batch_size, nr_exprs, nr_tokens_in_expr)
 
         expressions_tokens_kinds = expressions[:, :, :, 0]  # (batch_size, nr_exprs, nr_tokens_in_expr)
         expressions_idxs = expressions[:, :, :, 1]  # (batch_size, nr_exprs, nr_tokens_in_expr)
         assert expressions_tokens_kinds.size() == expressions_idxs.size() == (batch_size, nr_exprs, nr_tokens_in_expr)
 
-        token_kinds_for_tokens_vocab = (
+        token_kinds_for_kos_tokens_vocab = (
             self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.OPERATOR.value),
             self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.SEPARATOR.value),
             self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.KEYWORD.value))
-        use_tokens_vocab_condition = reduce(
+        use_kos_tokens_vocab_condition = reduce(
             torch.Tensor.logical_or,
-            ((expressions_tokens_kinds == token_kind) for token_kind in token_kinds_for_tokens_vocab))
-        tokens_idxs = torch.where(
-            use_tokens_vocab_condition,
+            ((expressions_tokens_kinds == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
+        kos_tokens_idxs = torch.where(
+            use_kos_tokens_vocab_condition,
             expressions_idxs,
             torch.tensor(
-                [self.tokens_vocab.get_word_idx('<NONE>')],
+                [self.kos_tokens_vocab.get_word_idx('<NONE>')],
                 dtype=expressions_idxs.dtype, device=expressions_idxs.device))  # (batch_size, nr_exprs, nr_tokens_in_expr)
-        assert tokens_idxs.size() == expressions_idxs.size()
-        selected_tokens_encoding = self.tokens_embedding_layer(tokens_idxs.flatten())\
-            .view(batch_size, nr_exprs, nr_tokens_in_expr, self.token_embedding_dim)
+        assert kos_tokens_idxs.size() == expressions_idxs.size()
+        selected_kos_tokens_encoding = self.kos_tokens_embedding_layer(kos_tokens_idxs.flatten())\
+            .view(batch_size, nr_exprs, nr_tokens_in_expr, self.kos_token_embedding_dim)
 
         use_identifier_vocab_condition = expressions_tokens_kinds == self.tokens_kinds_vocab.get_word_idx_or_unk(
             SerTokenKind.IDENTIFIER.value)
@@ -104,9 +104,9 @@ class ExpressionEncoder(nn.Module):
             .view(expressions_tokens_kinds.size() + (self.token_kind_embedding_dim,))  # (batch_size, nr_exprs, nr_tokens_in_expr, token_kind_embedding_dim)
 
         expr_embeddings = torch.cat(
-            [token_kinds_embeddings, selected_tokens_encoding, selected_encoded_identifiers], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, token_kind_embedding_dim + token_embedding_dim + identifier_embedding_dim)
+            [token_kinds_embeddings, selected_kos_tokens_encoding, selected_encoded_identifiers], dim=-1)  # (batch_size, nr_exprs, nr_tokens_in_expr, token_kind_embedding_dim + token_embedding_dim + identifier_embedding_dim)
         assert expr_embeddings.size() == (batch_size, nr_exprs, nr_tokens_in_expr, self.token_kind_embedding_dim +
-                                          self.token_embedding_dim + self.identifier_embedding_dim)
+                                          self.kos_token_embedding_dim + self.identifier_embedding_dim)
         expr_embeddings = self.dropout_layer(expr_embeddings.flatten(0, 2))
         expr_embeddings_projected = self.dropout_layer(F.relu(
             self.projection_linear_layer(expr_embeddings)))

@@ -11,7 +11,7 @@ from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DataFold
 from ddfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
 from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter
-from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, non_identifier_token_to_token_vocab_word
+from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 
 
@@ -27,9 +27,9 @@ def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
                 token.identifier_idx]
     if token.kind == SerTokenKind.LITERAL:
         return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.tokens.get_word_idx('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
+                vocabs.kos_tokens.get_word_idx('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
     return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.tokens.get_word_idx_or_unk(non_identifier_token_to_token_vocab_word(token))]
+            vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))]
 
 
 def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>') -> Iterable:
@@ -112,7 +112,7 @@ def preprocess_code_task_example(
         for pdg_node in method_pdg.pdg_nodes], max_length=model_hps.method_code_encoder.max_nr_pdg_nodes,
         pad_word=code_task_vocabs.pdg_node_control_kinds.get_word_idx('<PAD>'))), dtype=torch.long)
     padding_expression = [[code_task_vocabs.tokens_kinds.get_word_idx('<PAD>'),
-                           code_task_vocabs.tokens.get_word_idx('<PAD>')]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
+                           code_task_vocabs.kos_tokens.get_word_idx('<PAD>')]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
     cfg_nodes_expressions = torch.tensor(list(truncate_and_pad([
         list(truncate_and_pad(
             [token_to_input_vector(token, code_task_vocabs) for token in get_pdg_node_tokenized_expression(method, pdg_node)],

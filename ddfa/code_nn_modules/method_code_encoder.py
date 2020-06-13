@@ -31,10 +31,10 @@ class MethodCodeEncoder(nn.Module):
         self.identifier_encoder = IdentifierEncoder(
             sub_identifiers_vocab=code_task_vocabs.sub_identifiers, embedding_dim=self.identifier_embedding_dim)
         expression_encoder = ExpressionEncoder(
-            tokens_vocab=code_task_vocabs.tokens, tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
+            kos_tokens_vocab=code_task_vocabs.kos_tokens, tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
             expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
             identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
-            token_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
+            kos_token_embedding_dim=self.identifier_embedding_dim, expr_encoding_dim=self.expr_encoding_dim)
         self.cfg_node_encoder = CFGNodeEncoder(
             expression_encoder=expression_encoder, pdg_node_control_kinds_vocab=code_task_vocabs.pdg_node_control_kinds)
         self.encoder_decoder_bridge_dense_layers = nn.ModuleList([
