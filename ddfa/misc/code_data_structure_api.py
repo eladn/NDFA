@@ -107,6 +107,7 @@ class SerFeatureValueType(Enum):
     BOOLEAN = "Boolean"
     CATEGORICAL = "Categorical"
     NUMERICAL = "Numerical"
+    TEXTUAL = "Textual"
 
 
 @dataclass
@@ -302,6 +303,81 @@ class QDummyGetFiltes:
 
 
 @dataclass
+class SerTokenMetric:
+    false_negatives: int
+    false_positives: int
+    nr_ground_true_tokens: int
+    nr_predicted_tokens: int
+    true_negatives: int
+    true_positives: int
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerTokenMetric':
+        assert isinstance(obj, dict)
+        false_negatives = from_int(obj.get("falseNegatives"))
+        false_positives = from_int(obj.get("falsePositives"))
+        nr_ground_true_tokens = from_int(obj.get("nrGroundTrueTokens"))
+        nr_predicted_tokens = from_int(obj.get("nrPredictedTokens"))
+        true_negatives = from_int(obj.get("trueNegatives"))
+        true_positives = from_int(obj.get("truePositives"))
+        return SerTokenMetric(false_negatives, false_positives, nr_ground_true_tokens, nr_predicted_tokens, true_negatives, true_positives)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["falseNegatives"] = from_int(self.false_negatives)
+        result["falsePositives"] = from_int(self.false_positives)
+        result["nrGroundTrueTokens"] = from_int(self.nr_ground_true_tokens)
+        result["nrPredictedTokens"] = from_int(self.nr_predicted_tokens)
+        result["trueNegatives"] = from_int(self.true_negatives)
+        result["truePositives"] = from_int(self.true_positives)
+        return result
+
+
+@dataclass
+class SerExperimentResults:
+    experiment_name: str
+    token_metric: SerTokenMetric
+    logging_call_hash: Optional[str] = None
+    top_k_predicted_names: Optional[List[List[str]]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerExperimentResults':
+        assert isinstance(obj, dict)
+        experiment_name = from_str(obj.get("experimentName"))
+        token_metric = SerTokenMetric.from_dict(obj.get("tokenMetric"))
+        logging_call_hash = from_union([from_str, from_none], obj.get("loggingCallHash"))
+        top_k_predicted_names = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], obj.get("topKPredictedNames"))
+        return SerExperimentResults(experiment_name, token_metric, logging_call_hash, top_k_predicted_names)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["experimentName"] = from_str(self.experiment_name)
+        result["tokenMetric"] = to_class(SerTokenMetric, self.token_metric)
+        result["loggingCallHash"] = from_union([from_str, from_none], self.logging_call_hash)
+        result["topKPredictedNames"] = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], self.top_k_predicted_names)
+        return result
+
+
+@dataclass
+class QExperimentResults:
+    arguments: Optional[Dict[str, Any]] = None
+    q_experiment_results_return: Optional[List[SerExperimentResults]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'QExperimentResults':
+        assert isinstance(obj, dict)
+        arguments = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("arguments"))
+        q_experiment_results_return = from_union([lambda x: from_list(SerExperimentResults.from_dict, x), from_none], obj.get("return"))
+        return QExperimentResults(arguments, q_experiment_results_return)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["arguments"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.arguments)
+        result["return"] = from_union([lambda x: from_list(lambda x: to_class(SerExperimentResults, x), x), from_none], self.q_experiment_results_return)
+        return result
+
+
+@dataclass
 class SerExperiment:
     name: str
     base_model: Optional[str] = None
@@ -376,82 +452,6 @@ class QLoggingCallArguments:
     def to_dict(self) -> dict:
         result: dict = {}
         result["id"] = self.id
-        return result
-
-
-@dataclass
-class SerLoggingCallCalculatedFeature:
-    feature_name: str
-    feature_value: Any
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerLoggingCallCalculatedFeature':
-        assert isinstance(obj, dict)
-        feature_name = from_str(obj.get("featureName"))
-        feature_value = obj.get("featureValue")
-        return SerLoggingCallCalculatedFeature(feature_name, feature_value)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["featureName"] = from_str(self.feature_name)
-        result["featureValue"] = self.feature_value
-        return result
-
-
-@dataclass
-class SerSymbolNameCalculatedFeatureValue:
-    feature_name: str
-    feature_value: Any
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerSymbolNameCalculatedFeatureValue':
-        assert isinstance(obj, dict)
-        feature_name = from_str(obj.get("featureName"))
-        feature_value = obj.get("featureValue")
-        return SerSymbolNameCalculatedFeatureValue(feature_name, feature_value)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["featureName"] = from_str(self.feature_name)
-        result["featureValue"] = self.feature_value
-        return result
-
-
-@dataclass
-class SerSymbolNameCalculatedFeatures:
-    symbol_name: str
-    features_values: Optional[List[SerSymbolNameCalculatedFeatureValue]] = None
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerSymbolNameCalculatedFeatures':
-        assert isinstance(obj, dict)
-        symbol_name = from_str(obj.get("symbolName"))
-        features_values = from_union([lambda x: from_list(SerSymbolNameCalculatedFeatureValue.from_dict, x), from_none], obj.get("featuresValues"))
-        return SerSymbolNameCalculatedFeatures(symbol_name, features_values)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["symbolName"] = from_str(self.symbol_name)
-        result["featuresValues"] = from_union([lambda x: from_list(lambda x: to_class(SerSymbolNameCalculatedFeatureValue, x), x), from_none], self.features_values)
-        return result
-
-
-@dataclass
-class SerCalculatedFeatures:
-    logging_call_features: Optional[List[SerLoggingCallCalculatedFeature]] = None
-    symbol_name_features: Optional[List[SerSymbolNameCalculatedFeatures]] = None
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerCalculatedFeatures':
-        assert isinstance(obj, dict)
-        logging_call_features = from_union([lambda x: from_list(SerLoggingCallCalculatedFeature.from_dict, x), from_none], obj.get("loggingCallFeatures"))
-        symbol_name_features = from_union([lambda x: from_list(SerSymbolNameCalculatedFeatures.from_dict, x), from_none], obj.get("symbolNameFeatures"))
-        return SerCalculatedFeatures(logging_call_features, symbol_name_features)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["loggingCallFeatures"] = from_union([lambda x: from_list(lambda x: to_class(SerLoggingCallCalculatedFeature, x), x), from_none], self.logging_call_features)
-        result["symbolNameFeatures"] = from_union([lambda x: from_list(lambda x: to_class(SerSymbolNameCalculatedFeatures, x), x), from_none], self.symbol_name_features)
         return result
 
 
@@ -810,62 +810,6 @@ class SerContextualScopesContainer:
         return result
 
 
-@dataclass
-class SerTokenMetric:
-    false_negatives: int
-    false_positives: int
-    nr_ground_true_tokens: int
-    nr_predicted_tokens: int
-    true_negatives: int
-    true_positives: int
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerTokenMetric':
-        assert isinstance(obj, dict)
-        false_negatives = from_int(obj.get("falseNegatives"))
-        false_positives = from_int(obj.get("falsePositives"))
-        nr_ground_true_tokens = from_int(obj.get("nrGroundTrueTokens"))
-        nr_predicted_tokens = from_int(obj.get("nrPredictedTokens"))
-        true_negatives = from_int(obj.get("trueNegatives"))
-        true_positives = from_int(obj.get("truePositives"))
-        return SerTokenMetric(false_negatives, false_positives, nr_ground_true_tokens, nr_predicted_tokens, true_negatives, true_positives)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["falseNegatives"] = from_int(self.false_negatives)
-        result["falsePositives"] = from_int(self.false_positives)
-        result["nrGroundTrueTokens"] = from_int(self.nr_ground_true_tokens)
-        result["nrPredictedTokens"] = from_int(self.nr_predicted_tokens)
-        result["trueNegatives"] = from_int(self.true_negatives)
-        result["truePositives"] = from_int(self.true_positives)
-        return result
-
-
-@dataclass
-class SerExperimentResults:
-    experiment_name: str
-    token_metric: SerTokenMetric
-    logging_call_hash: Optional[str] = None
-    top_k_predicted_names: Optional[List[List[str]]] = None
-
-    @staticmethod
-    def from_dict(obj: Any) -> 'SerExperimentResults':
-        assert isinstance(obj, dict)
-        experiment_name = from_str(obj.get("experimentName"))
-        token_metric = SerTokenMetric.from_dict(obj.get("tokenMetric"))
-        logging_call_hash = from_union([from_str, from_none], obj.get("loggingCallHash"))
-        top_k_predicted_names = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], obj.get("topKPredictedNames"))
-        return SerExperimentResults(experiment_name, token_metric, logging_call_hash, top_k_predicted_names)
-
-    def to_dict(self) -> dict:
-        result: dict = {}
-        result["experimentName"] = from_str(self.experiment_name)
-        result["tokenMetric"] = to_class(SerTokenMetric, self.token_metric)
-        result["loggingCallHash"] = from_union([from_str, from_none], self.logging_call_hash)
-        result["topKPredictedNames"] = from_union([lambda x: from_list(lambda x: from_list(from_str, x), x), from_none], self.top_k_predicted_names)
-        return result
-
-
 class SerLogLevel(Enum):
     DEBUG = "Debug"
     ERROR = "Error"
@@ -983,10 +927,9 @@ class SerLoggingCall:
     hash: str
     log_level: SerLogLevel
     method_ref: SerMethodRef
+    nr_logging_calls_in_method: int
     sub_token_range_ref_in_method: SerSubTokenRangeRef
     ast_node_idx: Optional[int] = None
-    calculated_features: Optional[SerCalculatedFeatures] = None
-    experiments_results: Optional[List[SerExperimentResults]] = None
     lines_dist_from_closest_log_call_in_inner_scope: Optional[int] = None
     names_used_in_log_and_found_in_inner_method_scope: Optional[List[str]] = None
     name_symbols_used_in_log: Optional[List[SerNameSymbolOccurrence]] = None
@@ -1000,15 +943,14 @@ class SerLoggingCall:
         hash = from_str(obj.get("hash"))
         log_level = SerLogLevel(obj.get("logLevel"))
         method_ref = SerMethodRef.from_dict(obj.get("methodRef"))
+        nr_logging_calls_in_method = from_int(obj.get("nrLoggingCallsInMethod"))
         sub_token_range_ref_in_method = SerSubTokenRangeRef.from_dict(obj.get("subTokenRangeRefInMethod"))
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
-        calculated_features = from_union([SerCalculatedFeatures.from_dict, from_none], obj.get("calculatedFeatures"))
-        experiments_results = from_union([lambda x: from_list(SerExperimentResults.from_dict, x), from_none], obj.get("experimentsResults"))
         lines_dist_from_closest_log_call_in_inner_scope = from_union([from_int, from_none], obj.get("linesDistFromClosestLogCallInInnerScope"))
         names_used_in_log_and_found_in_inner_method_scope = from_union([lambda x: from_list(from_str, x), from_none], obj.get("namesUsedInLogAndFoundInInnerMethodScope"))
         name_symbols_used_in_log = from_union([lambda x: from_list(SerNameSymbolOccurrence.from_dict, x), from_none], obj.get("nameSymbolsUsedInLog"))
         pdg_node_idx = from_union([from_int, from_none], obj.get("pdgNodeIdx"))
-        return SerLoggingCall(code, contextual_scopes, hash, log_level, method_ref, sub_token_range_ref_in_method, ast_node_idx, calculated_features, experiments_results, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
+        return SerLoggingCall(code, contextual_scopes, hash, log_level, method_ref, nr_logging_calls_in_method, sub_token_range_ref_in_method, ast_node_idx, lines_dist_from_closest_log_call_in_inner_scope, names_used_in_log_and_found_in_inner_method_scope, name_symbols_used_in_log, pdg_node_idx)
 
     def to_dict(self) -> dict:
         result: dict = {}
@@ -1017,10 +959,9 @@ class SerLoggingCall:
         result["hash"] = from_str(self.hash)
         result["logLevel"] = to_enum(SerLogLevel, self.log_level)
         result["methodRef"] = to_class(SerMethodRef, self.method_ref)
+        result["nrLoggingCallsInMethod"] = from_int(self.nr_logging_calls_in_method)
         result["subTokenRangeRefInMethod"] = to_class(SerSubTokenRangeRef, self.sub_token_range_ref_in_method)
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
-        result["calculatedFeatures"] = from_union([lambda x: to_class(SerCalculatedFeatures, x), from_none], self.calculated_features)
-        result["experimentsResults"] = from_union([lambda x: from_list(lambda x: to_class(SerExperimentResults, x), x), from_none], self.experiments_results)
         result["linesDistFromClosestLogCallInInnerScope"] = from_union([from_int, from_none], self.lines_dist_from_closest_log_call_in_inner_scope)
         result["namesUsedInLogAndFoundInInnerMethodScope"] = from_union([lambda x: from_list(from_str, x), from_none], self.names_used_in_log_and_found_in_inner_method_scope)
         result["nameSymbolsUsedInLog"] = from_union([lambda x: from_list(lambda x: to_class(SerNameSymbolOccurrence, x), x), from_none], self.name_symbols_used_in_log)
@@ -1047,38 +988,46 @@ class QLoggingCall:
         return result
 
 
-class SerFeatureOfType(Enum):
-    LOGGING_CALL = "LoggingCall"
+class SerExampleSubItemKind(Enum):
+    AST_NODE = "ASTNode"
+    IDENTIFIER = "Identifier"
+    LOGGED_SYMBOL_NAME = "LoggedSymbolName"
+    LOGGING_CALL_TO_METHOD_EXIT_PDG_PATH = "LoggingCallToMethodExitPDGPath"
+    METHOD_CODE_TOKEN = "MethodCodeToken"
+    METHOD_ENTRY_TO_LOGGING_CALL_PDG_PATH = "MethodEntryToLoggingCallPDGPath"
+    METHOD_ENTRY_TO_METHOD_EXIT_PDG_PATH = "MethodEntryToMethodExitPDGPath"
+    PDG_DATA_DEPENDENCY_EDGE = "PDGDataDependencyEdge"
+    PDG_NODE = "PDGNode"
     SYMBOL_NAME = "SymbolName"
 
 
 @dataclass
-class SerLoggingCallFeature:
+class SerExampleFeature:
     feature_name: str
-    feature_of_type: SerFeatureOfType
     feature_value_type: SerFeatureValueType
     max_value: Any
     min_value: Any
+    feature_of_sub_item_kind: Optional[SerExampleSubItemKind] = None
     options: Optional[List[Any]] = None
 
     @staticmethod
-    def from_dict(obj: Any) -> 'SerLoggingCallFeature':
+    def from_dict(obj: Any) -> 'SerExampleFeature':
         assert isinstance(obj, dict)
         feature_name = from_str(obj.get("featureName"))
-        feature_of_type = SerFeatureOfType(obj.get("featureOfType"))
         feature_value_type = SerFeatureValueType(obj.get("featureValueType"))
         max_value = obj.get("maxValue")
         min_value = obj.get("minValue")
+        feature_of_sub_item_kind = from_union([SerExampleSubItemKind, from_none], obj.get("featureOfSubItemKind"))
         options = from_union([lambda x: from_list(lambda x: x, x), from_none], obj.get("options"))
-        return SerLoggingCallFeature(feature_name, feature_of_type, feature_value_type, max_value, min_value, options)
+        return SerExampleFeature(feature_name, feature_value_type, max_value, min_value, feature_of_sub_item_kind, options)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["featureName"] = from_str(self.feature_name)
-        result["featureOfType"] = to_enum(SerFeatureOfType, self.feature_of_type)
         result["featureValueType"] = to_enum(SerFeatureValueType, self.feature_value_type)
         result["maxValue"] = self.max_value
         result["minValue"] = self.min_value
+        result["featureOfSubItemKind"] = from_union([lambda x: to_enum(SerExampleSubItemKind, x), from_none], self.feature_of_sub_item_kind)
         result["options"] = from_union([lambda x: from_list(lambda x: x, x), from_none], self.options)
         return result
 
@@ -1086,19 +1035,19 @@ class SerLoggingCallFeature:
 @dataclass
 class QLoggingCallFeatures:
     arguments: Optional[Dict[str, Any]] = None
-    q_logging_call_features_return: Optional[List[SerLoggingCallFeature]] = None
+    q_logging_call_features_return: Optional[List[SerExampleFeature]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'QLoggingCallFeatures':
         assert isinstance(obj, dict)
         arguments = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("arguments"))
-        q_logging_call_features_return = from_union([lambda x: from_list(SerLoggingCallFeature.from_dict, x), from_none], obj.get("return"))
+        q_logging_call_features_return = from_union([lambda x: from_list(SerExampleFeature.from_dict, x), from_none], obj.get("return"))
         return QLoggingCallFeatures(arguments, q_logging_call_features_return)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["arguments"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.arguments)
-        result["return"] = from_union([lambda x: from_list(lambda x: to_class(SerLoggingCallFeature, x), x), from_none], self.q_logging_call_features_return)
+        result["return"] = from_union([lambda x: from_list(lambda x: to_class(SerExampleFeature, x), x), from_none], self.q_logging_call_features_return)
         return result
 
 
@@ -1709,6 +1658,25 @@ class QMethodPDGArguments:
         return result
 
 
+@dataclass
+class SerSymbolsScopeWithinRef:
+    scope_size: int
+    symbols_scope_idx: int
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerSymbolsScopeWithinRef':
+        assert isinstance(obj, dict)
+        scope_size = from_int(obj.get("scopeSize"))
+        symbols_scope_idx = from_int(obj.get("symbolsScopeIdx"))
+        return SerSymbolsScopeWithinRef(scope_size, symbols_scope_idx)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["scopeSize"] = from_int(self.scope_size)
+        result["symbolsScopeIdx"] = from_int(self.symbols_scope_idx)
+        return result
+
+
 class SerControlScopeType(Enum):
     ASSERT = "Assert"
     BREAK = "Break"
@@ -1749,6 +1717,7 @@ class SerControlScopeType(Enum):
 
 @dataclass
 class SerControlScope:
+    current_symbols_scope_within_ref: SerSymbolsScopeWithinRef
     idx: int
     type: SerControlScopeType
     ast_node_idx: Optional[int] = None
@@ -1760,6 +1729,7 @@ class SerControlScope:
     @staticmethod
     def from_dict(obj: Any) -> 'SerControlScope':
         assert isinstance(obj, dict)
+        current_symbols_scope_within_ref = SerSymbolsScopeWithinRef.from_dict(obj.get("currentSymbolsScopeWithinRef"))
         idx = from_int(obj.get("idx"))
         type = SerControlScopeType(obj.get("type"))
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
@@ -1767,10 +1737,11 @@ class SerControlScope:
         exit_points_pdg_node_idx = from_union([lambda x: from_list(from_int, x), from_none], obj.get("exitPointsPDGNodeIdx"))
         own_symbols_scope_idx = from_union([from_int, from_none], obj.get("ownSymbolsScopeIdx"))
         parent_control_scope_idx = from_union([from_int, from_none], obj.get("parentControlScopeIdx"))
-        return SerControlScope(idx, type, ast_node_idx, entry_point_pdg_node_idx, exit_points_pdg_node_idx, own_symbols_scope_idx, parent_control_scope_idx)
+        return SerControlScope(current_symbols_scope_within_ref, idx, type, ast_node_idx, entry_point_pdg_node_idx, exit_points_pdg_node_idx, own_symbols_scope_idx, parent_control_scope_idx)
 
     def to_dict(self) -> dict:
         result: dict = {}
+        result["currentSymbolsScopeWithinRef"] = to_class(SerSymbolsScopeWithinRef, self.current_symbols_scope_within_ref)
         result["idx"] = from_int(self.idx)
         result["type"] = to_enum(SerControlScopeType, self.type)
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
@@ -1923,6 +1894,7 @@ class SerPDGNode:
     control_kind: SerPDGNodeControlKind
     has_expression: bool
     idx: int
+    related_symbols_scope_within_ref: SerSymbolsScopeWithinRef
     ast_node_idx: Optional[int] = None
     belongs_to_control_scopes_idxs: Optional[List[int]] = None
     called_functions_names: Optional[List[str]] = None
@@ -1939,6 +1911,7 @@ class SerPDGNode:
         control_kind = SerPDGNodeControlKind(obj.get("controlKind"))
         has_expression = from_bool(obj.get("hasExpression"))
         idx = from_int(obj.get("idx"))
+        related_symbols_scope_within_ref = SerSymbolsScopeWithinRef.from_dict(obj.get("relatedSymbolsScopeWithinRef"))
         ast_node_idx = from_union([from_int, from_none], obj.get("astNodeIdx"))
         belongs_to_control_scopes_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("belongsToControlScopesIdxs"))
         called_functions_names = from_union([lambda x: from_list(from_str, x), from_none], obj.get("calledFunctionsNames"))
@@ -1948,13 +1921,14 @@ class SerPDGNode:
         data_dependency_in_edges = from_union([lambda x: from_list(SerPDGDataDependencyEdge.from_dict, x), from_none], obj.get("dataDependencyInEdges"))
         data_dependency_out_edges = from_union([lambda x: from_list(SerPDGDataDependencyEdge.from_dict, x), from_none], obj.get("dataDependencyOutEdges"))
         symbols_use_def_mut = from_union([SerSymbolsUseDefMut.from_dict, from_none], obj.get("symbolsUseDefMut"))
-        return SerPDGNode(control_kind, has_expression, idx, ast_node_idx, belongs_to_control_scopes_idxs, called_functions_names, code_sub_token_range_ref, control_flow_in_edges, control_flow_out_edges, data_dependency_in_edges, data_dependency_out_edges, symbols_use_def_mut)
+        return SerPDGNode(control_kind, has_expression, idx, related_symbols_scope_within_ref, ast_node_idx, belongs_to_control_scopes_idxs, called_functions_names, code_sub_token_range_ref, control_flow_in_edges, control_flow_out_edges, data_dependency_in_edges, data_dependency_out_edges, symbols_use_def_mut)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["controlKind"] = to_enum(SerPDGNodeControlKind, self.control_kind)
         result["hasExpression"] = from_bool(self.has_expression)
         result["idx"] = from_int(self.idx)
+        result["relatedSymbolsScopeWithinRef"] = to_class(SerSymbolsScopeWithinRef, self.related_symbols_scope_within_ref)
         result["astNodeIdx"] = from_union([from_int, from_none], self.ast_node_idx)
         result["belongsToControlScopesIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.belongs_to_control_scopes_idxs)
         result["calledFunctionsNames"] = from_union([lambda x: from_list(from_str, x), from_none], self.called_functions_names)
@@ -1976,7 +1950,7 @@ class SerSymbolDeclarationKind(Enum):
 
 @dataclass
 class SerSymbol:
-    contained_in_symbols_scope_idx: int
+    contained_in_symbols_scope_within_ref: SerSymbolsScopeWithinRef
     declaration_kind: SerSymbolDeclarationKind
     decl_site_pdg_node_idx: int
     identifier_idx: int
@@ -1984,13 +1958,13 @@ class SerSymbol:
     symbol_name: str
     type_name: str
     declaration_ast_node_idx: Optional[int] = None
-    def_sites_pdg_node_ids: Optional[List[int]] = None
-    use_sites_pdg_node_ids: Optional[List[int]] = None
+    def_sites_pdg_node_idxs: Optional[List[int]] = None
+    use_sites_pdg_node_idxs: Optional[List[int]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerSymbol':
         assert isinstance(obj, dict)
-        contained_in_symbols_scope_idx = from_int(obj.get("containedInSymbolsScopeIdx"))
+        contained_in_symbols_scope_within_ref = SerSymbolsScopeWithinRef.from_dict(obj.get("containedInSymbolsScopeWithinRef"))
         declaration_kind = SerSymbolDeclarationKind(obj.get("declarationKind"))
         decl_site_pdg_node_idx = from_int(obj.get("declSitePDGNodeIdx"))
         identifier_idx = from_int(obj.get("identifierIdx"))
@@ -1998,13 +1972,13 @@ class SerSymbol:
         symbol_name = from_str(obj.get("symbolName"))
         type_name = from_str(obj.get("typeName"))
         declaration_ast_node_idx = from_union([from_int, from_none], obj.get("declarationASTNodeIdx"))
-        def_sites_pdg_node_ids = from_union([lambda x: from_list(from_int, x), from_none], obj.get("defSitesPDGNodeIds"))
-        use_sites_pdg_node_ids = from_union([lambda x: from_list(from_int, x), from_none], obj.get("useSitesPDGNodeIds"))
-        return SerSymbol(contained_in_symbols_scope_idx, declaration_kind, decl_site_pdg_node_idx, identifier_idx, idx, symbol_name, type_name, declaration_ast_node_idx, def_sites_pdg_node_ids, use_sites_pdg_node_ids)
+        def_sites_pdg_node_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("defSitesPDGNodeIdxs"))
+        use_sites_pdg_node_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("useSitesPDGNodeIdxs"))
+        return SerSymbol(contained_in_symbols_scope_within_ref, declaration_kind, decl_site_pdg_node_idx, identifier_idx, idx, symbol_name, type_name, declaration_ast_node_idx, def_sites_pdg_node_idxs, use_sites_pdg_node_idxs)
 
     def to_dict(self) -> dict:
         result: dict = {}
-        result["containedInSymbolsScopeIdx"] = from_int(self.contained_in_symbols_scope_idx)
+        result["containedInSymbolsScopeWithinRef"] = to_class(SerSymbolsScopeWithinRef, self.contained_in_symbols_scope_within_ref)
         result["declarationKind"] = to_enum(SerSymbolDeclarationKind, self.declaration_kind)
         result["declSitePDGNodeIdx"] = from_int(self.decl_site_pdg_node_idx)
         result["identifierIdx"] = from_int(self.identifier_idx)
@@ -2012,29 +1986,29 @@ class SerSymbol:
         result["symbolName"] = from_str(self.symbol_name)
         result["typeName"] = from_str(self.type_name)
         result["declarationASTNodeIdx"] = from_union([from_int, from_none], self.declaration_ast_node_idx)
-        result["defSitesPDGNodeIds"] = from_union([lambda x: from_list(from_int, x), from_none], self.def_sites_pdg_node_ids)
-        result["useSitesPDGNodeIds"] = from_union([lambda x: from_list(from_int, x), from_none], self.use_sites_pdg_node_ids)
+        result["defSitesPDGNodeIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.def_sites_pdg_node_idxs)
+        result["useSitesPDGNodeIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.use_sites_pdg_node_idxs)
         return result
 
 
 @dataclass
 class SerSymbolsScope:
     idx: int
-    parent_symbols_scope_idx: Optional[int] = None
+    parent_symbols_scope_within_ref: Optional[SerSymbolsScopeWithinRef] = None
     symbol_idxs: Optional[List[int]] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'SerSymbolsScope':
         assert isinstance(obj, dict)
         idx = from_int(obj.get("idx"))
-        parent_symbols_scope_idx = from_union([from_int, from_none], obj.get("parentSymbolsScopeIdx"))
+        parent_symbols_scope_within_ref = from_union([SerSymbolsScopeWithinRef.from_dict, from_none], obj.get("parentSymbolsScopeWithinRef"))
         symbol_idxs = from_union([lambda x: from_list(from_int, x), from_none], obj.get("symbolIdxs"))
-        return SerSymbolsScope(idx, parent_symbols_scope_idx, symbol_idxs)
+        return SerSymbolsScope(idx, parent_symbols_scope_within_ref, symbol_idxs)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["idx"] = from_int(self.idx)
-        result["parentSymbolsScopeIdx"] = from_union([from_int, from_none], self.parent_symbols_scope_idx)
+        result["parentSymbolsScopeWithinRef"] = from_union([lambda x: to_class(SerSymbolsScopeWithinRef, x), from_none], self.parent_symbols_scope_within_ref)
         result["symbolIdxs"] = from_union([lambda x: from_list(from_int, x), from_none], self.symbol_idxs)
         return result
 
@@ -2099,8 +2073,135 @@ class QMethodPDG:
 
 
 @dataclass
+class SerExampleFeatureValue:
+    feature_name: str
+    feature_value: Any
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerExampleFeatureValue':
+        assert isinstance(obj, dict)
+        feature_name = from_str(obj.get("featureName"))
+        feature_value = obj.get("featureValue")
+        return SerExampleFeatureValue(feature_name, feature_value)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["featureName"] = from_str(self.feature_name)
+        result["featureValue"] = self.feature_value
+        return result
+
+
+@dataclass
+class SerExampleSubItemFeatureValue:
+    feature_value: Any
+    sub_item: Any
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerExampleSubItemFeatureValue':
+        assert isinstance(obj, dict)
+        feature_value = obj.get("featureValue")
+        sub_item = obj.get("subItem")
+        return SerExampleSubItemFeatureValue(feature_value, sub_item)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["featureValue"] = self.feature_value
+        result["subItem"] = self.sub_item
+        return result
+
+
+@dataclass
+class SerExampleSubItemFeatureValues:
+    feature_name: str
+    sub_items_values: Optional[List[SerExampleSubItemFeatureValue]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerExampleSubItemFeatureValues':
+        assert isinstance(obj, dict)
+        feature_name = from_str(obj.get("featureName"))
+        sub_items_values = from_union([lambda x: from_list(SerExampleSubItemFeatureValue.from_dict, x), from_none], obj.get("subItemsValues"))
+        return SerExampleSubItemFeatureValues(feature_name, sub_items_values)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["featureName"] = from_str(self.feature_name)
+        result["subItemsValues"] = from_union([lambda x: from_list(lambda x: to_class(SerExampleSubItemFeatureValue, x), x), from_none], self.sub_items_values)
+        return result
+
+
+@dataclass
+class SerExampleCalculatedFeatures:
+    example_features: Optional[List[SerExampleFeatureValue]] = None
+    example_sub_item_features: Optional[List[SerExampleSubItemFeatureValues]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerExampleCalculatedFeatures':
+        assert isinstance(obj, dict)
+        example_features = from_union([lambda x: from_list(SerExampleFeatureValue.from_dict, x), from_none], obj.get("exampleFeatures"))
+        example_sub_item_features = from_union([lambda x: from_list(SerExampleSubItemFeatureValues.from_dict, x), from_none], obj.get("exampleSubItemFeatures"))
+        return SerExampleCalculatedFeatures(example_features, example_sub_item_features)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["exampleFeatures"] = from_union([lambda x: from_list(lambda x: to_class(SerExampleFeatureValue, x), x), from_none], self.example_features)
+        result["exampleSubItemFeatures"] = from_union([lambda x: from_list(lambda x: to_class(SerExampleSubItemFeatureValues, x), x), from_none], self.example_sub_item_features)
+        return result
+
+
+@dataclass
+class SerCodeRawExample:
+    calculated_features: Optional[SerExampleCalculatedFeatures] = None
+    hash: Optional[str] = None
+    logging_call: Optional[SerLoggingCall] = None
+    method: Optional[SerMethod] = None
+    method_ast: Optional[SerMethodAST] = None
+    method_pdg: Optional[SerMethodPDG] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'SerCodeRawExample':
+        assert isinstance(obj, dict)
+        calculated_features = from_union([SerExampleCalculatedFeatures.from_dict, from_none], obj.get("calculated_features"))
+        hash = from_union([from_str, from_none], obj.get("hash"))
+        logging_call = from_union([SerLoggingCall.from_dict, from_none], obj.get("logging_call"))
+        method = from_union([SerMethod.from_dict, from_none], obj.get("method"))
+        method_ast = from_union([SerMethodAST.from_dict, from_none], obj.get("method_ast"))
+        method_pdg = from_union([SerMethodPDG.from_dict, from_none], obj.get("method_pdg"))
+        return SerCodeRawExample(calculated_features, hash, logging_call, method, method_ast, method_pdg)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["calculated_features"] = from_union([lambda x: to_class(SerExampleCalculatedFeatures, x), from_none], self.calculated_features)
+        result["hash"] = from_union([from_str, from_none], self.hash)
+        result["logging_call"] = from_union([lambda x: to_class(SerLoggingCall, x), from_none], self.logging_call)
+        result["method"] = from_union([lambda x: to_class(SerMethod, x), from_none], self.method)
+        result["method_ast"] = from_union([lambda x: to_class(SerMethodAST, x), from_none], self.method_ast)
+        result["method_pdg"] = from_union([lambda x: to_class(SerMethodPDG, x), from_none], self.method_pdg)
+        return result
+
+
+@dataclass
+class QSerCodeRawExamples:
+    arguments: Optional[Dict[str, Any]] = None
+    q_ser_code_raw_examples_return: Optional[List[SerCodeRawExample]] = None
+
+    @staticmethod
+    def from_dict(obj: Any) -> 'QSerCodeRawExamples':
+        assert isinstance(obj, dict)
+        arguments = from_union([lambda x: from_dict(lambda x: x, x), from_none], obj.get("arguments"))
+        q_ser_code_raw_examples_return = from_union([lambda x: from_list(SerCodeRawExample.from_dict, x), from_none], obj.get("return"))
+        return QSerCodeRawExamples(arguments, q_ser_code_raw_examples_return)
+
+    def to_dict(self) -> dict:
+        result: dict = {}
+        result["arguments"] = from_union([lambda x: from_dict(lambda x: x, x), from_none], self.arguments)
+        result["return"] = from_union([lambda x: from_list(lambda x: to_class(SerCodeRawExample, x), x), from_none], self.q_ser_code_raw_examples_return)
+        return result
+
+
+@dataclass
 class Query:
     q_dummy_get_filtes: Optional[QDummyGetFiltes] = None
+    q_experiment_results: Optional[QExperimentResults] = None
     q_experiments: Optional[QExperiments] = None
     q_logging_call: Optional[QLoggingCall] = None
     q_logging_call_features: Optional[QLoggingCallFeatures] = None
@@ -2109,11 +2210,13 @@ class Query:
     q_method: Optional[QMethod] = None
     q_method_ast: Optional[QMethodAST] = None
     q_method_pdg: Optional[QMethodPDG] = None
+    q_ser_code_raw_examples: Optional[QSerCodeRawExamples] = None
 
     @staticmethod
     def from_dict(obj: Any) -> 'Query':
         assert isinstance(obj, dict)
         q_dummy_get_filtes = from_union([QDummyGetFiltes.from_dict, from_none], obj.get("qDummyGetFiltes"))
+        q_experiment_results = from_union([QExperimentResults.from_dict, from_none], obj.get("qExperimentResults"))
         q_experiments = from_union([QExperiments.from_dict, from_none], obj.get("qExperiments"))
         q_logging_call = from_union([QLoggingCall.from_dict, from_none], obj.get("qLoggingCall"))
         q_logging_call_features = from_union([QLoggingCallFeatures.from_dict, from_none], obj.get("qLoggingCallFeatures"))
@@ -2122,11 +2225,13 @@ class Query:
         q_method = from_union([QMethod.from_dict, from_none], obj.get("qMethod"))
         q_method_ast = from_union([QMethodAST.from_dict, from_none], obj.get("qMethodAST"))
         q_method_pdg = from_union([QMethodPDG.from_dict, from_none], obj.get("qMethodPDG"))
-        return Query(q_dummy_get_filtes, q_experiments, q_logging_call, q_logging_call_features, q_logging_calls, q_logging_call_statistics, q_method, q_method_ast, q_method_pdg)
+        q_ser_code_raw_examples = from_union([QSerCodeRawExamples.from_dict, from_none], obj.get("qSerCodeRawExamples"))
+        return Query(q_dummy_get_filtes, q_experiment_results, q_experiments, q_logging_call, q_logging_call_features, q_logging_calls, q_logging_call_statistics, q_method, q_method_ast, q_method_pdg, q_ser_code_raw_examples)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["qDummyGetFiltes"] = from_union([lambda x: to_class(QDummyGetFiltes, x), from_none], self.q_dummy_get_filtes)
+        result["qExperimentResults"] = from_union([lambda x: to_class(QExperimentResults, x), from_none], self.q_experiment_results)
         result["qExperiments"] = from_union([lambda x: to_class(QExperiments, x), from_none], self.q_experiments)
         result["qLoggingCall"] = from_union([lambda x: to_class(QLoggingCall, x), from_none], self.q_logging_call)
         result["qLoggingCallFeatures"] = from_union([lambda x: to_class(QLoggingCallFeatures, x), from_none], self.q_logging_call_features)
@@ -2135,6 +2240,7 @@ class Query:
         result["qMethod"] = from_union([lambda x: to_class(QMethod, x), from_none], self.q_method)
         result["qMethodAST"] = from_union([lambda x: to_class(QMethodAST, x), from_none], self.q_method_ast)
         result["qMethodPDG"] = from_union([lambda x: to_class(QMethodPDG, x), from_none], self.q_method_pdg)
+        result["qSerCodeRawExamples"] = from_union([lambda x: to_class(QSerCodeRawExamples, x), from_none], self.q_ser_code_raw_examples)
         return result
 
 
