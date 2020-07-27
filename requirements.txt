@@ -11,3 +11,4 @@ confclass
 # torch-spline-conv==latest+
 torch-geometric
 typing_extensions
+notify_run
