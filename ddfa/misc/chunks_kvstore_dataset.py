@@ -92,7 +92,10 @@ class ChunksKVStoresDataset(Dataset):
         for chunk_idx in itertools.count():
             filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
             if not os.path.isfile(filepath) and not os.path.isfile(filepath + '.dat'):
-                break
+                if chunk_idx == 0:
+                    raise ValueError(f'Not found `{self.datafold}` dataset in path `{self.pp_data_path}`.')
+                else:
+                    break
             self._pp_data_chunks_filepaths.append(filepath)
             kvstore = shelve.open(filepath, 'r')
             self._kvstore_chunks.append(kvstore)
