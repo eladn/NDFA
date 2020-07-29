@@ -32,9 +32,9 @@ class PredictLogVarsTask(CodeTaskBase):
         super(PredictLogVarsTask, self).__init__(task_props)
         # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
-    def iterate_raw_examples(self, model_hps: DDFAModelHyperParams, raw_data_path: str) \
+    def iterate_raw_examples(self, model_hps: DDFAModelHyperParams, raw_extracted_data_dir: str) \
             -> typing.Iterable[RawExtractedExample]:
-        return iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_data_path)
+        return iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_extracted_data_dir)
 
     def preprocess_raw_example(
             self, model_hps: DDFAModelHyperParams,
