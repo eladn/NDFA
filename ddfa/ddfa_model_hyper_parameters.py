@@ -123,7 +123,7 @@ class DDFAModelTrainingHyperParams:
         description="Batch size both for training and for evaluating.")
 
     nr_epochs: int = confparam(
-        default=20,
+        default=2000,
         description="Number of epochs to train.")
 
     stop_criterion: Optional[str] = confparam(
