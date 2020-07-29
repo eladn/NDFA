@@ -22,6 +22,7 @@ from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, truncate_and_pad, \
     PreprocessLimitExceedError
 from ddfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
+from ddfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -231,10 +232,7 @@ def preprocess_logging_call_example(
         remove_edges_from_pdg_nodes_idxs={raw_example.logging_call.pdg_node_idx},
         pdg_nodes_to_mask={raw_example.logging_call.pdg_node_idx: '<LOG_PRED>'})
 
-    logging_call_pdg_node = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx]
-    symbols_idxs_used_in_logging_call = list(
-        set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
-        set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.may))
+    symbols_idxs_used_in_logging_call = get_symbol_idxs_used_in_logging_call(example=raw_example)
     nr_target_symbols = len(symbols_idxs_used_in_logging_call)
     if nr_target_symbols < model_hps.method_code_encoder.min_nr_target_symbols:
         raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) < MIN_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.min_nr_target_symbols})')
