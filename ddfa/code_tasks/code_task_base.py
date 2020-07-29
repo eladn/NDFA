@@ -2,37 +2,18 @@ import abc
 import torch
 import functools
 from torch.utils.data.dataset import Dataset
-from typing import Optional, List, Any, Type, Dict, Iterable, Tuple
-from confclass import confclass, confparam
+from typing import Optional, List, Any, Type, Iterable, Tuple
 import torch.nn as nn
 
 from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, PreprocessLimitExceedError
+from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
+from ddfa.code_tasks.code_task_properties import CodeTaskProperties, task_names
 
 
-__all__ = ['task_names', 'CodeTaskProperties', 'CodeTaskBase', 'EvaluationMetric']
-
-
-task_names = ('pred-log-vars',)
-
-
-class EvaluationMetric(abc.ABC):
-    @abc.abstractmethod
-    def update(self, y_hat, target):
-        ...
-
-    @abc.abstractmethod
-    def get_metrics(self) -> Dict[str, float]:
-        ...
-
-
-@confclass
-class CodeTaskProperties:
-    name: str = confparam(
-        default=task_names[0],
-        choices=list(task_names))
+__all__ = ['CodeTaskBase']
 
 
 class CodeTaskBase(abc.ABC):

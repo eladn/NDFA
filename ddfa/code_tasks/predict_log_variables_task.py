@@ -7,7 +7,9 @@ from torch.utils.data.dataset import Dataset
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
 from ddfa.dataset_properties import DatasetProperties, DataFold
-from ddfa.code_tasks.code_task_base import CodeTaskBase, CodeTaskProperties, EvaluationMetric
+from ddfa.code_tasks.code_task_base import CodeTaskBase
+from ddfa.code_tasks.code_task_properties import CodeTaskProperties
+from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ddfa.misc.code_data_structure_api import *
 from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample

@@ -2,7 +2,7 @@ from collections import defaultdict, OrderedDict
 from typing import Dict, Set, List
 import numpy as np
 
-from ddfa.code_tasks.code_task_base import EvaluationMetric
+from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
 
 
 __all__ = ['SymbolsSetEvaluationMetric']

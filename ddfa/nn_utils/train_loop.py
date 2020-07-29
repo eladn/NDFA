@@ -10,7 +10,7 @@ from typing import Optional, Callable, List, Type, Tuple, Dict, Collection
 
 from ddfa.nn_utils.window_average import WindowAverage
 from ddfa.nn_utils.train_callback import TrainCallback
-from ddfa.code_tasks.code_task_base import EvaluationMetric
+from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
 
 
 __all__ = ['fit', 'evaluate']

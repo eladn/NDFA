@@ -1,7 +1,7 @@
 from confclass import confclass, confparam
 
 from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams, DDFAModelTrainingHyperParams
-from ddfa.code_tasks.code_task_base import CodeTaskProperties
+from ddfa.code_tasks.code_task_properties import CodeTaskProperties
 from ddfa.dataset_properties import DatasetProperties
 
 
