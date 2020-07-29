@@ -11,6 +11,7 @@ from ddfa.dataset_properties import DatasetProperties, DataFold
 from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, PreprocessLimitExceedError
 from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ddfa.code_tasks.code_task_properties import CodeTaskProperties, task_names
+from ddfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
 __all__ = ['CodeTaskBase']
@@ -65,7 +66,8 @@ class CodeTaskBase(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def predict(self, model: nn.Module, device: torch.device, pp_example: Any) -> Any:
+    def predict(
+            self, model: nn.Module, device: torch.device, raw_example: RawExtractedExample, pp_example: Any) -> Any:
         ...
 
     @abc.abstractmethod

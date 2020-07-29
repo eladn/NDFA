@@ -197,8 +197,9 @@ def main():
                         code_task_vocabs=code_task_vocabs, add_tag=False):
                     if isinstance(pp_example, PreprocessLimitExceedError):
                         continue
-                    prediction = task.predict(model=model, device=device, pp_example=pp_example)
-                    predictions_output_file.write(prediction)
+                    prediction = task.predict(
+                        model=model, device=device, raw_example=raw_example, pp_example=pp_example)
+                    predictions_output_file.write(' '.join(word for word in prediction))
                     predictions_output_file.write('\n')
                     predictions_hashes_output_file.write(f'{pp_example.example_hash}\n')
             print(f'Completed performing prediction.')

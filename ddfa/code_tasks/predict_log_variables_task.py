@@ -52,6 +52,7 @@ class PredictLogVarsTask(CodeTaskBase):
     def predict(
             self, model: 'PredictLogVarsModel',
             device: torch.device,
+            raw_example: RawExtractedExample,
             pp_example: 'PredictLogVarsTaggedExample') -> Any:
         code_task_input = pp_example.code_task_input
         model.to(device)
@@ -59,8 +60,13 @@ class PredictLogVarsTask(CodeTaskBase):
         code_task_input = MethodCodeInputToEncoder.collate([code_task_input])
         code_task_input = code_task_input.to(device)
         output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
-        print(output.decoder_outputs.size())
-        raise NotImplementedError  # TODO: impl
+        decoder_outputs = output.decoder_outputs.squeeze(dim=0)
+        symbol_indices = decoder_outputs.argmax(dim=-1)
+        EOS_symbol_special_word_idx = 2  # '<EOS>'
+        symbol_indices = symbol_indices.cpu().tolist()
+        symbol_indices = [symbol_idx - 3 for symbol_idx in symbol_indices if symbol_idx > 2]
+        symbol_names = [raw_example.method_pdg.symbols[symbol_idx].symbol_name for symbol_idx in symbol_indices]
+        return symbol_names
 
     def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
