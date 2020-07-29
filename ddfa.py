@@ -13,6 +13,7 @@ from ddfa.ddfa_model_hyper_parameters import DDFAModelTrainingHyperParams
 from ddfa.code_tasks.code_task_base import CodeTaskBase
 from ddfa.dataset_properties import DataFold
 from ddfa.nn_utils.train_loop import fit, evaluate
+from ddfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
@@ -194,6 +195,8 @@ def main():
                         model_hps=exec_params.experiment_setting.model_hyper_params,
                         raw_extracted_data_dir=exec_params.predict_raw_data_path,
                         code_task_vocabs=code_task_vocabs, add_tag=False):
+                    if isinstance(pp_example, PreprocessLimitExceedError):
+                        continue
                     prediction = task.predict(model=model, device=device, pp_example=pp_example)
                     predictions_output_file.write(prediction)
                     predictions_output_file.write('\n')
