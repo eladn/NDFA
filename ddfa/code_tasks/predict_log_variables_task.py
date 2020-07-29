@@ -57,6 +57,7 @@ class PredictLogVarsTask(CodeTaskBase):
         model.to(device)
         model.eval()
         code_task_input = MethodCodeInputToEncoder.collate([code_task_input])
+        code_task_input = code_task_input.to(device)
         output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
         print(output.decoder_outputs.size())
         raise NotImplementedError  # TODO: impl
