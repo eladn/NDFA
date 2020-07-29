@@ -22,10 +22,20 @@ class ModelExecutionParams:
         description="Path to preprocessed dataset.",
         arg_names=['--pp-data'])
 
-    predict_data_path: Optional[str] = confparam(
+    predict_pp_data_path: Optional[str] = confparam(
         default=None,
         description="Path to preprocessed prediction data.",
-        arg_names=['--pred-data-path'])
+        arg_names=['--pred-pp-data-path'])
+
+    predict_raw_data_path: Optional[str] = confparam(
+        default=None,
+        description="Path to raw prediction data.",
+        arg_names=['--pred-raw-data-path'])
+
+    predict_output_path: Optional[str] = confparam(
+        default=None,
+        description="Dir path to prediction outputs.",
+        arg_names=['--pred-output-path'])
 
     perform_training: bool = confparam(
         default=False,
@@ -115,7 +125,7 @@ class ModelExecutionParams:
 
     @property
     def perform_prediction(self):
-        return bool(self.predict_data_path)
+        return bool(self.predict_pp_data_path) or bool(self.predict_raw_data_path)
 
     @property
     def should_load_model(self) -> bool:
@@ -158,6 +168,8 @@ class ModelExecutionParams:
             raise argparse.ArgumentError(None, "Must train or load a model in order to perform evaluation.")
         if self.perform_prediction and not self.should_load_model:
             raise argparse.ArgumentError(None, "Must load a model in order to perform prediction.")
+        if bool(self.predict_raw_data_path) and bool(self.predict_pp_data_path):
+            raise argparse.ArgumentError(None, "Cannot specify both `--pred-raw-data-path` and `--pred-pp-data-path`.")
         if not self.perform_training and self.should_save_model:
             raise argparse.ArgumentError(None, "Must train model in order to save the model.")
         if self.perform_training and not self.should_save_model:
@@ -166,8 +178,8 @@ class ModelExecutionParams:
             raise argparse.ArgumentError(None, "Must specify raw train/eval/test data path if performing preprocessing.")
         if not self.perform_preprocessing and (self.raw_train_data_path or self.raw_eval_data_path or self.raw_test_data_path):
             raise argparse.ArgumentError(None, "Must specify `--preprocess` if specifying raw data path.")
-        if not self.pp_data_dir_path:
-            raise argparse.ArgumentError(None, "Must specify `--pp-data`.")
+        if (self.perform_preprocessing or self.perform_training or self.perform_evaluation) and not self.pp_data_dir_path:
+            raise argparse.ArgumentError(None, "Must specify `--pp-data` for performing preprocess / train / evaluation.")
 
 
 def test_model_execution_params():

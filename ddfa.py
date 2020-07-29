@@ -72,7 +72,7 @@ def main():
 
     if exec_params.perform_preprocessing:
         os.makedirs(exec_params.pp_data_dir_path, exist_ok=True)
-        task.preprocess(
+        task.preprocess_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
             pp_data_path=exec_params.pp_data_dir_path,
             raw_train_data_path=exec_params.raw_train_data_path,
@@ -180,7 +180,45 @@ def main():
               f'\n\t validation metrics: {metrics_results}')
 
     if exec_params.perform_prediction:
-        raise NotImplementedError()  # TODO: implement!
+        if exec_params.predict_raw_data_path:
+            print(f'Performing prediction (over raw data in `{exec_params.predict_raw_data_path}`) ..')
+            # TODO: consider getting the vocabs from `model`
+            code_task_vocabs = task.create_or_load_code_task_vocabs(
+                model_hps=exec_params.experiment_setting.model_hyper_params,
+                pp_data_path=exec_params.pp_data_dir_path,
+                raw_train_data_path=exec_params.raw_train_data_path)
+            os.makedirs(exec_params.predict_output_path, exist_ok=True)
+            with open(os.path.join(exec_params.predict_output_path, 'predictions.txt'), 'w') as predictions_output_file, \
+                    open(os.path.join(exec_params.predict_output_path, 'predictions_hashes.txt'), 'w') as predictions_hashes_output_file:
+                for raw_example, pp_example in task.preprocess_raw_examples_generator(
+                        model_hps=exec_params.experiment_setting.model_hyper_params,
+                        raw_extracted_data_dir=exec_params.predict_raw_data_path,
+                        code_task_vocabs=code_task_vocabs, add_tag=False):
+                    prediction = task.predict(model=model, device=device, pp_example=pp_example)
+                    predictions_output_file.write(prediction)
+                    predictions_output_file.write('\n')
+                    predictions_hashes_output_file.write(f'{pp_example.example_hash}\n')
+            print(f'Completed performing prediction.')
+        elif exec_params.predict_pp_data_path:
+            print(f'Performing prediction (over preprocessed data in `{exec_params.predict_pp_data_path}`) ..')
+            raise NotImplementedError
+            # dataloader_cuda_kwargs = {'num_workers': 3,
+            #                           'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
+            # pp_data = task.create_dataset(
+            #     model_hps=exec_params.experiment_setting.model_hyper_params,
+            #     dataset_props=exec_params.experiment_setting.dataset,
+            #     datafold=None,
+            #     pp_data_path=exec_params.pp_data_dir_path)
+            # data_loader = DataLoader(
+            #     pp_data, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size * 2,
+            #     collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
+            # predictions = task.predict(
+            #     model=model,
+            #     device=device,
+            #     data_loader=data_loader)
+            print(f'Completed performing prediction.')
+        else:
+            assert False
 
 
 if __name__ == '__main__':

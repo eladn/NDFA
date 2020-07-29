@@ -17,8 +17,8 @@ from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ddfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
 from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
-from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, preprocess_code_task_example, \
-    truncate_and_pad, PreprocessLimitExceedError
+from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, truncate_and_pad, \
+    PreprocessLimitExceedError
 from ddfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
 
 
@@ -30,17 +30,34 @@ class PredictLogVarsTask(CodeTaskBase):
         super(PredictLogVarsTask, self).__init__(task_props)
         # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
-    def preprocess(self, model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
-                   raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
-        preprocess_code_task_dataset(
-            model_hps=model_hps, pp_data_path=pp_data_path,
-            raw_extracted_examples_generator=iter_raw_extracted_examples_and_verify,
-            pp_example_fn=preprocess_logging_call_example, raw_train_data_path=raw_train_data_path,
-            raw_eval_data_path=raw_eval_data_path, raw_test_data_path=raw_test_data_path)
+    def iterate_raw_examples(self, model_hps: DDFAModelHyperParams, raw_data_path: str) \
+            -> typing.Iterable[RawExtractedExample]:
+        return iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_data_path)
 
-    def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> nn.Module:
-        vocabs = CodeTaskVocabs.load_or_create(model_hps=model_hps, pp_data_path=pp_data_path)
+    def preprocess_raw_example(
+            self, model_hps: DDFAModelHyperParams,
+            code_task_vocabs: CodeTaskVocabs,
+            raw_example: Any,
+            add_tag: bool = True) \
+            -> 'PredictLogVarsTaggedExample':
+        return preprocess_logging_call_example(
+            model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example, add_tag=add_tag)
+
+    def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> 'PredictLogVarsModel':
+        vocabs = self.create_or_load_code_task_vocabs(model_hps=model_hps, pp_data_path=pp_data_path)
         return PredictLogVarsModel(model_hps=model_hps, code_task_vocabs=vocabs)
+
+    def predict(
+            self, model: 'PredictLogVarsModel',
+            device: torch.device,
+            pp_example: 'PredictLogVarsTaggedExample') -> Any:
+        code_task_input = pp_example.code_task_input
+        model.to(device)
+        model.eval()
+        code_task_input = MethodCodeInputToEncoder.collate([code_task_input])
+        output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
+        print(output.decoder_outputs.size())
+        raise NotImplementedError  # TODO: impl
 
     def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
@@ -59,6 +76,13 @@ class PredictLogVarsTask(CodeTaskBase):
                 super(LoggingCallTaskEvaluationMetric_, self).__init__(
                     nr_symbols_special_words=3)  # TODO: get `nr_symbols_special_words` from `model_hps` !
         return [LoggingCallTaskEvaluationMetric_]
+
+    def create_or_load_code_task_vocabs(
+            self, model_hps: DDFAModelHyperParams,
+            pp_data_path: str,
+            raw_train_data_path: Optional[str] = None) -> CodeTaskVocabs:
+        return CodeTaskVocabs.load_or_create(
+            model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
 
 
 class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
@@ -97,7 +121,7 @@ class PredictLoggingCallVarsModelOutput(TensorsDataClass):
 
 @dataclasses.dataclass
 class PredictLogVarsTaggedExample(TensorsDataClass):
-    logging_call_hash: str
+    example_hash: str
     code_task_input: MethodCodeInputToEncoder
     target_symbols_idxs_used_in_logging_call: torch.Tensor
 
@@ -188,15 +212,17 @@ class PredictLogVarsTaskDataset(ChunksKVStoresDataset):
 
 
 def preprocess_logging_call_example(
-        model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
-        example: RawExtractedExample) -> typing.Optional[PredictLogVarsTaggedExample]:
+        model_hps: DDFAModelHyperParams,
+        code_task_vocabs: CodeTaskVocabs,
+        raw_example: RawExtractedExample,
+        add_tag: bool = True) -> typing.Optional[PredictLogVarsTaggedExample]:  # FIXME: is it really optional?
     code_task_input = preprocess_code_task_example(
         model_hps=model_hps, code_task_vocabs=code_task_vocabs,
-        method=example.method, method_pdg=example.method_pdg, method_ast=example.method_ast,
-        remove_edges_from_pdg_nodes_idxs={example.logging_call.pdg_node_idx},
-        pdg_nodes_to_mask={example.logging_call.pdg_node_idx: '<LOG_PRED>'})
+        method=raw_example.method, method_pdg=raw_example.method_pdg, method_ast=raw_example.method_ast,
+        remove_edges_from_pdg_nodes_idxs={raw_example.logging_call.pdg_node_idx},
+        pdg_nodes_to_mask={raw_example.logging_call.pdg_node_idx: '<LOG_PRED>'})
 
-    logging_call_pdg_node = example.method_pdg.pdg_nodes[example.logging_call.pdg_node_idx]
+    logging_call_pdg_node = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx]
     symbols_idxs_used_in_logging_call = list(
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.must) |
         set(symbol_ref.symbol_idx for symbol_ref in logging_call_pdg_node.symbols_use_def_mut.use.may))
@@ -205,7 +231,7 @@ def preprocess_logging_call_example(
         raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) < MIN_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.min_nr_target_symbols})')
     if nr_target_symbols > model_hps.method_code_encoder.max_nr_target_symbols:
         raise PreprocessLimitExceedError(f'#target_symbols ({nr_target_symbols}) > MAX_NR_TARGET_SYMBOLS ({model_hps.method_code_encoder.max_nr_target_symbols})')
-    target_symbols_idxs_used_in_logging_call = torch.tensor(list(truncate_and_pad(
+    target_symbols_idxs_used_in_logging_call = None if not add_tag else torch.tensor(list(truncate_and_pad(
         [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
         [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
          for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
@@ -214,6 +240,6 @@ def preprocess_logging_call_example(
         pad_word=code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))), dtype=torch.long)
 
     return PredictLogVarsTaggedExample(
-        logging_call_hash=example.logging_call.hash,
+        example_hash=raw_example.logging_call.hash,
         code_task_input=code_task_input,  # TODO: put logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)

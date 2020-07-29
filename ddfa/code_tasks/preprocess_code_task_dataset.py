@@ -185,7 +185,7 @@ def preprocess_code_task_example(
 
 
 class PPExampleFnType(Protocol):
-    def __call__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs, example: Any) -> Any: ...
+    def __call__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs, raw_example: Any) -> Any: ...
 
 
 class RawExtractedExamplesGenerator(Protocol):
@@ -195,10 +195,8 @@ class RawExtractedExamplesGenerator(Protocol):
 def preprocess_code_task_dataset(
         model_hps: DDFAModelHyperParams, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
-        raw_train_data_path: Optional[str] = None, raw_eval_data_path: Optional[str] = None,
-        raw_test_data_path: Optional[str] = None):
-    vocabs = CodeTaskVocabs.load_or_create(
-        model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
+        code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
+        raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_eval_data_path),
@@ -212,9 +210,9 @@ def preprocess_code_task_dataset(
         chunks_examples_writer = ChunksKVStoreDatasetWriter(
             pp_data_path=pp_data_path, datafold=datafold,
             max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
-        for example in raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path):
+        for raw_example in raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path):
             try:
-                pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=vocabs, example=example)
+                pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example)
                 assert pp_example is not None
                 chunks_examples_writer.write_example(pp_example)
             except PreprocessLimitExceedError as err:
