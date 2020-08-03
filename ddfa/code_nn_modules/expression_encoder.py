@@ -72,9 +72,9 @@ class ExpressionEncoder(nn.Module):
         assert expressions_tokens_kinds.size() == expressions_idxs.size() == (batch_size, nr_exprs, nr_tokens_in_expr)
 
         token_kinds_for_kos_tokens_vocab = (
-            self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.OPERATOR.value),
-            self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.SEPARATOR.value),
-            self.tokens_kinds_vocab.get_word_idx_or_unk(SerTokenKind.KEYWORD.value))
+            self.tokens_kinds_vocab.get_word_idx(SerTokenKind.OPERATOR.value),
+            self.tokens_kinds_vocab.get_word_idx(SerTokenKind.SEPARATOR.value),
+            self.tokens_kinds_vocab.get_word_idx(SerTokenKind.KEYWORD.value))
         use_kos_tokens_vocab_condition = reduce(
             torch.Tensor.logical_or,
             ((expressions_tokens_kinds == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
@@ -88,7 +88,7 @@ class ExpressionEncoder(nn.Module):
         selected_kos_tokens_encoding = self.kos_tokens_embedding_layer(kos_tokens_idxs.flatten())\
             .view(batch_size, nr_exprs, nr_tokens_in_expr, self.kos_token_embedding_dim)
 
-        use_identifier_vocab_condition = expressions_tokens_kinds == self.tokens_kinds_vocab.get_word_idx_or_unk(
+        use_identifier_vocab_condition = expressions_tokens_kinds == self.tokens_kinds_vocab.get_word_idx(
             SerTokenKind.IDENTIFIER.value)
         none_identifier_emb = self.identifiers_special_words_embedding_layer(
                 torch.tensor([self.identifiers_special_words_vocab.get_word_idx('<NONE>')],
