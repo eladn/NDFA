@@ -38,7 +38,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
 
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
-        valid_loader: Optional[DataLoader], optimizer: Optimizer, criterion: nn.Module = F.nll_loss,
+        valid_loader: Optional[DataLoader], optimizer: Optimizer,
+        lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler], criterion: nn.Module = F.nll_loss,
         minibatch_size: Optional[int] = None,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
@@ -62,7 +63,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
               f'\n\t validation metrics: {val_metrics_results}')
 
     train_step_avg_time = None
-    for epoch_nr in range(1, nr_epochs + 1):
+    for epoch_nr in range(1, nr_epochs + 1):  # TODO: allow resuming from given epoch number
         print(f'Starting training epoch #{epoch_nr} ..')
         for callback in callbacks:
             callback.epoch_start(epoch_nr=epoch_nr)
@@ -168,6 +169,9 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         for callback in callbacks:
             callback.epoch_end(
                 epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
+
+        if lr_scheduler is not None:
+            lr_scheduler.step()
 
 
 def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,
