@@ -92,3 +92,67 @@ class TensorsDataClass:
                 for field in dataclasses.fields(cls) if field.init and field.name not in {'_batch_size'}})
         batched_obj._batch_size = len(inputs)
         return batched_obj
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class ExampleBasedIndicesTensor(TensorsDataClass):
+    indices: torch.LongTensor
+    example_idx: torch.LongTensor = dataclasses.field(init=False, default=None)  # for accessing a `BatchFlattenedTensorsDataClass`
+
+    @classmethod
+    def collate(cls, inputs: List['ExampleBasedIndicesTensor']):
+        raise NotImplementedError  # TODO: impl!
+
+    def access(self, dst_tensor: torch.Tensor, example_offsets: torch.Tensor, mask=None):
+        raise NotImplementedError  # TODO: impl!
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class BatchFlattenedTensorsDataClass(TensorsDataClass):
+    nr_items_per_example: torch.LongTensor = dataclasses.field(init=False, default=None)
+    _example_offsets: torch.LongTensor = dataclasses.field(init=False, default=None)
+
+    # for being accessed by `ExampleBasedIndexTensor`; exclusive cumsum of nr_tensors_per_example
+    @property
+    def example_offsets(self):
+        if self._example_offsets is None:
+            self._example_offsets = self.nr_items_per_example.cumsum(dim=-1) - self.nr_items_per_example
+        return self._example_offsets
+
+    @classmethod
+    def collate(cls, inputs: List['BatchFlattenedTensorsDataClass']):
+        raise NotImplementedError  # TODO: impl!
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class BatchFlattenedTensor(BatchFlattenedTensorsDataClass):
+    tensor: torch.Tensor
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class BatchFlattenedSeq(BatchFlattenedTensor):
+    lengths: torch.LongTensor
+
+    @classmethod
+    def collate(cls, inputs: List['BatchFlattenedSeq']):
+        raise NotImplementedError  # TODO: impl!
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class ExampleBasedIndicesBatchFlattenedTensorsDataClass(BatchFlattenedTensorsDataClass):
+    example_idx: torch.LongTensor = dataclasses.field(init=False, default=None)  # for accessing a `BatchFlattenedTensorsDataClass`
+
+    @classmethod
+    def collate(cls, inputs: List['ExampleBasedIndicesBatchFlattenedTensorsDataClass']):
+        raise NotImplementedError  # TODO: impl!
+
+
+# TODO: complete impl
+@dataclasses.dataclass
+class ExampleBasedIndicesBatchFlattenedTensor(ExampleBasedIndicesBatchFlattenedTensorsDataClass):
+    indices: torch.LongTensor
