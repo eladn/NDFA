@@ -18,7 +18,8 @@ from ddfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedEr
 
 def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
     # TODO: fully implement (choose optimizer and lr)!
-    return torch.optim.Adam(model.parameters(), lr=0.0005)
+    return torch.optim.AdamW(model.parameters(), lr=0.0005)
+    # return torch.optim.Adam(model.parameters(), lr=0.0005)
 
 
 def main():
