@@ -1,5 +1,6 @@
 import os
-import pickle
+import io
+import torch
 import shelve
 import itertools
 import numpy as np
@@ -34,9 +35,14 @@ class ChunksKVStoreDatasetWriter:
         return self.next_example_idx
 
     def write_example(self, example):
-        example_size_in_bytes = len(pickle.dumps(example))
+        with io.BytesIO() as bytes_io_stream:
+            torch.save(example, bytes_io_stream)
+            bytes_io_stream.seek(0)
+            binary_serialized_example = bytes_io_stream.read()
+            # now i can store `binary_serialized_example` however i want
+        example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
-        chunk_file[str(self.next_example_idx)] = example
+        chunk_file[str(self.next_example_idx)] = binary_serialized_example
         self.next_example_idx += 1
         self.cur_chunk_nr_examples += 1
         self.cur_chunk_size_in_bytes += example_size_in_bytes
@@ -124,5 +130,7 @@ class ChunksKVStoresDataset(Dataset):
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len
         chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
-        example = chunk_kvstore[str(idx)]
-        return example
+        binary_serialized_example = chunk_kvstore[str(idx)]
+        with io.BytesIO(binary_serialized_example) as bytes_io_stream:
+            bytes_io_stream.seek(0)
+            return torch.load(bytes_io_stream)
