@@ -9,6 +9,6 @@ confclass
 # torch-sparse==latest+cpu
 # torch-cluster==latest+cpu
 # torch-spline-conv==latest+
-torch-geometric
+# torch-geometric
 typing_extensions
 notify_run
