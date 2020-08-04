@@ -26,7 +26,7 @@ def create_lr_scheduler(model: nn.Module, train_hps: DDFAModelTrainingHyperParam
         -> torch.optim.lr_scheduler._LRScheduler:
     # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
     return torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda epoch: 0.95 ** epoch, last_epoch=-1)
+        optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1)
 
 
 def main():
@@ -104,7 +104,8 @@ def main():
             optimizer.load_state_dict(loaded_checkpoint['optimizer_state_dict'])
         # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
         lr_scheduler = create_lr_scheduler(model, exec_params.experiment_setting.train_hyper_params, optimizer)
-        lr_scheduler.load_state_dict(loaded_checkpoint['lr_scheduler_state_dict'])
+        if loaded_checkpoint:
+            lr_scheduler.load_state_dict(loaded_checkpoint['lr_scheduler_state_dict'])
 
         saved_ckpts = []
         def save_checkpoint(model: nn.Module, optimizer: Optimizer, epoch_nr: int, step_nr: Optional[int] = None):
