@@ -1,5 +1,7 @@
 import torch
 import itertools
+import functools
+import multiprocessing as mp
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
@@ -194,11 +196,22 @@ class RawExtractedExamplesGenerator(Protocol):
     def __call__(self, raw_extracted_data_dir: str) -> Iterable[Any]: ...
 
 
+def catch_preprocess_limit_exceed_error(
+        pp_example_fn: PPExampleFnType, model_hps: DDFAModelHyperParams,
+        code_task_vocabs: CodeTaskVocabs, raw_example):
+    try:
+        pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example)
+        assert pp_example is not None
+        return pp_example
+    except PreprocessLimitExceedError as err:
+        return err
+
+
 def preprocess_code_task_dataset(
         model_hps: DDFAModelHyperParams, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
-        raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
+        raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None, nr_processes: int = 4):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_eval_data_path),
@@ -212,13 +225,17 @@ def preprocess_code_task_dataset(
         chunks_examples_writer = ChunksKVStoreDatasetWriter(
             pp_data_path=pp_data_path, datafold=datafold,
             max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
-        for raw_example in raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path):
-            try:
-                pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example)
+        with mp.pool.Pool(processes=nr_processes) as pool:
+            for pp_example in pool.imap_unordered(
+                    functools.partial(
+                        catch_preprocess_limit_exceed_error,
+                        pp_example_fn=pp_example_fn, model_hps=model_hps, code_task_vocabs=code_task_vocabs),
+                    iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
                 assert pp_example is not None
-                chunks_examples_writer.write_example(pp_example)
-            except PreprocessLimitExceedError as err:
-                pass  # TODO: add to limit exceed statistics
+                if isinstance(pp_example, PreprocessLimitExceedError):
+                    pass  # TODO: add to limit exceed statistics
+                else:
+                    chunks_examples_writer.write_example(pp_example)
 
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
