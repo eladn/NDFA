@@ -24,12 +24,13 @@ def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
                           SerTokenKind.IDENTIFIER, SerTokenKind.LITERAL}
     if token.kind == SerTokenKind.IDENTIFIER:
         return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-                token.identifier_idx]
+                token.identifier_idx,
+                (-1 if token.symbol_idx is None else token.symbol_idx)]
     if token.kind == SerTokenKind.LITERAL:
         return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-                vocabs.kos_tokens.get_word_idx('<PAD>')]  # TODO: add some '<NON-RELEVANT>' special word
+                vocabs.kos_tokens.get_word_idx('<PAD>'), -1]  # TODO: add some '<NON-RELEVANT>' special word
     return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
-            vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))]
+            vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token)), -1]
 
 
 def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>') -> Iterable:
@@ -112,7 +113,8 @@ def preprocess_code_task_example(
         for pdg_node in method_pdg.pdg_nodes], max_length=model_hps.method_code_encoder.max_nr_pdg_nodes,
         pad_word=code_task_vocabs.pdg_node_control_kinds.get_word_idx('<PAD>'))), dtype=torch.long)
     padding_expression = [[code_task_vocabs.tokens_kinds.get_word_idx('<PAD>'),
-                           code_task_vocabs.kos_tokens.get_word_idx('<PAD>')]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
+                           code_task_vocabs.kos_tokens.get_word_idx('<PAD>'),
+                           -1]] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
     cfg_nodes_expressions = torch.tensor(list(truncate_and_pad([
         list(truncate_and_pad(
             [token_to_input_vector(token, code_task_vocabs) for token in get_pdg_node_tokenized_expression(method, pdg_node)],
