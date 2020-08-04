@@ -229,7 +229,7 @@ def preprocess_code_task_dataset(
             for pp_example in pool.imap_unordered(
                     functools.partial(
                         catch_preprocess_limit_exceed_error,
-                        pp_example_fn=pp_example_fn, model_hps=model_hps, code_task_vocabs=code_task_vocabs),
+                        pp_example_fn, model_hps, code_task_vocabs),
                     iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
                 assert pp_example is not None
                 if isinstance(pp_example, PreprocessLimitExceedError):
