@@ -37,8 +37,7 @@ class ChunksKVStoreDatasetWriter:
     def write_example(self, example):
         with io.BytesIO() as bytes_io_stream:
             torch.save(example, bytes_io_stream)
-            bytes_io_stream.seek(0)
-            binary_serialized_example = bytes_io_stream.read()
+            binary_serialized_example = bytes_io_stream.bytes_io_stream.getvalue()
             # now i can store `binary_serialized_example` however i want
         example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
