@@ -24,7 +24,8 @@ class CodeTaskBase(abc.ABC):
 
     def preprocess_dataset(
             self, model_hps: DDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
-            raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None):
+            raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
+            pp_nr_processes: int = 4):
         code_task_vocabs = self.create_or_load_code_task_vocabs(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
         preprocess_code_task_dataset(
@@ -32,7 +33,7 @@ class CodeTaskBase(abc.ABC):
             raw_extracted_examples_generator=functools.partial(self.iterate_raw_examples, model_hps=model_hps),
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
             raw_train_data_path=raw_train_data_path, raw_eval_data_path=raw_eval_data_path,
-            raw_test_data_path=raw_test_data_path)
+            raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes)
 
     @abc.abstractmethod
     def iterate_raw_examples(self, model_hps: DDFAModelHyperParams, raw_extracted_data_dir: str) -> Iterable[Any]:

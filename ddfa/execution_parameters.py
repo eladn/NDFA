@@ -52,6 +52,11 @@ class ModelExecutionParams:
         description="Perform preprocessing of the raw dataset.",
         arg_names=['--preprocess'])
 
+    pp_nr_processes: Optional[int] = confparam(
+        default=4,
+        description="Number of processes to use for preprocessing.",
+        arg_names=['--pp-nr-processes'])
+
     raw_train_data_path: Optional[str] = confparam(
         default=None,
         description="Path to raw train dataset.",

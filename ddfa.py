@@ -86,7 +86,8 @@ def main():
             pp_data_path=exec_params.pp_data_dir_path,
             raw_train_data_path=exec_params.raw_train_data_path,
             raw_eval_data_path=exec_params.raw_eval_data_path,
-            raw_test_data_path=exec_params.raw_test_data_path)
+            raw_test_data_path=exec_params.raw_test_data_path,
+            pp_nr_processes=pp_nr_processes)
 
     model = task.build_model(
         model_hps=exec_params.experiment_setting.model_hyper_params,

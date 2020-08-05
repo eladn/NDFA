@@ -226,6 +226,7 @@ def preprocess_code_task_dataset(
             pp_data_path=pp_data_path, datafold=datafold,
             max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
         with mp.Pool(processes=nr_processes) as pool:
+            # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
             for pp_example in pool.imap_unordered(
                     functools.partial(
                         catch_preprocess_limit_exceed_error,
