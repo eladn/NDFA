@@ -61,11 +61,12 @@ class AttnRNNEncoder(nn.Module):
         rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (batch_size, seq_len, hidden_dim)
         assert rnn_outputs.size() == (batch_size, seq_len, self.hidden_dim)
 
-        outputs = self.attn_layer(sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask)
-        assert outputs.size() == (batch_size, self.hidden_dim)
-
         if not batch_first:
             # TODO: instead of permute in input / output, pass `batch_first` to `pack_padded_sequence()` &
             #  `pad_packed_sequence()` and fix rest of the code to adapt it.
-            outputs = outputs.permute(1, 0, 2)  # (seq_len, batch_size, self.input_dim)
-        return outputs
+            rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (seq_len, batch_size, self.hidden_dim)
+
+        merged_rnn_outputs = self.attn_layer(sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask)
+        assert merged_rnn_outputs.size() == (batch_size, self.hidden_dim)
+
+        return merged_rnn_outputs, rnn_outputs

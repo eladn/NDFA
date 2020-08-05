@@ -4,6 +4,7 @@ import typing
 
 from ddfa.nn_utils.attn_rnn_decoder import AttnRNNDecoder
 from ddfa.code_nn_modules.vocabulary import Vocabulary
+from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 
 class SymbolsDecoder(nn.Module):
@@ -21,8 +22,9 @@ class SymbolsDecoder(nn.Module):
 
     def forward(self, encoder_outputs: torch.Tensor, encoder_outputs_mask: typing.Optional[torch.BoolTensor],
                 symbols_encodings: torch.Tensor, symbols_encodings_mask: typing.Optional[torch.BoolTensor],
+                encoded_symbols_occurrences: typing.Optional[ScatteredEncodings],
                 target_symbols_idxs: typing.Optional[torch.LongTensor]):
         return self.attn_rnn_decoder(
             encoder_outputs=encoder_outputs, encoder_outputs_mask=encoder_outputs_mask,
             output_batched_encodings=symbols_encodings, output_batched_encodings_mask=symbols_encodings_mask,
-            target_idxs=target_symbols_idxs)
+            dyn_vocab_scattered_encodings=encoded_symbols_occurrences, target_idxs=target_symbols_idxs)

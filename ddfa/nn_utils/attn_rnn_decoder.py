@@ -6,6 +6,7 @@ from typing import Optional, Union
 from ddfa.code_nn_modules.vocabulary import Vocabulary
 from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 from ddfa.nn_utils.attention import Attention
+from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 
 __all__ = ['AttnRNNDecoder']
@@ -19,7 +20,7 @@ class AttnRNNDecoder(nn.Module):
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
-        self.encoder_output_len = encoder_output_len # TODO: remove!
+        self.encoder_output_len = encoder_output_len  # TODO: remove!
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim
@@ -44,11 +45,13 @@ class AttnRNNDecoder(nn.Module):
         self.attention_over_encoder_outputs = Attention(
             nr_features=self.encoder_output_dim, project_key=True, project_query=True,
             key_in_features=self.decoder_hidden_dim + self.decoder_output_dim)
+        self.dyn_vocab_linear_projection = nn.Linear(1028, 256)  # TODO: plug-in HPs
 
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: Optional[torch.BoolTensor] = None,
                 output_batched_encodings: Optional[torch.Tensor] = None,
                 output_batched_encodings_mask: Optional[torch.BoolTensor] = None,
+                dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
                 target_idxs: Optional[torch.LongTensor] = None):
         assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
@@ -129,6 +132,12 @@ class AttnRNNDecoder(nn.Module):
                                device=projection_on_batched_target_encodings_wo_common.device))
             assert projection_on_batched_target_encodings_wo_common.size() == (batch_size, nr_output_batched_words_per_example)
 
+            if dyn_vocab_scattered_encodings is not None:
+                dyn_vocab_scattered_encodings_projected = self.dyn_vocab_linear_projection(dyn_vocab_scattered_encodings.encodings)
+                projection_on_dyn_vocab_scattered_encodings_wo_common = torch.bmm(
+                    dyn_vocab_scattered_encodings_projected, next_output_after_linear.unsqueeze(-1)) \
+                    .view(batch_size, dyn_vocab_scattered_encodings.encodings.size()[1])
+
             # (batch_size, decoder_output_dim) * (nr_output_common_embeddings, decoder_output_dim).T
             #   -> (batch_size, nr_output_common_embeddings)
             projection_on_output_common_embeddings = torch.mm(
@@ -136,11 +145,22 @@ class AttnRNNDecoder(nn.Module):
             assert projection_on_output_common_embeddings.size() == (batch_size, self.nr_output_common_embeddings)
 
             projection_on_all_output_encodings = torch.cat(
-                (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common), dim=-1)
+                (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common)
+                + (() if dyn_vocab_scattered_encodings is None else (projection_on_dyn_vocab_scattered_encodings_wo_common,)), dim=-1)
 
-            rnn_cell_output = F.log_softmax(projection_on_all_output_encodings, dim=1)
-            assert rnn_cell_output.size() == (batch_size, nr_all_possible_output_words_encodings)
-            outputs.append(rnn_cell_output)
+            if dyn_vocab_scattered_encodings is None:
+                final_cell_log_softmax_out = F.log_softmax(projection_on_all_output_encodings, dim=1)
+            else:
+                rnn_cell_output = F.softmax(projection_on_all_output_encodings, dim=1)
+                rnn_cell_output_no_dyn_vocab = rnn_cell_output[:, :nr_all_possible_output_words_encodings]
+                assert rnn_cell_output_no_dyn_vocab.size() == (batch_size, nr_all_possible_output_words_encodings)
+                rnn_cell_output_dyn_vocab = rnn_cell_output[:, nr_all_possible_output_words_encodings:]
+                final_cell_softmax_out = rnn_cell_output_no_dyn_vocab.scatter_add(
+                    dim=1,
+                    index=dyn_vocab_scattered_encodings.indices + self.nr_output_common_embeddings,  # We assume the indexing here is w/o the common
+                    src=rnn_cell_output_dyn_vocab)
+                final_cell_log_softmax_out = torch.log(final_cell_softmax_out)
+            outputs.append(final_cell_log_softmax_out)
 
             if not self.training:
                 _, prev_cell_output_idx = rnn_cell_output.topk(1, dim=1)

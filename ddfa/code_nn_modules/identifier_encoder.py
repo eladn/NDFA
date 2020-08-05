@@ -61,7 +61,7 @@ class IdentifierEncoder(nn.Module):
             sub_identifiers_mask = sub_identifiers_mask.flatten(0, 1)  # (bsz * nr_identifiers_in_example, nr_sub_identifiers)
             # quick fix for padding (no identifiers there) to avoid later attn softmax of only -inf values.
             sub_identifiers_mask[:, 0] = True
-        encoded_identifiers = self.attn_rnn_encoder(
+        encoded_identifiers, _ = self.attn_rnn_encoder(
             sequence_input=sub_identifiers_embeddings, mask=sub_identifiers_mask, batch_first=True)
         assert encoded_identifiers.size() == (batch_size * nr_identifiers_in_example, self.embedding_dim)
         return encoded_identifiers.view(batch_size, nr_identifiers_in_example, self.embedding_dim)

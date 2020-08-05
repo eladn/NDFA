@@ -176,10 +176,13 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             encoder_outputs_mask=code_task_input.cfg_nodes_mask,
             symbols_encodings=encoded_code.encoded_symbols,
             symbols_encodings_mask=code_task_input.identifiers_idxs_of_all_symbols_mask,
+            encoded_symbols_occurrences=encoded_code.encoded_symbols_occurrences,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
         self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
 
-        return PredictLoggingCallVarsModelOutput(decoder_outputs=decoder_outputs, all_symbols_encodings=encoded_code.encoded_symbols)
+        return PredictLoggingCallVarsModelOutput(
+            decoder_outputs=decoder_outputs,
+            all_symbols_encodings=encoded_code.encoded_symbols)
 
 
 class PredictLogVarsModelLoss(nn.Module):
