@@ -8,8 +8,6 @@ from warnings import warn
 from typing import Optional
 from torch.utils.data.dataset import Dataset
 
-from ndfa.dataset_properties import DataFold
-
 
 __all__ = ['ChunkedRandomAccessDatasetWriter', 'ChunkedRandomAccessDataset']
 
@@ -19,10 +17,10 @@ class ChunkedRandomAccessDatasetWriter:
     MB_IN_BYTES = 1024 * 1024
     GB_IN_BYTES = 1024 * 1024 * 1024
 
-    def __init__(self, pp_data_path: str, datafold: DataFold,
-                 max_chunk_size_in_bytes: int = GB_IN_BYTES, override: bool = False):
-        self.pp_data_path: str = pp_data_path
-        self.datafold: DataFold = datafold
+    def __init__(self, pp_data_path_prefix: str,
+                 max_chunk_size_in_bytes: int = GB_IN_BYTES,
+                 override: bool = False):
+        self.pp_data_path_prefix: str = pp_data_path_prefix
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
         self.override: bool = override
         self.next_example_idx: int = 0
@@ -40,7 +38,7 @@ class ChunkedRandomAccessDatasetWriter:
         with io.BytesIO() as bytes_io_stream:
             torch.save(example, bytes_io_stream)
             binary_serialized_example = bytes_io_stream.getvalue()
-            # now i can store `binary_serialized_example` however i want
+            # now we can store `binary_serialized_example` however we want (we use `shelve` KV store)
         example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
         chunk_file[str(self.next_example_idx)] = binary_serialized_example
@@ -80,7 +78,7 @@ class ChunkedRandomAccessDatasetWriter:
         self.cur_chunk_file = None
 
     def _get_chunk_filepath(self, chunk_idx: int) -> str:
-        return os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
+        return f'{self.pp_data_path_prefix}.{chunk_idx}.pt'
 
     def enforce_no_further_chunks(self):
         # Remove old extra file chunks
@@ -93,17 +91,16 @@ class ChunkedRandomAccessDatasetWriter:
 
 
 class ChunkedRandomAccessDataset(Dataset):
-    def __init__(self, datafold: DataFold, pp_data_path: str):
-        self.datafold = datafold
-        self.pp_data_path = pp_data_path
+    def __init__(self, pp_data_path_prefix: str):
+        self.pp_data_path_prefix = pp_data_path_prefix
         self._pp_data_chunks_filepaths = []
         self._kvstore_chunks = []
         self._kvstore_chunks_lengths = []
         for chunk_idx in itertools.count():
-            filepath = os.path.join(self.pp_data_path, f'pp_{self.datafold.value.lower()}.{chunk_idx}.pt')
+            filepath = f'{self.pp_data_path_prefix}.{chunk_idx}.pt'
             if not os.path.isfile(filepath) and not os.path.isfile(filepath + '.dat'):
                 if chunk_idx == 0:
-                    raise ValueError(f'Not found `{self.datafold}` dataset in path `{self.pp_data_path}`.')
+                    raise ValueError(f'Could not find dataset in path `{self.pp_data_path_prefix}`.')
                 else:
                     break
             self._pp_data_chunks_filepaths.append(filepath)
@@ -114,7 +111,6 @@ class ChunkedRandomAccessDataset(Dataset):
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
-        # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def _get_chunk_idx_contains_item(self, item_idx: int) -> int:
         assert item_idx < self._len

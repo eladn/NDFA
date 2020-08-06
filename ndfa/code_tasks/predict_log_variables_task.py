@@ -1,3 +1,4 @@
+import os
 import torch
 import typing
 import dataclasses
@@ -212,7 +213,8 @@ class PredictLogVarsModelLoss(nn.Module):
 
 class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
-        super(PredictLogVarsTaskDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
+        super(PredictLogVarsTaskDataset, self).__init__(
+            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'))
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def __getitem__(self, idx):

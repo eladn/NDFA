@@ -1,3 +1,4 @@
+import os
 import torch
 import itertools
 import functools
@@ -236,7 +237,7 @@ def preprocess_code_task_dataset(
         # TODO: add hash of task props & model HPs to perprocessed file name.
         # TODO: aggregate limit exceed statistics and print in the end.
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
-            pp_data_path=pp_data_path, datafold=datafold,
+            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
