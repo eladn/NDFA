@@ -63,6 +63,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
               f'\n\t validation metrics: {val_metrics_results}')
 
     train_step_avg_time = None
+    avg_throughput = None
     for epoch_nr in range(1, nr_epochs + 1):  # TODO: allow resuming from given epoch number
         print(f'Starting training epoch #{epoch_nr} ..')
         for callback in callbacks:
@@ -87,14 +88,18 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
                 train_step_avg_time * 0.8 + cur_step_duration * 0.2
+            cur_step_throughput = batch_nr_examples / cur_step_duration
+            avg_throughput = cur_step_throughput if avg_throughput is None else \
+                avg_throughput * 0.8 + cur_step_throughput * 0.2
             nr_steps_performed_since_last_evaluation += 1
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
             train_epoch_window_loss.update(batch_loss)
             train_epoch_avg_loss = train_epoch_loss_sum/train_epoch_nr_examples
             train_data_loader_with_progress.set_postfix(
-                {'ep': f'{epoch_nr}',
-                 'loss (epoch avg)': f'{train_epoch_avg_loss:.4f}',
+                {'throughput (#ex/s)': f'{avg_throughput:.2f}',
+                 'ep': f'{epoch_nr}',
+                 'loss (ep avg)': f'{train_epoch_avg_loss:.4f}',
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
                  'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
 
