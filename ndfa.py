@@ -8,21 +8,21 @@ from torch.utils.data.dataloader import DataLoader
 from typing import Optional
 import itertools
 
-from ddfa.execution_parameters import ModelExecutionParams
-from ddfa.ddfa_model_hyper_parameters import DDFAModelTrainingHyperParams
-from ddfa.code_tasks.code_task_base import CodeTaskBase
-from ddfa.dataset_properties import DataFold
-from ddfa.nn_utils.train_loop import fit, evaluate
-from ddfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
+from ndfa.execution_parameters import ModelExecutionParams
+from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
+from ndfa.code_tasks.code_task_base import CodeTaskBase
+from ndfa.dataset_properties import DataFold
+from ndfa.nn_utils.train_loop import fit, evaluate
+from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 
 
-def create_optimizer(model: nn.Module, train_hps: DDFAModelTrainingHyperParams) -> Optimizer:
+def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
     # TODO: fully implement (choose optimizer and lr)!
     return torch.optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0)
     # return torch.optim.Adam(model.parameters(), lr=0.0005)
 
 
-def create_lr_scheduler(model: nn.Module, train_hps: DDFAModelTrainingHyperParams, optimizer: Optimizer) \
+def create_lr_scheduler(model: nn.Module, train_hps: NDFAModelTrainingHyperParams, optimizer: Optimizer) \
         -> torch.optim.lr_scheduler._LRScheduler:
     # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
     return torch.optim.lr_scheduler.LambdaLR(
@@ -153,7 +153,7 @@ def main():
 
         train_callbacks = []
         if exec_params.use_notify:
-            from ddfa.nn_utils.notify_train_callback import NotifyCallback
+            from ndfa.nn_utils.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
 
         print('Starting training.')

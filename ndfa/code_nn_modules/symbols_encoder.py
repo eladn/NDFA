@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
-from ddfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
+from ndfa.code_nn_modules.vocabulary import Vocabulary
 
 
 class SymbolsEncoder(nn.Module):

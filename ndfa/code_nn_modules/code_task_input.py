@@ -2,7 +2,7 @@ import torch
 import dataclasses
 from typing import Optional, Dict
 
-from ddfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
+from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     ExampleBasedIndicesBatchFlattenedTensor, TensorWithCollateMask
 
 

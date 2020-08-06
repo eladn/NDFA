@@ -9,13 +9,13 @@ from warnings import warn
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List
 from typing_extensions import Protocol
 
-from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
-from ddfa.dataset_properties import DataFold
-from ddfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
-from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter
-from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
-from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
-from ddfa.misc.tensors_data_class import TensorWithCollateMask
+from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
+from ndfa.dataset_properties import DataFold
+from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
+from ndfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter
+from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ndfa.misc.tensors_data_class import TensorWithCollateMask
 
 
 __all__ = [
@@ -54,7 +54,7 @@ def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
 
 
 def preprocess_code_task_example(
-        model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+        model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
         method: SerMethod, method_pdg: SerMethodPDG, method_ast: SerMethodAST,
         remove_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None,
         pdg_nodes_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodCodeInputToEncoder]:
@@ -202,7 +202,7 @@ def preprocess_code_task_example(
 
 
 class PPExampleFnType(Protocol):
-    def __call__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs, raw_example: Any) -> Any: ...
+    def __call__(self, model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs, raw_example: Any) -> Any: ...
 
 
 class RawExtractedExamplesGenerator(Protocol):
@@ -210,7 +210,7 @@ class RawExtractedExamplesGenerator(Protocol):
 
 
 def catch_preprocess_limit_exceed_error(
-        pp_example_fn: PPExampleFnType, model_hps: DDFAModelHyperParams,
+        pp_example_fn: PPExampleFnType, model_hps: NDFAModelHyperParams,
         code_task_vocabs: CodeTaskVocabs, raw_example):
     try:
         pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example)
@@ -221,7 +221,7 @@ def catch_preprocess_limit_exceed_error(
 
 
 def preprocess_code_task_dataset(
-        model_hps: DDFAModelHyperParams, pp_data_path: str,
+        model_hps: NDFAModelHyperParams, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
         raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None, nr_processes: int = 4):

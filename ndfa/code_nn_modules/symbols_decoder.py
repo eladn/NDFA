@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import typing
 
-from ddfa.nn_utils.attn_rnn_decoder import AttnRNNDecoder
-from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
+from ndfa.nn_utils.attn_rnn_decoder import AttnRNNDecoder
+from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 
 class SymbolsDecoder(nn.Module):

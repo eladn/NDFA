@@ -8,7 +8,7 @@ from warnings import warn
 from typing import Optional
 from torch.utils.data.dataset import Dataset
 
-from ddfa.dataset_properties import DataFold
+from ndfa.dataset_properties import DataFold
 
 
 __all__ = ['ChunksKVStoreDatasetWriter', 'ChunksKVStoresDataset']

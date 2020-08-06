@@ -1,8 +1,8 @@
 from confclass import confclass, confparam
 
-from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams, DDFAModelTrainingHyperParams
-from ddfa.code_tasks.code_task_properties import CodeTaskProperties
-from ddfa.dataset_properties import DatasetProperties
+from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams, NDFAModelTrainingHyperParams
+from ndfa.code_tasks.code_task_properties import CodeTaskProperties
+from ndfa.dataset_properties import DatasetProperties
 
 
 __all__ = ['ExperimentSetting']
@@ -15,14 +15,14 @@ class ExperimentSetting:
         description="Parameters of the code-related task to tackle.",
         arg_prefix='task')
 
-    model_hyper_params: DDFAModelHyperParams = confparam(
-        default_factory=DDFAModelHyperParams,
-        description="DDFA model hyper-parameters.",
+    model_hyper_params: NDFAModelHyperParams = confparam(
+        default_factory=NDFAModelHyperParams,
+        description="NDFA model hyper-parameters.",
         arg_prefix='hp')
 
-    train_hyper_params: DDFAModelTrainingHyperParams = confparam(
-        default_factory=DDFAModelTrainingHyperParams,
-        description="DDFA model training hyper-parameters.",
+    train_hyper_params: NDFAModelTrainingHyperParams = confparam(
+        default_factory=NDFAModelTrainingHyperParams,
+        description="NDFA model training hyper-parameters.",
         arg_prefix='trn')
 
     dataset: DatasetProperties = confparam(

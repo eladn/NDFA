@@ -3,8 +3,8 @@ from notify_run import Notify
 from typing import Dict, Optional
 import multiprocessing as mp
 
-from ddfa.nn_utils.train_callback import TrainCallback
-from ddfa.nn_utils.window_average import WindowAverage
+from ndfa.nn_utils.train_callback import TrainCallback
+from ndfa.nn_utils.window_average import WindowAverage
 
 
 __all__ = ['NotifyCallback']

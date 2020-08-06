@@ -6,12 +6,12 @@ from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
 
-from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.misc.code_data_structure_api import *
-from ddfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
-from ddfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
-from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
-from ddfa.nn_utils.unflatten_batch import unflatten_batch
+from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.misc.code_data_structure_api import *
+from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
+from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
+from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
+from ndfa.nn_utils.unflatten_batch import unflatten_batch
 
 
 @dataclasses.dataclass

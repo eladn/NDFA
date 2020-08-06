@@ -1,6 +1,6 @@
 from typing import Dict
 
-from ddfa.nn_utils.window_average import WindowAverage
+from ndfa.nn_utils.window_average import WindowAverage
 
 
 __all__ = ['TrainCallback']

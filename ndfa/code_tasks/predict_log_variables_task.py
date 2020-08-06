@@ -5,24 +5,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data.dataset import Dataset
 
-from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
-from ddfa.dataset_properties import DatasetProperties, DataFold
-from ddfa.code_tasks.code_task_base import CodeTaskBase
-from ddfa.code_tasks.code_task_properties import CodeTaskProperties
-from ddfa.code_tasks.evaluation_metric_base import EvaluationMetric
-from ddfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
-from ddfa.misc.code_data_structure_api import *
-from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
-from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoresDataset
-from ddfa.misc.tensors_data_class import TensorsDataClass
-from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
-from ddfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
-from ddfa.code_nn_modules.symbols_decoder import SymbolsDecoder
-from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
-from ddfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, truncate_and_pad, \
+from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
+from ndfa.dataset_properties import DatasetProperties, DataFold
+from ndfa.code_tasks.code_task_base import CodeTaskBase
+from ndfa.code_tasks.code_task_properties import CodeTaskProperties
+from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
+from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
+from ndfa.misc.code_data_structure_api import *
+from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
+from ndfa.misc.chunks_kvstore_dataset import ChunksKVStoresDataset
+from ndfa.misc.tensors_data_class import TensorsDataClass
+from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
+from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
+from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, truncate_and_pad, \
     PreprocessLimitExceedError
-from ddfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
-from ddfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
+from ndfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
+from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -33,12 +33,12 @@ class PredictLogVarsTask(CodeTaskBase):
         super(PredictLogVarsTask, self).__init__(task_props)
         # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
-    def iterate_raw_examples(self, model_hps: DDFAModelHyperParams, raw_extracted_data_dir: str) \
+    def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) \
             -> typing.Iterable[RawExtractedExample]:
         return iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_extracted_data_dir)
 
     def preprocess_raw_example(
-            self, model_hps: DDFAModelHyperParams,
+            self, model_hps: NDFAModelHyperParams,
             code_task_vocabs: CodeTaskVocabs,
             raw_example: Any,
             add_tag: bool = True) \
@@ -46,7 +46,7 @@ class PredictLogVarsTask(CodeTaskBase):
         return preprocess_logging_call_example(
             model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example, add_tag=add_tag)
 
-    def build_model(self, model_hps: DDFAModelHyperParams, pp_data_path: str) -> 'PredictLogVarsModel':
+    def build_model(self, model_hps: NDFAModelHyperParams, pp_data_path: str) -> 'PredictLogVarsModel':
         vocabs = self.create_or_load_code_task_vocabs(model_hps=model_hps, pp_data_path=pp_data_path)
         return PredictLogVarsModel(model_hps=model_hps, code_task_vocabs=vocabs)
 
@@ -69,18 +69,18 @@ class PredictLogVarsTask(CodeTaskBase):
         symbol_names = [raw_example.method_pdg.symbols[symbol_idx].symbol_name for symbol_idx in symbol_indices]
         return symbol_names
 
-    def create_dataset(self, model_hps: DDFAModelHyperParams, dataset_props: DatasetProperties,
+    def create_dataset(self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str) -> Dataset:
         return PredictLogVarsTaskDataset(datafold=datafold, pp_data_path=pp_data_path)
 
-    def build_loss_criterion(self, model_hps: DDFAModelHyperParams) -> nn.Module:
+    def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
         return PredictLogVarsModelLoss(model_hps=model_hps)
 
     def collate_examples(self, examples: List['PredictLogVarsTaggedExample']):
         assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
         return PredictLogVarsTaggedExample.collate(examples)
 
-    def evaluation_metrics(self, model_hps: DDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
+    def evaluation_metrics(self, model_hps: NDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):
             def __init__(self):
                 super(LoggingCallTaskEvaluationMetric_, self).__init__(
@@ -88,7 +88,7 @@ class PredictLogVarsTask(CodeTaskBase):
         return [LoggingCallTaskEvaluationMetric_]
 
     def create_or_load_code_task_vocabs(
-            self, model_hps: DDFAModelHyperParams,
+            self, model_hps: NDFAModelHyperParams,
             pp_data_path: str,
             raw_train_data_path: Optional[str] = None) -> CodeTaskVocabs:
         return CodeTaskVocabs.load_or_create(
@@ -141,7 +141,7 @@ class PredictLogVarsTaggedExample(TensorsDataClass):
 
 
 class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
-    def __init__(self, model_hps: DDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs):
+    def __init__(self, model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs):
         super(PredictLogVarsModel, self).__init__()
         ModuleWithDbgTestGrads.__init__(self)
         self.model_hps = model_hps
@@ -186,7 +186,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
 
 
 class PredictLogVarsModelLoss(nn.Module):
-    def __init__(self, model_hps: DDFAModelHyperParams):
+    def __init__(self, model_hps: NDFAModelHyperParams):
         super(PredictLogVarsModelLoss, self).__init__()
         self.model_hps = model_hps
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
@@ -225,7 +225,7 @@ class PredictLogVarsTaskDataset(ChunksKVStoresDataset):
 
 
 def preprocess_logging_call_example(
-        model_hps: DDFAModelHyperParams,
+        model_hps: NDFAModelHyperParams,
         code_task_vocabs: CodeTaskVocabs,
         raw_example: RawExtractedExample,
         add_tag: bool = True) -> typing.Optional[PredictLogVarsTaggedExample]:  # FIXME: is it really optional?

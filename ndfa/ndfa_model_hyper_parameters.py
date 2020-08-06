@@ -2,7 +2,7 @@ from confclass import confclass, confparam
 from typing import Optional
 
 
-__all__ = ['MethodCodeEncoderParams', 'DDFAModelHyperParams', 'DDFAModelTrainingHyperParams']
+__all__ = ['MethodCodeEncoderParams', 'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
 
 
 @confclass
@@ -102,14 +102,14 @@ class MethodCodeEncoderParams:
 
 
 @confclass
-class DDFAModelHyperParams:
+class NDFAModelHyperParams:
     method_code_encoder: MethodCodeEncoderParams = confparam(
         default_factory=MethodCodeEncoderParams,
         arg_prefix='code-encoder')
 
 
 @confclass
-class DDFAModelTrainingHyperParams:
+class NDFAModelTrainingHyperParams:
     dropout_rate: float = confparam(
         default=0.3,
         description="Dropout rate used during training.")

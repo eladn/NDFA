@@ -2,7 +2,7 @@ from confclass import confclass, confparam
 from typing import Optional
 import argparse
 
-from ddfa.experiment_setting import ExperimentSetting
+from ndfa.experiment_setting import ExperimentSetting
 
 
 @confclass

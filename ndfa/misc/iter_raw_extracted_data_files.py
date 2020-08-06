@@ -8,7 +8,7 @@ import dataclasses
 from warnings import warn
 from itertools import takewhile, repeat
 
-from ddfa.misc.code_data_structure_api import *
+from ndfa.misc.code_data_structure_api import *
 
 
 __all__ = ['RawExtractedExample', 'iter_raw_extracted_examples', 'iter_raw_extracted_examples_and_verify']

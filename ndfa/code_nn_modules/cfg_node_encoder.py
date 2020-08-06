@@ -4,9 +4,9 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from typing import Optional
 
-from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder, EncodedExpression
-from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
+from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder, EncodedExpression
+from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 
 @dataclasses.dataclass

@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from typing import Optional
 
-from ddfa.nn_utils.attention import Attention
+from ndfa.nn_utils.attention import Attention
 
 
 __all__ = ['AttnRNNEncoder']

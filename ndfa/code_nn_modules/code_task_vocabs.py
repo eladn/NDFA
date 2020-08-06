@@ -1,9 +1,9 @@
 from typing import NamedTuple
 
-from ddfa.ddfa_model_hyper_parameters import DDFAModelHyperParams
-from ddfa.misc.code_data_structure_api import *
-from ddfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
-from ddfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
+from ndfa.misc.code_data_structure_api import *
+from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
+from ndfa.code_nn_modules.vocabulary import Vocabulary
 
 
 __all__ = ['CodeTaskVocabs', 'kos_token_to_kos_token_vocab_word']
@@ -27,7 +27,7 @@ class CodeTaskVocabs(NamedTuple):
     identifiers_special_words: Vocabulary
 
     @classmethod
-    def load_or_create(cls, model_hps: DDFAModelHyperParams, pp_data_path: str,
+    def load_or_create(cls, model_hps: NDFAModelHyperParams, pp_data_path: str,
                        raw_train_data_path: Optional[str] = None) -> 'CodeTaskVocabs':
         print('Loading / creating code task vocabularies ..')
         vocabs_pad_unk_special_words = ('<PAD>', '<UNK>')

@@ -4,8 +4,8 @@ from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEnc
 from torch.nn.modules.normalization import LayerNorm
 from typing import Union, Optional
 
-from ddfa.code_nn_modules.vocabulary import Vocabulary
-from ddfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
+from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 
 
 class IdentifierEncoder(nn.Module):

@@ -4,13 +4,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import NamedTuple, Optional
 
-from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
-from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
-from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
-from ddfa.code_nn_modules.expression_encoder import ExpressionEncoder
-from ddfa.code_nn_modules.identifier_encoder import IdentifierEncoder
-from ddfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder, EncodedCFGNode
-from ddfa.code_nn_modules.symbols_encoder import SymbolsEncoder
+from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
+from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
+from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
+from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder, EncodedCFGNode
+from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 
 
 __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
