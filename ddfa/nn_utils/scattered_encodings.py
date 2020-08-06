@@ -9,3 +9,4 @@ __all__ = ['ScatteredEncodings']
 class ScatteredEncodings:
     encodings: torch.FloatTensor
     indices: torch.LongTensor
+    mask: torch.BoolTensor

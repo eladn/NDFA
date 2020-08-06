@@ -3,7 +3,7 @@ import dataclasses
 from typing import Optional, Dict
 
 from ddfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
-    ExampleBasedIndicesBatchFlattenedTensor
+    ExampleBasedIndicesBatchFlattenedTensor, TensorWithCollateMask
 
 
 __all__ = ['MethodCodeInputToEncoder']
@@ -23,6 +23,8 @@ class MethodCodeInputToEncoder(TensorsDataClass):
     cfg_edges_attrs: torch.LongTensor
     identifiers_idxs_of_all_symbols: torch.LongTensor
     identifiers_idxs_of_all_symbols_mask: torch.BoolTensor
+    indices_of_symbols_occurrences_in_cfg_nodes_expressions: TensorWithCollateMask
+    symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions: TensorWithCollateMask
 
 
 # TODO: complete impl and use

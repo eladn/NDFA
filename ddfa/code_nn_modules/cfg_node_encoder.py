@@ -12,7 +12,7 @@ from ddfa.nn_utils.scattered_encodings import ScatteredEncodings
 @dataclasses.dataclass
 class EncodedCFGNode:
     encoded_cfg_nodes: torch.Tensor
-    encoded_symbols_occurrences: Optional[ScatteredEncodings] = None
+    encoded_cfg_nodes_expressions: EncodedExpression
 
 
 class CFGNodeEncoder(nn.Module):
@@ -69,4 +69,4 @@ class CFGNodeEncoder(nn.Module):
         assert rnn_outputs.size() == (batch_size, max_nr_cfg_nodes, self.output_dim)
         return EncodedCFGNode(
             encoded_cfg_nodes=rnn_outputs,
-            encoded_symbols_occurrences=encoded_expressions.encoded_symbols_occurrences)
+            encoded_cfg_nodes_expressions=encoded_expressions)

@@ -17,7 +17,7 @@ from ddfa.nn_utils.unflatten_batch import unflatten_batch
 @dataclasses.dataclass
 class EncodedExpression:
     expr_encoded_merge: torch.Tensor
-    encoded_symbols_occurrences: Optional[ScatteredEncodings] = None
+    full_expr_encoded: torch.Tensor
 
 
 class ExpressionEncoder(nn.Module):
@@ -131,30 +131,33 @@ class ExpressionEncoder(nn.Module):
             expr_embeddings_projected_SNE = expr_embeddings_projected.permute(1, 0, 2)  # (nr_tokens_in_expr, bsz, embedding_dim)
             if expressions_mask is not None:
                 expressions_mask = ~expressions_mask.flatten(0, 1)  # (bsz * nr_exprs, nr_tokens_in_expr)
-            expr_encoded = self.transformer_encoder(
+            full_expr_encoded = self.transformer_encoder(
                 expr_embeddings_projected_SNE,
                 src_key_padding_mask=expressions_mask)
-            expr_encoded_merge = expr_encoded.sum(dim=0).view(batch_size, nr_exprs, -1)
+            expr_encoded_merge = full_expr_encoded.sum(dim=0).view(batch_size, nr_exprs, -1)
         elif self.method == 'bi-lstm':
             if expressions_mask is not None:
                 expressions_mask = expressions_mask.flatten(0, 1)  # (bsz * nr_exprs, nr_tokens_in_expr)
                 # quick fix for padding (no expressions there) to avoid later attn softmax of only -inf values.
                 expressions_mask[:, 0] = True
-            expr_encoded_merge, expr_encoded = self.attn_rnn_encoder(
+            expr_encoded_merge, full_expr_encoded = self.attn_rnn_encoder(
                 sequence_input=expr_embeddings_projected, mask=expressions_mask, batch_first=True)
-            expr_encoded = expr_encoded.view(batch_size, nr_exprs, nr_tokens_in_expr, self.expr_encoding_dim)
-            flattened_symbols_occurrences_symbols_idxs = symbols_idxs[use_symbol_condition]
-            flattened_symbols_occurrences_encodings = expr_encoded[use_symbol_condition]
-            batch_example_idx = torch.arange(0, batch_size).unsqueeze(-1).unsqueeze(-1).expand(batch_size, nr_exprs, nr_tokens_in_expr)
-            flattened_symbols_occurrences_batch_example_idx = batch_example_idx[use_symbol_condition]
-            symbols_occurrences_unflattening_indices, nr_symbols_per_example, unflattened_symbols_occurrences_mask = unflatten_batch(
-                flattened_data=torch.arange(symbols_idxs[use_symbol_condition].size()[0]),
-                examples_indices=flattened_symbols_occurrences_batch_example_idx)
-            unflattened_symbols_occurrences_symbols_idxs = flattened_symbols_occurrences_symbols_idxs[symbols_occurrences_unflattening_indices]
-            unflattened_symbols_occurrences_encodings = flattened_symbols_occurrences_encodings[symbols_occurrences_unflattening_indices]
+            full_expr_encoded = full_expr_encoded.view(batch_size, nr_exprs, nr_tokens_in_expr, self.expr_encoding_dim)
+            # flattened_symbols_occurrences_symbols_idxs = symbols_idxs[use_symbol_condition]
+            # flattened_symbols_occurrences_encodings = expr_encoded[use_symbol_condition]
+            # batch_example_idx = torch.arange(0, batch_size).unsqueeze(-1).unsqueeze(-1).expand(batch_size, nr_exprs, nr_tokens_in_expr)
+            # flattened_symbols_occurrences_batch_example_idx = batch_example_idx[use_symbol_condition]
+            # symbols_occurrences_unflattening_indices, nr_symbols_per_example, unflattened_symbols_occurrences_mask = unflatten_batch(
+            #     flattened_data=torch.arange(symbols_idxs[use_symbol_condition].size()[0]),
+            #     examples_indices=flattened_symbols_occurrences_batch_example_idx)
+            # unflattened_symbols_occurrences_symbols_idxs = flattened_symbols_occurrences_symbols_idxs[symbols_occurrences_unflattening_indices]
+            # unflattened_symbols_occurrences_encodings = flattened_symbols_occurrences_encodings[symbols_occurrences_unflattening_indices]
+            # ScatteredEncodings(
+            #     encodings=unflattened_symbols_occurrences_encodings,
+            #     indices=unflattened_symbols_occurrences_symbols_idxs)
+        else:
+            assert False
 
         return EncodedExpression(
             expr_encoded_merge=expr_encoded_merge.view(batch_size, nr_exprs, self.expr_encoding_dim),
-            encoded_symbols_occurrences=ScatteredEncodings(
-                encodings=unflattened_symbols_occurrences_encodings,
-                indices=unflattened_symbols_occurrences_symbols_idxs))
+            full_expr_encoded=full_expr_encoded)

@@ -46,6 +46,7 @@ class AttnRNNDecoder(nn.Module):
             nr_features=self.encoder_output_dim, project_key=True, project_query=True,
             key_in_features=self.decoder_hidden_dim + self.decoder_output_dim)
         self.dyn_vocab_linear_projection = nn.Linear(1028, 256)  # TODO: plug-in HPs
+        self.dyn_vocab_strategy = 'after_softmax'  # in {'before_softmax', 'after_softmax'}
 
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: Optional[torch.BoolTensor] = None,
@@ -53,6 +54,7 @@ class AttnRNNDecoder(nn.Module):
                 output_batched_encodings_mask: Optional[torch.BoolTensor] = None,
                 dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
                 target_idxs: Optional[torch.LongTensor] = None):
+        dyn_vocab_scattered_encodings = None  # TODO: remove!
         assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
         assert output_batched_encodings is None or \
@@ -125,7 +127,7 @@ class AttnRNNDecoder(nn.Module):
                 .view(batch_size, nr_output_batched_words_per_example)
             if output_batched_encodings_mask is not None:
                 # TODO: does it really makes sense to mask this?
-                projection_on_batched_target_encodings_wo_common += torch.where(
+                projection_on_batched_target_encodings_wo_common = projection_on_batched_target_encodings_wo_common + torch.where(
                     output_batched_encodings_mask,
                     torch.zeros(1, dtype=torch.float, device=projection_on_batched_target_encodings_wo_common.device),
                     torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float,
@@ -133,10 +135,36 @@ class AttnRNNDecoder(nn.Module):
             assert projection_on_batched_target_encodings_wo_common.size() == (batch_size, nr_output_batched_words_per_example)
 
             if dyn_vocab_scattered_encodings is not None:
-                dyn_vocab_scattered_encodings_projected = self.dyn_vocab_linear_projection(dyn_vocab_scattered_encodings.encodings)
+                dyn_vocab_scattered_encodings_projected = self.dyn_vocab_linear_projection(
+                    dyn_vocab_scattered_encodings.encodings)
                 projection_on_dyn_vocab_scattered_encodings_wo_common = torch.bmm(
                     dyn_vocab_scattered_encodings_projected, next_output_after_linear.unsqueeze(-1)) \
                     .view(batch_size, dyn_vocab_scattered_encodings.encodings.size()[1])
+
+                if self.dyn_vocab_strategy == 'after_softmax':
+                    # Use this masking is summing occurrences AFTER applying softmax
+                    projection_on_dyn_vocab_scattered_encodings_wo_common = \
+                        projection_on_dyn_vocab_scattered_encodings_wo_common + torch.where(
+                            dyn_vocab_scattered_encodings.mask,  # (bsz, max_nr_symbols_occurrences)
+                            torch.zeros(1, dtype=torch.float,
+                                        device=projection_on_dyn_vocab_scattered_encodings_wo_common.device),
+                            torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float,
+                                       device=projection_on_dyn_vocab_scattered_encodings_wo_common.device))
+                else:
+                    # Use this masking if summing occurrences BEFORE applying softmax
+                    projection_on_dyn_vocab_scattered_encodings_wo_common = \
+                        torch.zeros_like(projection_on_dyn_vocab_scattered_encodings_wo_common).masked_scatter(
+                            mask=dyn_vocab_scattered_encodings.mask,  # (bsz, max_nr_symbols_occurrences)
+                            source=projection_on_dyn_vocab_scattered_encodings_wo_common)
+
+                # print('dyn_vocab_scattered_encodings.encodings', dyn_vocab_scattered_encodings.encodings.size())
+                # print('dyn_vocab_scattered_encodings.indices', dyn_vocab_scattered_encodings.indices.size())
+                # print('dyn_vocab_scattered_encodings.mask', dyn_vocab_scattered_encodings.mask.size())
+                # print('projection_on_dyn_vocab_scattered_encodings_wo_common', projection_on_dyn_vocab_scattered_encodings_wo_common.size())
+                # print('dyn_vocab_scattered_encodings.encodings', dyn_vocab_scattered_encodings.encodings)
+                # print('dyn_vocab_scattered_encodings.indices', dyn_vocab_scattered_encodings.indices)
+                # print('dyn_vocab_scattered_encodings.mask', dyn_vocab_scattered_encodings.mask)
+                # print('projection_on_dyn_vocab_scattered_encodings_wo_common', projection_on_dyn_vocab_scattered_encodings_wo_common)
 
             # (batch_size, decoder_output_dim) * (nr_output_common_embeddings, decoder_output_dim).T
             #   -> (batch_size, nr_output_common_embeddings)
@@ -144,28 +172,46 @@ class AttnRNNDecoder(nn.Module):
                 next_output_after_linear, self.output_common_embedding.weight.t())
             assert projection_on_output_common_embeddings.size() == (batch_size, self.nr_output_common_embeddings)
 
-            projection_on_all_output_encodings = torch.cat(
-                (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common)
-                + (() if dyn_vocab_scattered_encodings is None else (projection_on_dyn_vocab_scattered_encodings_wo_common,)), dim=-1)
+            if self.dyn_vocab_strategy == 'after_softmax':
+                # Use this masking is summing occurrences AFTER applying softmax
+                projection_on_all_output_encodings = torch.cat(
+                    (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common)
+                    + (() if dyn_vocab_scattered_encodings is None else (projection_on_dyn_vocab_scattered_encodings_wo_common,)), dim=-1)
+            else:
+                # Use this masking is summing occurrences BEFORE applying softmax
+                projection_on_all_output_encodings = torch.cat(
+                    (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common), dim=-1)
+                if dyn_vocab_scattered_encodings is not None:
+                    projection_on_all_output_encodings = projection_on_all_output_encodings.scatter_add(
+                        dim=1,
+                        index=dyn_vocab_scattered_encodings.indices + self.nr_output_common_embeddings,  # We assume the indexing here is w/o the common
+                        src=projection_on_dyn_vocab_scattered_encodings_wo_common)
 
             if dyn_vocab_scattered_encodings is None:
                 final_cell_log_softmax_out = F.log_softmax(projection_on_all_output_encodings, dim=1)
             else:
-                rnn_cell_output = F.softmax(projection_on_all_output_encodings, dim=1)
-                rnn_cell_output_no_dyn_vocab = rnn_cell_output[:, :nr_all_possible_output_words_encodings]
-                assert rnn_cell_output_no_dyn_vocab.size() == (batch_size, nr_all_possible_output_words_encodings)
-                rnn_cell_output_dyn_vocab = rnn_cell_output[:, nr_all_possible_output_words_encodings:]
-                final_cell_softmax_out = rnn_cell_output_no_dyn_vocab.scatter_add(
-                    dim=1,
-                    index=dyn_vocab_scattered_encodings.indices + self.nr_output_common_embeddings,  # We assume the indexing here is w/o the common
-                    src=rnn_cell_output_dyn_vocab)
-                final_cell_log_softmax_out = torch.log(final_cell_softmax_out)
+                if self.dyn_vocab_strategy == 'after_softmax':
+                    # Use this masking is summing occurrences AFTER applying softmax
+                    rnn_cell_output = F.softmax(projection_on_all_output_encodings, dim=1)
+                    rnn_cell_output_no_dyn_vocab = rnn_cell_output[:, :nr_all_possible_output_words_encodings]
+                    assert rnn_cell_output_no_dyn_vocab.size() == (batch_size, nr_all_possible_output_words_encodings)
+                    rnn_cell_output_dyn_vocab = rnn_cell_output[:, nr_all_possible_output_words_encodings:]
+                    final_cell_softmax_out = rnn_cell_output_no_dyn_vocab.scatter_add(
+                        dim=1,
+                        index=dyn_vocab_scattered_encodings.indices + self.nr_output_common_embeddings,  # We assume the indexing here is w/o the common
+                        src=rnn_cell_output_dyn_vocab)
+                    final_cell_softmax_out = final_cell_softmax_out + torch.finfo().eps
+                    final_cell_log_softmax_out = final_cell_softmax_out.log()
+                else:
+                    # Use this masking is summing occurrences BEFORE applying softmax
+                    final_cell_log_softmax_out = F.log_softmax(projection_on_all_output_encodings, dim=1)
             outputs.append(final_cell_log_softmax_out)
 
             if not self.training:
-                _, prev_cell_output_idx = rnn_cell_output.topk(1, dim=1)
+                _, prev_cell_output_idx = final_cell_log_softmax_out.topk(1, dim=1)
                 prev_cell_output_idx = prev_cell_output_idx.squeeze(dim=1)
-                assert prev_cell_output_idx.size() == (batch_size,) and prev_cell_output_idx.dtype == torch.long
+                assert prev_cell_output_idx.size() == (batch_size,)
+                assert prev_cell_output_idx.dtype == torch.long
 
         outputs = torch.stack(outputs).permute(1, 0, 2)
         assert outputs.size() == (batch_size, target_seq_len - 1, nr_all_possible_output_words_encodings)  # w/o <SOS>

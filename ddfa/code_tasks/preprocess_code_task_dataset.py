@@ -15,6 +15,7 @@ from ddfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethod
 from ddfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter
 from ddfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ddfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ddfa.misc.tensors_data_class import TensorWithCollateMask
 
 
 __all__ = [
@@ -128,11 +129,18 @@ def preprocess_code_task_example(
     cfg_nodes_expressions_mask = torch.tensor(
         [([1] * min(len(get_pdg_node_tokenized_expression(method, pdg_node)), (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)) +
          [0] * ((model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1) - min(len(get_pdg_node_tokenized_expression(method, pdg_node)), (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1))))
-         if pdg_node.code_sub_token_range_ref is not None else [1] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
+         if pdg_node.code_sub_token_range_ref is not None and (pdg_nodes_to_mask is None or pdg_node.idx not in pdg_nodes_to_mask) else
+         [1] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)
          for pdg_node in itertools.islice(method_pdg.pdg_nodes, model_hps.method_code_encoder.max_nr_pdg_nodes)] +
         [[1] * (model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression + 1)] *
         (model_hps.method_code_encoder.max_nr_pdg_nodes - min(len(method_pdg.pdg_nodes), model_hps.method_code_encoder.max_nr_pdg_nodes)),
         dtype=torch.bool)
+
+    indices_of_symbols_occurrences_in_cfg_nodes_expressions = torch.nonzero(cfg_nodes_expressions[:, :, 2] >= 0, as_tuple=False)
+    symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions = (cfg_nodes_expressions[:, :, 2].flatten(0, 1))[
+        indices_of_symbols_occurrences_in_cfg_nodes_expressions[:, 0] * cfg_nodes_expressions.size()[1] +
+        indices_of_symbols_occurrences_in_cfg_nodes_expressions[:, 1]]
+
     cfg_edges_mask = torch.cat([
         torch.ones(nr_edges, dtype=torch.bool),
         torch.zeros(model_hps.method_code_encoder.max_nr_pdg_edges - nr_edges, dtype=torch.bool)])
@@ -185,7 +193,12 @@ def preprocess_code_task_example(
         cfg_edges_mask=cfg_edges_mask,
         cfg_edges_attrs=cfg_edges_attrs,
         identifiers_idxs_of_all_symbols=symbols_identifier_idxs,
-        identifiers_idxs_of_all_symbols_mask=symbols_identifier_mask)
+        identifiers_idxs_of_all_symbols_mask=symbols_identifier_mask,
+        indices_of_symbols_occurrences_in_cfg_nodes_expressions=TensorWithCollateMask(
+            tensor=indices_of_symbols_occurrences_in_cfg_nodes_expressions),
+        symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions=TensorWithCollateMask(
+            tensor=symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions)
+    )
 
 
 class PPExampleFnType(Protocol):

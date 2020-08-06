@@ -62,16 +62,37 @@ class MethodCodeEncoder(nn.Module):
             identifiers_idxs_of_all_symbols=code_task_input.identifiers_idxs_of_all_symbols,
             identifiers_idxs_of_all_symbols_mask=code_task_input.identifiers_idxs_of_all_symbols_mask)
 
+        assert len(code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()) == 3
+        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()[0] == \
+               code_task_input.batch_size
+        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()[2] == 2
+        flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
+            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size()[2] * \
+            code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 0] + \
+            code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 1]
+        flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
+            flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.unsqueeze(-1)\
+                .expand(flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.size() +
+                        (encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size()[-1],))
+        symbol_occurrences_encodings = torch.gather(
+            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.flatten(1, 2),
+            dim=1, index=flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions)
+        symbols_occurrences_scattered_encodings = ScatteredEncodings(
+            encodings=symbol_occurrences_encodings,
+            indices=code_task_input.symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions.tensor,
+            mask=code_task_input.symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions.collate_mask)
+
         encoded_cfg_nodes_after_bridge = encoded_cfg_nodes.encoded_cfg_nodes
         if self.encoder_decoder_bridge_dense_layers:
             encoded_cfg_nodes_after_bridge = functools.reduce(
                 lambda last_res, cur_layer: self.dropout_layer(F.relu(cur_layer(last_res))),
                 self.encoder_decoder_bridge_dense_layers,
-                encoded_cfg_nodes.flatten(0, 1)).view(encoded_cfg_nodes.encoded_cfg_nodes.size()[:-1] + (-1,))
+                encoded_cfg_nodes.encoded_cfg_nodes.flatten(0, 1))\
+                .view(encoded_cfg_nodes.encoded_cfg_nodes.size()[:-1] + (-1,))
 
         return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes.encoded_cfg_nodes,
             encoded_symbols=encoded_symbols,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge,
-            encoded_symbols_occurrences=encoded_cfg_nodes.encoded_symbols_occurrences)
+            encoded_symbols_occurrences=symbols_occurrences_scattered_encodings)
