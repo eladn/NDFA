@@ -12,7 +12,7 @@ from typing_extensions import Protocol
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
-from ndfa.misc.chunks_kvstore_dataset import ChunksKVStoreDatasetWriter
+from ndfa.misc.chunks_kvstore_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
 from ndfa.misc.tensors_data_class import TensorWithCollateMask
@@ -235,9 +235,9 @@ def preprocess_code_task_dataset(
         print(f'Starting pre-processing data-fold: `{datafold.name}` ..')
         # TODO: add hash of task props & model HPs to perprocessed file name.
         # TODO: aggregate limit exceed statistics and print in the end.
-        chunks_examples_writer = ChunksKVStoreDatasetWriter(
+        chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path=pp_data_path, datafold=datafold,
-            max_chunk_size_in_bytes=ChunksKVStoreDatasetWriter.MB_IN_BYTES * 500)
+            max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
             for pp_example in pool.imap_unordered(

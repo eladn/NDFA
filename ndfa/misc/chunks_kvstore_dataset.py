@@ -11,18 +11,20 @@ from torch.utils.data.dataset import Dataset
 from ndfa.dataset_properties import DataFold
 
 
-__all__ = ['ChunksKVStoreDatasetWriter', 'ChunksKVStoresDataset']
+__all__ = ['ChunkedRandomAccessDatasetWriter', 'ChunkedRandomAccessDataset']
 
 
-class ChunksKVStoreDatasetWriter:
+class ChunkedRandomAccessDatasetWriter:
     KB_IN_BYTES = 1024
     MB_IN_BYTES = 1024 * 1024
     GB_IN_BYTES = 1024 * 1024 * 1024
 
-    def __init__(self, pp_data_path: str, datafold: DataFold, max_chunk_size_in_bytes: int = GB_IN_BYTES):
+    def __init__(self, pp_data_path: str, datafold: DataFold,
+                 max_chunk_size_in_bytes: int = GB_IN_BYTES, override: bool = False):
         self.pp_data_path: str = pp_data_path
         self.datafold: DataFold = datafold
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
+        self.override: bool = override
         self.next_example_idx: int = 0
         self.cur_chunk_idx: Optional[int] = None
         self.cur_chunk_size_in_bytes: Optional[int] = None
@@ -49,7 +51,8 @@ class ChunksKVStoreDatasetWriter:
 
     def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> shelve.Shelf:
         assert example_size_in_bytes < self.max_chunk_size_in_bytes
-        if self.cur_chunk_file is None or self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
+        if self.cur_chunk_file is None or \
+                self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
             if self.cur_chunk_idx is None:
                 self.cur_chunk_idx = 0
             else:
@@ -57,9 +60,11 @@ class ChunksKVStoreDatasetWriter:
                 self.close_last_written_chunk()
             self.cur_chunk_filepath = self._get_chunk_filepath(self.cur_chunk_idx)
             if os.path.isfile(self.cur_chunk_filepath):
-                if self.cur_chunk_idx == 0:
-                    raise ValueError(f'Preprocessed file `{self.cur_chunk_filepath}` already exists. '
-                                     f'Please choose another `--pp-data` path or manually delete it.')
+                if self.cur_chunk_idx == 0 and not self.override:
+                    raise ValueError(
+                        f'Preprocessed file `{self.cur_chunk_filepath}` already exists. '
+                        f'Please either specify `--pp-override` argument, choose another `--pp-data`, '
+                        f'or manually delete it.')
                 else:
                     warn(f'Overwriting existing preprocessed file `{self.cur_chunk_filepath}`.')
                     os.remove(self.cur_chunk_filepath)
@@ -87,7 +92,7 @@ class ChunksKVStoreDatasetWriter:
             os.remove(chunk_filepath)
 
 
-class ChunksKVStoresDataset(Dataset):
+class ChunkedRandomAccessDataset(Dataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
         self.datafold = datafold
         self.pp_data_path = pp_data_path

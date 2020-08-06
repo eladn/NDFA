@@ -13,7 +13,7 @@ from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ndfa.misc.code_data_structure_api import *
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
-from ndfa.misc.chunks_kvstore_dataset import ChunksKVStoresDataset
+from ndfa.misc.chunks_kvstore_dataset import ChunkedRandomAccessDataset
 from ndfa.misc.tensors_data_class import TensorsDataClass
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
@@ -210,7 +210,7 @@ class PredictLogVarsModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-class PredictLogVarsTaskDataset(ChunksKVStoresDataset):
+class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
     def __init__(self, datafold: DataFold, pp_data_path: str):
         super(PredictLogVarsTaskDataset, self).__init__(datafold=datafold, pp_data_path=pp_data_path)
         # TODO: add hash of task props & model HPs to perprocessed file name.
