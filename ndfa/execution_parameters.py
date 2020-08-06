@@ -115,6 +115,11 @@ class ModelExecutionParams:
         arg_prefix='expr'
     )
 
+    batch_size: int = confparam(
+        default=16,
+        description="Actual batch size both for training and for evaluating "
+                    "(must be a divisor of `experiment_setting.train.eff_batch_size` for training).")
+
     use_gpu_if_available: bool = confparam(
         default=True,
         description="Use GPU if available.",
@@ -185,7 +190,10 @@ class ModelExecutionParams:
             raise argparse.ArgumentError(None, "Must specify `--preprocess` if specifying raw data path.")
         if (self.perform_preprocessing or self.perform_training or self.perform_evaluation) and not self.pp_data_dir_path:
             raise argparse.ArgumentError(None, "Must specify `--pp-data` for performing preprocess / train / evaluation.")
-
+        if self.experiment_setting.train_hyper_params.eff_batch_size < self.batch_size or \
+                self.experiment_setting.train_hyper_params.eff_batch_size % self.batch_size != 0:
+            raise argparse.ArgumentError(None, "The effective train batch size must be greater than and a "
+                                               "multiplication of the actual batch size.")
 
 def test_model_execution_params():
     model_execution_params: ModelExecutionParams = ModelExecutionParams.factory(

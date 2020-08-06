@@ -115,12 +115,12 @@ class NDFAModelTrainingHyperParams:
         description="Dropout rate used during training.")
 
     optimizer: str = confparam(
-        choices=('adam',),
-        default='adam')
+        choices=('adam', 'wadam'),
+        default='wadam')
 
-    batch_size: int = confparam(
+    eff_batch_size: int = confparam(
         default=64,
-        description="Batch size both for training and for evaluating.")
+        description="Batch size both for training (must be a multiplication of the used batch size).")
 
     nr_epochs: int = confparam(
         default=2000,

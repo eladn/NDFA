@@ -136,7 +136,7 @@ def main():
             pp_data_path=exec_params.pp_data_dir_path)
         dataloader_cuda_kwargs = {'num_workers': 3, 'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
         train_loader = DataLoader(
-            train_dataset, batch_size=exec_params.experiment_setting.train_hyper_params.batch_size,
+            train_dataset, batch_size=exec_params.batch_size,
             collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
         eval_loader = None
         if exec_params.perform_evaluation:
@@ -166,7 +166,8 @@ def main():
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             criterion=criterion,
-            nr_gradient_accumulation_steps=4,  # TODO: make a train HP
+            nr_gradient_accumulation_steps=
+            exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size,
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
             evaluation_metrics_types=task.evaluation_metrics(
                 model_hps=exec_params.experiment_setting.model_hyper_params),
