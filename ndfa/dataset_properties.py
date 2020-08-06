@@ -14,6 +14,6 @@ class DatasetProperties:
     name: str
     datafold: Optional[str] = confparam(
         default=None,
-        choices=('train', 'eval', 'test'))
+        choices=('train', 'validation', 'test'))
 
     # TODO: add filters properties ...

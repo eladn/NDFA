@@ -24,7 +24,7 @@ class CodeTaskBase(abc.ABC):
 
     def preprocess_dataset(
             self, model_hps: NDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
-            raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
+            raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
             pp_nr_processes: int = 4):
         code_task_vocabs = self.create_or_load_code_task_vocabs(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
@@ -32,7 +32,7 @@ class CodeTaskBase(abc.ABC):
             model_hps=model_hps, pp_data_path=pp_data_path,
             raw_extracted_examples_generator=functools.partial(self.iterate_raw_examples, model_hps=model_hps),
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
-            raw_train_data_path=raw_train_data_path, raw_eval_data_path=raw_eval_data_path,
+            raw_train_data_path=raw_train_data_path, raw_validation_data_path=raw_validation_data_path,
             raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes)
 
     @abc.abstractmethod

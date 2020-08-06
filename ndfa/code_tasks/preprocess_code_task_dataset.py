@@ -224,10 +224,10 @@ def preprocess_code_task_dataset(
         model_hps: NDFAModelHyperParams, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
-        raw_eval_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None, nr_processes: int = 4):
+        raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None, nr_processes: int = 4):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
-        (DataFold.Validation, raw_eval_data_path),
+        (DataFold.Validation, raw_validation_data_path),
         (DataFold.Test, raw_test_data_path))
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:

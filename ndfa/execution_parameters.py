@@ -62,10 +62,10 @@ class ModelExecutionParams:
         description="Path to raw train dataset.",
         arg_names=['--raw-train-data-path'])
 
-    raw_eval_data_path: Optional[str] = confparam(
+    raw_validation_data_path: Optional[str] = confparam(
         default=None,
         description="Path to raw evaluation dataset.",
-        arg_names=['--raw-eval-data-path'])
+        arg_names=['--raw-validation-data-path'])
 
     raw_test_data_path: Optional[str] = confparam(
         default=None,
@@ -184,9 +184,9 @@ class ModelExecutionParams:
             raise argparse.ArgumentError(None, "Must train model in order to save the model.")
         if self.perform_training and not self.should_save_model:
             raise argparse.ArgumentError(None, "Must specify model save path if performing model training.")
-        if self.perform_preprocessing and not (self.raw_train_data_path or self.raw_eval_data_path or self.raw_test_data_path):
+        if self.perform_preprocessing and not (self.raw_train_data_path or self.raw_validation_data_path or self.raw_test_data_path):
             raise argparse.ArgumentError(None, "Must specify raw train/eval/test data path if performing preprocessing.")
-        if not self.perform_preprocessing and (self.raw_train_data_path or self.raw_eval_data_path or self.raw_test_data_path):
+        if not self.perform_preprocessing and (self.raw_train_data_path or self.raw_validation_data_path or self.raw_test_data_path):
             raise argparse.ArgumentError(None, "Must specify `--preprocess` if specifying raw data path.")
         if (self.perform_preprocessing or self.perform_training or self.perform_evaluation) and not self.pp_data_dir_path:
             raise argparse.ArgumentError(None, "Must specify `--pp-data` for performing preprocess / train / evaluation.")
