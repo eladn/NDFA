@@ -4,6 +4,9 @@ from torch.nn.utils.rnn import pad_sequence
 from typing import Tuple, Optional
 
 
+__all__ = ['unflatten_batch', 'unflatten_batch2']
+
+
 def unflatten_batch(flattened_data: torch.Tensor, examples_indices: torch.LongTensor) \
         -> Tuple[torch.Tensor, torch.LongTensor, torch.BoolTensor]:
     assert len(flattened_data.size()) == 1

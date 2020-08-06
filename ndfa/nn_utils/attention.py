@@ -4,6 +4,9 @@ import torch.nn.functional as F
 from typing import Optional
 
 
+__all__ = ['Attention']
+
+
 class Attention(nn.Module):
     def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
                  key_in_features: Optional[int] = None):
