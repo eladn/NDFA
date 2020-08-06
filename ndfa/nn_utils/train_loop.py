@@ -34,7 +34,7 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
                 (nr_batches is not None and batch_idx == nr_batches - 1):
             optimizer.step()
             optimizer.zero_grad()
-    return y_pred, loss.item(), x_batch.batch_size
+    return y_pred, loss.item() * nr_gradient_accumulation_steps, x_batch.batch_size
 
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
