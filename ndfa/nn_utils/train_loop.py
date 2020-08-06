@@ -19,18 +19,18 @@ __all__ = ['fit', 'evaluate']
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
                                 criterion: nn.Module, optimizer: Optional[Optimizer] = None,
                                 batch_idx: Optional[int] = None, nr_batches: Optional[int] = None,
-                                minibatch_size: Optional[int] = None, dbg_test_grads: bool = False):
+                                nr_gradient_accumulation_steps: int = 1, dbg_test_grads: bool = False):
     # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
     x_batch, y_batch = x_batch.to(device), y_batch.to(device)
     y_pred = model(x_batch, y_batch)
-    loss = criterion(y_pred, y_batch)
+    loss = criterion(y_pred, y_batch) / nr_gradient_accumulation_steps
     if optimizer is not None:
         if dbg_test_grads:
             model.dbg_retain_grads()
         loss.backward()
         if dbg_test_grads:
             model.dbg_test_grads()
-        if minibatch_size is None or (batch_idx % minibatch_size) == minibatch_size - 1 or \
+        if nr_gradient_accumulation_steps is None or (batch_idx % nr_gradient_accumulation_steps) == nr_gradient_accumulation_steps - 1 or \
                 (nr_batches is not None and batch_idx == nr_batches - 1):
             optimizer.step()
             optimizer.zero_grad()
@@ -40,7 +40,7 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer,
         lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler], criterion: nn.Module = F.nll_loss,
-        minibatch_size: Optional[int] = None,
+        nr_gradient_accumulation_steps: int = 1,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
         callbacks: Optional[Collection[TrainCallback]] = None,
@@ -83,7 +83,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
-                nr_batches=nr_steps, minibatch_size=minibatch_size)
+                nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps)
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
                 train_step_avg_time * 0.8 + cur_step_duration * 0.2

@@ -166,7 +166,7 @@ def main():
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             criterion=criterion,
-            minibatch_size=16,  # TODO: make a train HP
+            nr_gradient_accumulation_steps=4,  # TODO: make a train HP
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
             evaluation_metrics_types=task.evaluation_metrics(
                 model_hps=exec_params.experiment_setting.model_hyper_params),
