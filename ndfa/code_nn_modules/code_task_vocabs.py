@@ -1,19 +1,13 @@
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
-from ndfa.misc.code_data_structure_api import *
+from ndfa.misc.code_data_structure_api import SerTokenKind, SerToken
+from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 
 
 __all__ = ['CodeTaskVocabs', 'kos_token_to_kos_token_vocab_word']
-
-
-# TODO: put in utils
-def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
-    return method.code.tokenized[
-        pdg_node.code_sub_token_range_ref.begin_token_idx:
-        pdg_node.code_sub_token_range_ref.end_token_idx+1]
 
 
 class CodeTaskVocabs(NamedTuple):

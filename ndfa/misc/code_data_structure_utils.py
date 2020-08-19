@@ -1,11 +1,18 @@
-from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST
+from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 from functools import reduce
 from typing import Tuple, Set
 
 
-__all__ = ['find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call']
+__all__ = [
+    'get_pdg_node_tokenized_expression', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call']
+
+
+def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
+    return method.code.tokenized[
+        pdg_node.code_sub_token_range_ref.begin_token_idx:
+        pdg_node.code_sub_token_range_ref.end_token_idx+1]
 
 
 def find_all_simple_names_in_sub_ast(ast_node: SerASTNode, method_ast: SerMethodAST) -> Set[str]:

@@ -13,6 +13,7 @@ from typing_extensions import Protocol
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
+from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
@@ -45,13 +46,6 @@ def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>
 
 class PreprocessLimitExceedError(ValueError):
     pass
-
-
-# TODO: put in utils
-def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
-    return method.code.tokenized[
-        pdg_node.code_sub_token_range_ref.begin_token_idx:
-        pdg_node.code_sub_token_range_ref.end_token_idx+1]
 
 
 def preprocess_code_task_example(
