@@ -3,12 +3,13 @@ import dataclasses
 from typing import Optional, Dict
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
-    ExampleBasedIndicesBatchFlattenedTensor, TensorWithCollateMask
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor
 
 
 __all__ = ['MethodCodeInputToEncoder']
 
 
+# TODO: this is an old impl - REMOVE!
 @dataclasses.dataclass
 class MethodCodeInputToEncoder(TensorsDataClass):
     method_hash: str
@@ -29,20 +30,32 @@ class MethodCodeInputToEncoder(TensorsDataClass):
 
 # TODO: complete impl and use
 @dataclasses.dataclass
-class TokenizedCodeExpressionsInputTensors(TensorsDataClass):
-    token_type: torch.LongTensor  # (nr_expressions_in_batch, max_nr_tokens_in_expr)
-    kos_token_index: torch.LongTensor  # (nr_expressions_in_batch, max_nr_tokens_in_expr)
-    identifier_token_index: torch.LongTensor  # (nr_expressions_in_batch, max_nr_tokens_in_expr)
-    lengths: torch.LongTensor  # (nr_expressions_in_batch, )
-    example_idx: torch.LongTensor = dataclasses.field(init=False, default=None)  # (nr_expressions_in_batch, )
+class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
+    token_type: BatchFlattenedSeq  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    kos_token_index: BatchFlattenedTensor  # (nr_kos_tokens_in_all_expressions_in_batch,)
+    identifier_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_identifier_tokens_in_all_expressions_in_batch,)
 
 
 # TODO: complete impl and use
 @dataclasses.dataclass
 class SymbolsInputTensors(TensorsDataClass):  # TODO: inherit from some other version of `TensorsDataClass` that supports indexing
-    symbols_identifier_indices: torch.LongTensor
-    symbols_appearances_in_cfg_expressions: Optional[torch.LongTensor] = None
-    symbols_appearances_in_method_code: Optional[torch.LongTensor] = None
+    symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_in_batch,);  value meaning: identifier batched index
+    symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_appearances,);
+    symbols_appearances_expression_token_idx: BatchedFlattenedIndicesFlattenedTensor = None  # (nr_symbols_appearances,);
+    symbols_appearances_cfg_expression_idx: BatchedFlattenedIndicesFlattenedTensor = None  # (nr_symbols_appearances,);
+
+
+class PDGInputTensors(TensorsDataClass):
+    cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
+    cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
+    cfg_nodes_tokenized_expressions: Optional[CodeExpressionTokensSequenceInputTensors] = None
+    # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = None
+
+    # cfg_edges: Optional[torch.LongTensor] = None
+    # cfg_edges_lengths: Optional[torch.BoolTensor] = None
+    # cfg_edges_attrs: Optional[torch.LongTensor] = None
+
+    # cfg_control_flow_paths: Optional[Dict[str, ExampleBasedIndicesBatchFlattenedTensor]] = None
 
 
 # TODO: complete impl and use
@@ -50,17 +63,8 @@ class SymbolsInputTensors(TensorsDataClass):  # TODO: inherit from some other ve
 class MethodCodeInputTensors(TensorsDataClass):
     method_hash: str
 
-    identifiers_sub_parts: BatchFlattenedSeq  # (nr_identifiers_in_batch, max_nr_sub_parts_in_identifier)
+    identifiers_sub_parts: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     symbols: SymbolsInputTensors
 
-    method_tokenized_code: Optional[TokenizedCodeExpressionsInputTensors] = None
-
-    cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
-    cfg_nodes_tokenized_expressions: Optional[TokenizedCodeExpressionsInputTensors] = None
-    cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = None
-
-    cfg_edges: Optional[torch.LongTensor] = None
-    cfg_edges_lengths: Optional[torch.BoolTensor] = None
-    cfg_edges_attrs: Optional[torch.LongTensor] = None
-
-    cfg_control_flow_paths: Optional[Dict[str, ExampleBasedIndicesBatchFlattenedTensor]] = None
+    method_tokenized_code: Optional[CodeExpressionTokensSequenceInputTensors] = None
+    pdg: Optional[PDGInputTensors] = None
