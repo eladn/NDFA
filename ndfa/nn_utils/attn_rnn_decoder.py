@@ -54,7 +54,6 @@ class AttnRNNDecoder(nn.Module):
                 output_batched_encodings_mask: Optional[torch.BoolTensor] = None,
                 dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
                 target_idxs: Optional[torch.LongTensor] = None):
-        dyn_vocab_scattered_encodings = None  # TODO: remove!
         assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
         assert output_batched_encodings is None or \
