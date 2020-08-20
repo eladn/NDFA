@@ -29,9 +29,9 @@ class AttnRNNDecoder(nn.Module):
         self.output_common_vocab = output_common_vocab
         assert (output_common_embedding is None) ^ (output_common_vocab is not None)
         assert output_common_embedding is None or \
-               output_common_embedding.weight.size()[1] == self.decoder_output_dim
+               output_common_embedding.weight.size(1) == self.decoder_output_dim
         self.nr_output_common_embeddings = 0 if self.output_common_embedding is None else \
-            self.output_common_embedding.weight.size()[0]
+            self.output_common_embedding.weight.size(0)
         assert output_common_vocab is None or len(output_common_vocab) == self.nr_output_common_embeddings
         self.nr_rnn_layers = nr_rnn_layers
         rnn_type = nn.LSTM if rnn_type == 'lstm' else nn.GRU
@@ -54,13 +54,13 @@ class AttnRNNDecoder(nn.Module):
                 output_batched_encodings_mask: Optional[torch.BoolTensor] = None,
                 dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
                 target_idxs: Optional[torch.LongTensor] = None):
-        assert len(encoder_outputs.size()) == 3  # (batch_size, encoder_output_len, encoder_output_dim)
+        assert encoder_outputs.ndim == 3  # (batch_size, encoder_output_len, encoder_output_dim)
         batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
         assert output_batched_encodings is None or \
-               len(output_batched_encodings.size()) == 3 and \
-               output_batched_encodings.size()[0] == batch_size and \
-               output_batched_encodings.size()[2] == self.decoder_output_dim
-        nr_output_batched_words_per_example = output_batched_encodings.size()[1]
+               output_batched_encodings.ndim == 3 and \
+               output_batched_encodings.size(0) == batch_size and \
+               output_batched_encodings.size(2) == self.decoder_output_dim
+        nr_output_batched_words_per_example = output_batched_encodings.size(1)
         nr_all_possible_output_words_encodings = nr_output_batched_words_per_example + self.nr_output_common_embeddings
         assert output_batched_encodings_mask is None or output_batched_encodings_mask.size() == \
                (batch_size, nr_output_batched_words_per_example)
@@ -82,8 +82,8 @@ class AttnRNNDecoder(nn.Module):
         target_seq_len = self.max_target_seq_len
         if self.training:
             assert target_idxs is not None
-            assert len(target_idxs.size()) == 2 and target_idxs.size()[0] == batch_size
-            target_seq_len = target_idxs.size()[1]
+            assert target_idxs.ndim == 2 and target_idxs.size(0) == batch_size
+            target_seq_len = target_idxs.size(1)
             assert target_seq_len <= self.max_target_seq_len
             target_encodings = apply_batched_embeddings(
                 batched_embeddings=output_batched_encodings, indices=target_idxs,
@@ -138,7 +138,7 @@ class AttnRNNDecoder(nn.Module):
                     dyn_vocab_scattered_encodings.encodings)
                 projection_on_dyn_vocab_scattered_encodings_wo_common = torch.bmm(
                     dyn_vocab_scattered_encodings_projected, next_output_after_linear.unsqueeze(-1)) \
-                    .view(batch_size, dyn_vocab_scattered_encodings.encodings.size()[1])
+                    .view(batch_size, dyn_vocab_scattered_encodings.encodings.size(1))
 
                 if self.dyn_vocab_strategy == 'after_softmax':
                     # Use this masking is summing occurrences AFTER applying softmax

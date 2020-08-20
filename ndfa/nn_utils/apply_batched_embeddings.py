@@ -12,18 +12,18 @@ def apply_batched_embeddings(
         mask: Optional[torch.Tensor] = None, padding_embedding_vector: Optional[torch.Tensor] = None,
         common_embeddings: Optional[Union[torch.Tensor, nn.Embedding]] = None) -> torch.Tensor:
     indices_device = indices.device
-    assert len(batched_embeddings.size()) == 3  # (batch_size, nr_words_per_example, embedding_dim)
+    assert batched_embeddings.ndim == 3  # (batch_size, nr_words_per_example, embedding_dim)
     assert indices.dtype in {torch.int, torch.int32, torch.int64, torch.long}
-    assert len(indices.size()) >= 1
-    assert batched_embeddings.size()[0] == indices.size()[0]  # same batch_size
+    assert indices.ndim >= 1
+    assert batched_embeddings.size(0) == indices.size(0)  # same batch_size
     batch_size, nr_words_per_example, embedding_dim = batched_embeddings.size()
     assert common_embeddings is None or \
            (isinstance(common_embeddings, torch.Tensor) and
-            len(common_embeddings.size()) == 2 and common_embeddings.size()[1] == embedding_dim) or \
+            common_embeddings.ndim == 2 and common_embeddings.size(1) == embedding_dim) or \
            (isinstance(common_embeddings, nn.Embedding) and common_embeddings.embedding_dim == embedding_dim)
     assert (mask is None) ^ (padding_embedding_vector is not None)
     assert padding_embedding_vector is None or \
-           (len(padding_embedding_vector.size()) == 1 and padding_embedding_vector.size()[0] == embedding_dim)
+           (padding_embedding_vector.ndim == 1 and padding_embedding_vector.size(0) == embedding_dim)
     assert mask is None or mask.size() == indices.size()
     assert mask is None or mask.dtype == torch.bool
     if common_embeddings is not None and mask is not None:
@@ -55,7 +55,7 @@ def apply_batched_embeddings(
             padding_embedding_vector)  # (batch_size * nr_indices_per_example, embedding_dim)
     else:  # common_embeddings is not None
         nr_common_embeddings = common_embeddings.num_embeddings if isinstance(common_embeddings, nn.Embedding) else \
-            int(common_embeddings.size()[0])
+            int(common_embeddings.size(0))
         use_common_embeddings_mask = (indices_flattened < nr_common_embeddings)
         indices_flattened_with_fixed_offsets = torch.where(
             use_common_embeddings_mask,
@@ -123,7 +123,7 @@ def apply_batched_embeddings_test():
     assert torch.all(applied_embd == wo_common_wo_mask_expected_result)
 
     # test for the case of a single sequence per example.
-    for seq_idx in range(wo_common_wo_mask_expected_result.size()[1]):
+    for seq_idx in range(wo_common_wo_mask_expected_result.size(1)):
         applied_embd = apply_batched_embeddings(
             batched_embeddings=batched_embeddings,
             indices=indices_multiple_seqs_per_example[:, seq_idx, :])
@@ -178,8 +178,8 @@ def apply_batched_embeddings_test():
     assert applied_embd.size() == with_used_common_wo_mask_expected_result.size()
     assert torch.all(applied_embd == with_used_common_wo_mask_expected_result)
     common_embeddings_as_embedding_layer = nn.Embedding(
-        num_embeddings=common_embeddings.size()[0],
-        embedding_dim=common_embeddings.size()[1],
+        num_embeddings=common_embeddings.size(0),
+        embedding_dim=common_embeddings.size(1),
         _weight=common_embeddings.float())
     applied_embd = apply_batched_embeddings(
         batched_embeddings=batched_embeddings.float(),

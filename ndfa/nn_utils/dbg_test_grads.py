@@ -23,13 +23,13 @@ class ModuleWithDbgTestGrads:
     def dbg_test_grads_after_bwd(self, grad_test_example_idx: int = 3, isclose_atol=1e-07):
         assert self.is_grads_dbg_enabled
         assert all(tensor.grad.size() == tensor.size() for tensor in self._dbg__tensors_to_check_grads.values())
-        assert all(tensor.grad.size()[0] == next(iter(self._dbg__tensors_to_check_grads.values())).grad.size()[0]
+        assert all(tensor.grad.size(0) == next(iter(self._dbg__tensors_to_check_grads.values())).grad.size(0)
                    for tensor in self._dbg__tensors_to_check_grads.values())
         for name, tensor in self._dbg__tensors_to_check_grads.items():
             print(f'Checking tensor `{name}` of shape {tensor.size()}:')
             # print(tensor.grad.cpu())
             grad = tensor.grad.cpu()
-            batch_size = grad.size()[0]
+            batch_size = grad.size(0)
             if not all(grad[example_idx].allclose(torch.tensor(0.0), atol=isclose_atol) for example_idx in
                        range(batch_size) if example_idx != grad_test_example_idx):
                 print(
@@ -49,10 +49,10 @@ class ModuleWithDbgTestGrads:
             else:
                 print(
                     f'Success: Tensor `{name}` of shape {tensor.size()} for example #{grad_test_example_idx} is not all zero.')
-                if len(tensor.size()) > 1:
+                if tensor.ndim > 1:
                     sub_objects_iszero = torch.tensor(
                         [grad[grad_test_example_idx, sub_object_idx].allclose(torch.tensor(0.0), atol=isclose_atol)
-                         for sub_object_idx in range(tensor.size()[1])])
+                         for sub_object_idx in range(tensor.size(1))])
                     print(f'sub_objects_nonzero: {~sub_objects_iszero} (sum: {(~sub_objects_iszero).sum()})')
             print()
 

@@ -26,7 +26,7 @@ class AttnRNNEncoder(nn.Module):
 
     def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,
                 lengths: Optional[torch.Tensor] = None, batch_first: bool = False):
-        assert len(sequence_input.size()) == 3 and sequence_input.size()[2] == self.input_dim
+        assert sequence_input.ndim == 3 and sequence_input.size(2) == self.input_dim
         if batch_first:
             # TODO: instead of permute in input / output, pass `batch_first` to `pack_padded_sequence()` &
             #  `pad_packed_sequence()` and fix rest of the code to adapt it.

@@ -22,7 +22,7 @@ class Attention(nn.Module):
                 attn_weights: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None):
         assert (attn_key_from is None) ^ (attn_weights is None)
         assert attn_weights is None or self.key_linear_projection_layer is None
-        assert len(sequences.size()) == 3  # (bsz, seq_len, nr_features)
+        assert sequences.ndim == 3  # (bsz, seq_len, nr_features)
         batch_size, seq_len, nr_features = sequences.size()
         assert attn_key_from is None or attn_key_from.size() == (batch_size, self.key_in_features)
         assert attn_weights is None or attn_weights.size() == (batch_size, seq_len)

@@ -133,7 +133,7 @@ def preprocess_code_task_example(
 
     indices_of_symbols_occurrences_in_cfg_nodes_expressions = torch.nonzero(cfg_nodes_expressions[:, :, 2] >= 0, as_tuple=False)
     symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions = (cfg_nodes_expressions[:, :, 2].flatten(0, 1))[
-        indices_of_symbols_occurrences_in_cfg_nodes_expressions[:, 0] * cfg_nodes_expressions.size()[1] +
+        indices_of_symbols_occurrences_in_cfg_nodes_expressions[:, 0] * cfg_nodes_expressions.size(1) +
         indices_of_symbols_occurrences_in_cfg_nodes_expressions[:, 1]]
 
     cfg_edges_mask = torch.cat([

@@ -35,7 +35,7 @@ class IdentifierEncoder(nn.Module):
                 sub_identifiers_mask: Optional[torch.BoolTensor] = None):
         assert isinstance(sub_identifiers_indices, torch.Tensor)
         assert sub_identifiers_indices.dtype == torch.long
-        assert len(sub_identifiers_indices.size()) == 3
+        assert sub_identifiers_indices.ndim == 3
         assert sub_identifiers_mask is None or (sub_identifiers_mask.dtype == torch.bool and
                                                 sub_identifiers_mask.size() == sub_identifiers_indices.size())
         batch_size, nr_identifiers_in_example, nr_sub_identifiers_in_identifier = sub_identifiers_indices.size()

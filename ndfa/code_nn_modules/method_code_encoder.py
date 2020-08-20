@@ -62,18 +62,18 @@ class MethodCodeEncoder(nn.Module):
             identifiers_idxs_of_all_symbols=code_task_input.identifiers_idxs_of_all_symbols,
             identifiers_idxs_of_all_symbols_mask=code_task_input.identifiers_idxs_of_all_symbols_mask)
 
-        assert len(code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()) == 3
-        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()[0] == \
+        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.ndim == 3
+        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size(0) == \
                code_task_input.batch_size
-        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size()[2] == 2
+        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size(2) == 2
         flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
-            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size()[2] * \
+            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size(2) * \
             code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 0] + \
             code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 1]
         flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
             flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.unsqueeze(-1)\
                 .expand(flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.size() +
-                        (encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size()[-1],))
+                        (encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size(-1),))
         symbol_occurrences_encodings = torch.gather(
             encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.flatten(1, 2),
             dim=1, index=flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions)

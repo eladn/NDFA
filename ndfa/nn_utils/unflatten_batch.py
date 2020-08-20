@@ -9,19 +9,19 @@ __all__ = ['unflatten_batch', 'unflatten_batch2']
 
 def unflatten_batch(flattened_data: torch.Tensor, examples_indices: torch.LongTensor) \
         -> Tuple[torch.Tensor, torch.LongTensor, torch.BoolTensor]:
-    assert len(flattened_data.size()) == 1
-    assert len(examples_indices.size()) == 1
-    batch_range = torch.arange(1, examples_indices.size()[0] + 1, device=flattened_data.device)
+    assert flattened_data.ndim == 1
+    assert examples_indices.ndim == 1
+    batch_range = torch.arange(1, examples_indices.size(0) + 1, device=flattened_data.device)
     indices_of_last_item_per_example = batch_range[
         examples_indices != torch.cat((examples_indices[1:], examples_indices[-1].unsqueeze(-1) + 1))]
     nr_items_per_example = indices_of_last_item_per_example - torch.cat((torch.tensor([0]), indices_of_last_item_per_example[:-1]))
     # performance note: here we move data GPU->CPU and later back to GPU
     list_of_tensor_seq_per_example = torch.split(flattened_data, nr_items_per_example.tolist())
-    batch_size = nr_items_per_example.size()[0]
+    batch_size = nr_items_per_example.size(0)
     # packed_seq = pack_sequence(list_of_tensor_seq_per_example, enforce_sorted=False)
     # pad_packed_sequence(packed_seq, batch_first=True)
     unflattened_data = pad_sequence(list_of_tensor_seq_per_example, batch_first=True)
-    max_nr_items_per_example = unflattened_data.size()[1]
+    max_nr_items_per_example = unflattened_data.size(1)
     mask = nr_items_per_example.unsqueeze(-1).expand(batch_size, max_nr_items_per_example) >= \
            torch.arange(1, max_nr_items_per_example + 1, device=flattened_data.device).unsqueeze(0)\
                .expand(batch_size, max_nr_items_per_example)
@@ -33,12 +33,12 @@ def unflatten_batch2(
         batch_size: Optional[int] = None, batch_range: Optional[torch.Tensor] = None,
         max_nr_items_per_example: Optional[int] = None) \
         -> Tuple[torch.Tensor, torch.LongTensor, torch.BoolTensor]:
-    assert len(flattened_data.size()) == 1
-    assert len(examples_indices.size()) == 1
+    assert flattened_data.ndim == 1
+    assert examples_indices.ndim == 1
     if batch_size is None:
         batch_size = examples_indices[-1].item() + 1
     if batch_range is None:
-        batch_range = torch.arange(1, examples_indices.size()[0] + 1, device=flattened_data.device)
+        batch_range = torch.arange(1, examples_indices.size(0) + 1, device=flattened_data.device)
     last_item_per_example_mask = \
         examples_indices != torch.cat((examples_indices[1:], examples_indices[-1].unsqueeze(-1) + 1))
     first_item_per_example_mask = \

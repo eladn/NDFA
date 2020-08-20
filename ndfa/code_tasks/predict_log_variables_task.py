@@ -105,10 +105,9 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
         batch_target_symbols_indices = target
         _, batch_pred_symbols_indices = y_hat.decoder_outputs.topk(k=1, dim=-1)
         batch_pred_symbols_indices = batch_pred_symbols_indices.squeeze(dim=-1)
-        assert len(batch_pred_symbols_indices.size()) == len(batch_target_symbols_indices.size()) == 2
-        assert batch_pred_symbols_indices.size()[0] == batch_target_symbols_indices.size()[0]  # bsz
-        assert batch_pred_symbols_indices.size()[1] + 1 == batch_target_symbols_indices.size()[
-            1]  # seq_len; prefix `<SOS>` is not predicted.
+        assert batch_pred_symbols_indices.ndim == batch_target_symbols_indices.ndim == 2
+        assert batch_pred_symbols_indices.size(0) == batch_target_symbols_indices.size(0)  # bsz
+        assert batch_pred_symbols_indices.size(1) + 1 == batch_target_symbols_indices.size(1)  # seq_len; prefix `<SOS>` is not predicted.
         batch_pred_symbols_indices = batch_pred_symbols_indices.numpy()
         batch_target_symbols_indices = batch_target_symbols_indices.numpy()
         batch_size = batch_target_symbols_indices.shape[0]
@@ -195,18 +194,18 @@ class PredictLogVarsModelLoss(nn.Module):
 
     def dbg_forward_test_grads(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
         # Change this to be the forward() when debugging gradients.
-        assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
-        assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
-        assert model_output.decoder_outputs.size()[0] == target_symbols_idxs.size()[0]  # bsz
-        assert model_output.decoder_outputs.size()[1] + 1 == target_symbols_idxs.size()[1]  # nr_target_symbols
+        assert model_output.decoder_outputs.ndim == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
+        assert target_symbols_idxs.ndim == 2  # (bsz, nr_target_symbols)
+        assert model_output.decoder_outputs.size(0) == target_symbols_idxs.size(0)  # bsz
+        assert model_output.decoder_outputs.size(1) + 1 == target_symbols_idxs.size(1)  # nr_target_symbols
         assert target_symbols_idxs.dtype == torch.long
         return model_output.decoder_outputs[self.dbg__example_idx_to_test_grads, :, :].sum()
 
     def forward(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
-        assert len(model_output.decoder_outputs.size()) == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
-        assert len(target_symbols_idxs.size()) == 2  # (bsz, nr_target_symbols)
-        assert model_output.decoder_outputs.size()[0] == target_symbols_idxs.size()[0]  # bsz
-        assert model_output.decoder_outputs.size()[1] + 1 == target_symbols_idxs.size()[1]  # nr_target_symbols
+        assert model_output.decoder_outputs.ndim == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
+        assert target_symbols_idxs.ndim == 2  # (bsz, nr_target_symbols)
+        assert model_output.decoder_outputs.size(0) == target_symbols_idxs.size(0)  # bsz
+        assert model_output.decoder_outputs.size(1) + 1 == target_symbols_idxs.size(1)  # nr_target_symbols
         assert target_symbols_idxs.dtype == torch.long
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 

@@ -42,17 +42,17 @@ class CFGNodeEncoder(nn.Module):
         encoded_expressions: EncodedExpression = self.expression_encoder(
             expressions=cfg_nodes_expressions, expressions_mask=cfg_nodes_expressions_mask,
             encoded_identifiers=encoded_identifiers)
-        assert len(cfg_nodes_control_kind.size()) == 2  # (batch_size, nr_cfg_nodes)
-        assert len(cfg_nodes_mask.size()) == 2  # (batch_size, nr_cfg_nodes)
+        assert cfg_nodes_control_kind.ndim == 2  # (batch_size, nr_cfg_nodes)
+        assert cfg_nodes_mask.ndim == 2  # (batch_size, nr_cfg_nodes)
         assert cfg_nodes_control_kind.size() == cfg_nodes_mask.size()
         embedded_cfg_nodes_control_kind = self.pdg_node_control_kinds_embeddings(cfg_nodes_control_kind.flatten())\
             .view(cfg_nodes_control_kind.size() + (-1,))  # (batch_size, nr_cfg_nodes, control_kind_embedding)
-        assert len(encoded_expressions.expr_encoded_merge.size()) == len(embedded_cfg_nodes_control_kind.size()) == 3
+        assert encoded_expressions.expr_encoded_merge.ndim == embedded_cfg_nodes_control_kind.ndim == 3
         assert encoded_expressions.expr_encoded_merge.size()[:-1] == embedded_cfg_nodes_control_kind.size()[:-1]
         cfg_nodes_encodings = torch.cat([encoded_expressions.expr_encoded_merge, embedded_cfg_nodes_control_kind], dim=-1)  # (batch_size, nr_cfg_nodes, expr_embed_dim + control_kind_embedding)
 
-        batch_size = cfg_nodes_mask.size()[0]
-        max_nr_cfg_nodes = cfg_nodes_mask.size()[1]
+        batch_size = cfg_nodes_mask.size(0)
+        max_nr_cfg_nodes = cfg_nodes_mask.size(1)
         nr_cfg_nodes = None if cfg_nodes_mask is None else cfg_nodes_mask.long().sum(dim=1)
         nr_cfg_nodes = torch.where(nr_cfg_nodes <= torch.zeros(1, dtype=torch.long, device=nr_cfg_nodes.device),
                                    torch.ones(1, dtype=torch.long, device=nr_cfg_nodes.device), nr_cfg_nodes)
@@ -60,7 +60,7 @@ class CFGNodeEncoder(nn.Module):
             cfg_nodes_encodings.permute(1, 0, 2), lengths=nr_cfg_nodes, enforce_sorted=False)
         rnn_outputs, (_, _) = self.rnn_layer(packed_input)
         rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
-        max_nr_cfg_nodes = rnn_outputs.size()[0]
+        max_nr_cfg_nodes = rnn_outputs.size(0)
         assert rnn_outputs.size() == (max_nr_cfg_nodes, batch_size, self.nr_rnn_directions * self.output_dim)
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \

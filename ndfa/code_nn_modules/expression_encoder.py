@@ -69,10 +69,10 @@ class ExpressionEncoder(nn.Module):
 
     def forward(self, expressions: torch.Tensor, expressions_mask: Optional[torch.BoolTensor],
                 encoded_identifiers: torch.Tensor):  # Union[torch.Tensor, nn.utils.rnn.PackedSequence]
-        assert len(expressions.size()) == 4 and expressions.size()[-1] == 3
+        assert expressions.ndim == 4 and expressions.size(-1) == 3
         batch_size, nr_exprs, nr_tokens_in_expr, _ = expressions.size()
-        assert len(encoded_identifiers.size()) == 3
-        nr_identifiers_in_example = encoded_identifiers.size()[1]
+        assert encoded_identifiers.ndim == 3
+        nr_identifiers_in_example = encoded_identifiers.size(1)
         assert encoded_identifiers.size() == (batch_size, nr_identifiers_in_example, self.kos_token_embedding_dim)
         assert expressions_mask is None or expressions_mask.size() == (batch_size, nr_exprs, nr_tokens_in_expr)
 
@@ -109,7 +109,7 @@ class ExpressionEncoder(nn.Module):
         selected_encoded_identifiers = apply_batched_embeddings(
             batched_embeddings=encoded_identifiers, indices=expressions_idxs, mask=use_identifier_vocab_condition,
             padding_embedding_vector=none_identifier_emb)
-        assert self.identifier_embedding_dim == encoded_identifiers.size()[-1]
+        assert self.identifier_embedding_dim == encoded_identifiers.size(-1)
         assert selected_encoded_identifiers.size() == expressions_idxs.size() + (self.identifier_embedding_dim,)
 
         token_kinds_embeddings = self.tokens_kinds_embedding_layer(expressions_tokens_kinds.flatten())\

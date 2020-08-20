@@ -18,10 +18,10 @@ class SymbolsEncoder(nn.Module):
             padding_idx=self.symbols_special_words_vocab.get_word_idx('<PAD>'))
 
     def forward(self, encoded_identifiers, identifiers_idxs_of_all_symbols, identifiers_idxs_of_all_symbols_mask):
-        assert identifiers_idxs_of_all_symbols.size()[0] \
-               == identifiers_idxs_of_all_symbols_mask.size()[0] \
-               == encoded_identifiers.size()[0]
-        assert encoded_identifiers.size()[-1] == self.symbol_embedding_dim  # it might change...
+        assert identifiers_idxs_of_all_symbols.size(0) \
+               == identifiers_idxs_of_all_symbols_mask.size(0) \
+               == encoded_identifiers.size(0)
+        assert encoded_identifiers.size(-1) == self.symbol_embedding_dim  # it might change...
         symbol_pad_embed = self.symbols_special_words_embedding(
             torch.tensor([self.symbols_special_words_vocab.get_word_idx('<PAD>')],
                          dtype=torch.long, device=encoded_identifiers.device)).view(-1)
