@@ -1,6 +1,6 @@
 import torch
 import dataclasses
-from typing import List, Union, Optional, Tuple, Dict, final
+from typing import List, Union, Optional, Tuple, Dict, Any, final
 
 
 __all__ = [
@@ -11,55 +11,74 @@ __all__ = [
 
 
 def collate_tensors_with_variable_shapes(
-        tensors: Tuple[torch.Tensor], create_collate_mask: bool = True, create_collate_lengths: bool = False) \
+        tensors: Tuple[torch.Tensor], create_collate_mask: bool = True,
+        create_collate_lengths: bool = False, last_variable_dim: int = -1,
+        padding_fill_value: Optional[Any] = None) \
         -> Union[torch.Tensor,
                  Tuple[torch.Tensor, torch.BoolTensor],
                  Tuple[torch.Tensor, torch.LongTensor],
                  Tuple[torch.Tensor, torch.BoolTensor, torch.LongTensor]]:
     assert all(isinstance(tensor, torch.Tensor) for tensor in tensors)
-    assert all(tensor.ndim == tensors[0].ndim for tensor in tensors)
+    nr_dims = tensors[0].ndim
+    assert all(tensor.ndim == nr_dims for tensor in tensors)
+    last_variable_dim = last_variable_dim % nr_dims
+    for non_variable_dim in range(last_variable_dim + 1, nr_dims):
+        if any(tensor.size(non_variable_dim) != tensors[0].size(non_variable_dim) for tensor in tensors):
+            raise ValueError(
+                f'Dimension #{non_variable_dim} is set to be non-variable '
+                f'(last variable dim is #{last_variable_dim}), '
+                f'but input tensors have different sizes for this dim.')
 
     max_dims = tuple(
         max(tensor.size(dim_idx) for tensor in tensors)
         for dim_idx in range(tensors[0].ndim))
     collate_size = (len(tensors),) + max_dims
     if create_collate_mask:
-        collate_mask = torch.zeros(collate_size, dtype=torch.bool, device=tensors[0].device)
+        collate_mask_size = (len(tensors),) + max_dims[:last_variable_dim + 1]
+        collate_mask = torch.zeros(collate_mask_size, dtype=torch.bool, device=tensors[0].device)
     if create_collate_lengths:
-        collate_lengths = torch.zeros((len(tensors), tensors[0].ndim), dtype=torch.long, device=tensors[0].device)
-    collated_tensor = torch.zeros(collate_size, dtype=tensors[0].dtype, device=tensors[0].device)
+        collate_lengths = torch.zeros((len(tensors), last_variable_dim + 1),
+                                      dtype=torch.long, device=tensors[0].device)
+    if padding_fill_value is None:
+        collated_tensor = torch.zeros(collate_size, dtype=tensors[0].dtype, device=tensors[0].device)
+    else:
+        collated_tensor = torch.full(collate_size, fill_value=padding_fill_value,
+                                     dtype=tensors[0].dtype, device=tensors[0].device)
     for idx, tensor in enumerate(tensors):
         if tensor.ndim == 0:
             collated_tensor[idx] = tensor
-            if create_collate_mask:
-                collate_mask[idx] = True
         if tensor.ndim == 1:
             collated_tensor[idx, :tensor.size(0)] = tensor
-            if create_collate_mask:
-                collate_mask[idx, :tensor.size(0)] = True
         elif tensor.ndim == 2:
             collated_tensor[idx, :tensor.size(0), :tensor.size(1)] = tensor
-            if create_collate_mask:
-                collate_mask[idx, :tensor.size(0), :tensor.size(1)] = True
         elif tensor.ndim == 3:
             collated_tensor[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2)] = tensor
-            if create_collate_mask:
-                collate_mask[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2)] = True
         elif tensor.ndim == 4:
             collated_tensor[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3)] = tensor
-            if create_collate_mask:
-                collate_mask[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3)] = True
         elif tensor.ndim == 5:
             collated_tensor[
                 idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3), :tensor.size(4)] = tensor
-            if create_collate_mask:
-                collate_mask[
-                    idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3), :tensor.size(4)] = True
         else:
             raise ValueError(
                 f'Cannot collate tensor with > 5 dims. Given input tensors with {tensor.ndim} dims.')
+        if create_collate_mask:
+            if last_variable_dim == 0:
+                collate_mask[idx, :tensor.size(0)] = True
+            elif last_variable_dim == 1:
+                collate_mask[idx, :tensor.size(0), :tensor.size(1)] = True
+            elif last_variable_dim == 2:
+                collate_mask[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2)] = True
+            elif last_variable_dim == 3:
+                collate_mask[idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3)] = True
+            elif last_variable_dim == 4:
+                collate_mask[
+                    idx, :tensor.size(0), :tensor.size(1), :tensor.size(2), :tensor.size(3), :tensor.size(4)] = True
+            else:
+                raise ValueError(
+                    f'Cannot collate tensor with > 5 dims. Given input tensors with {tensor.ndim} dims.')
         if create_collate_lengths:
-            collate_lengths[idx] = torch.tensor(tensor.size(), dtype=torch.long, device=tensors[0].device)
+            collate_lengths[idx] = torch.tensor(tensor.size()[:last_variable_dim + 1],
+                                                dtype=torch.long, device=tensors[0].device)
     ret = collated_tensor,
     if create_collate_mask:
         ret += collate_mask,
@@ -246,7 +265,13 @@ class TensorDataClassWithSingleIndicesTensor:
 class TensorDataClassWithSequences:
     sequences: Union[List[torch.Tensor], torch.Tensor]
     batch_first: bool = True
-    lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
+    sequences_lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
+
+    @classmethod
+    def get_management_fields(cls) -> Tuple[str, ...]:
+        supers = super(TensorDataClassWithSequences, cls).get_management_fields() \
+            if hasattr(super(TensorDataClassWithSequences, cls), 'get_management_fields') else ()
+        return supers + ('batch_first', 'sequences_lengths')
 
 
 @final
@@ -309,7 +334,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
                        for field_name in non_none_data_field_names)
                    for inp in inputs)
         flattened_data_fields = {
-            field_name: torch.cat(tensors, dim=0)
+            field_name: cls._flatten_tensors(tensors)
             for field_name, tensors in non_none_data_tensors_grouped_by_field.items()}
         flattened = cls(
             self_indexing_group=inputs[0].self_indexing_group,
@@ -327,7 +352,12 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
                 torch.zeros(flattened.max_nr_items - getattr(inp, non_none_data_field_names[0]).size(0))], dim=0)
             for example_idx, inp in enumerate(inputs)], dim=0)
         flattened._nr_examples = len(inputs)
+        flattened._batch_size = getattr(flattened, non_none_data_field_names[0]).size(0)  # FIXME: does it make sense?
         return flattened
+
+    @classmethod
+    def _flatten_tensors(cls, tensors: List[torch.Tensor]):
+        return torch.cat(tensors, dim=0)
 
     def post_collate_remove_unnecessary_collate_info(self):
         self.batched_index_offset_additive_fix_per_example = None
@@ -342,17 +372,45 @@ class BatchFlattenedTensor(BatchFlattenedTensorsDataClass, TensorDataClassWithSi
     pass  # the double inheritance is all the impl needed
 
 
-# TODO: complete implementation!
 @final
 @dataclasses.dataclass
 class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSequences):
-    # TODO: fix collate() to allow different sequences lengths across examples
-    #  (each example might have another max length - we should take the max)
-    #  We can use here `TensorWithCollateMask.collate()` that actually does the same for the general case.
-    #  Except this issue, the super impl `BatchFlattenedTensorsDataClass.collate()` does the other things correctly.
     @classmethod
     def _collate_first_pass(cls, inputs: List['BatchFlattenedSeq']) -> 'BatchFlattenedSeq':
-        raise NotImplementedError  # TODO: implement!
+        assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
+        if not inputs[0].batch_first:
+            raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
+        assert all(inp.sequences_lengths is None for inp in inputs)
+        assert all(isinstance(inp.sequences, list) for inp in inputs) or \
+               all(isinstance(inp.sequences, torch.Tensor) for inp in inputs)
+        assert all(isinstance(seq, torch.Tensor) for inp in inputs for seq in inp.sequences)
+        assert all(seq.ndim >= 1 for inp in inputs for seq in inp.sequences)
+        seq_lengths = [seq.size(0) for inp in inputs for seq in inp.sequences]
+        if isinstance(inputs[0].sequences, list):
+            fixed_inputs = [
+                cls(
+                    sequences=collate_tensors_with_variable_shapes(
+                        tensors=tuple(inp.sequences), create_collate_mask=False,
+                        create_collate_lengths=False, last_variable_dim=0))
+                for inp in inputs]
+            for inp, fixed_inp in zip(inputs, fixed_inputs):
+                for fld in cls.get_management_fields():
+                    setattr(fixed_inp, fld, getattr(inp, fld))
+            inputs = fixed_inputs
+        flattened = super(BatchFlattenedSeq, cls)._collate_first_pass(inputs)
+        flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
+        return flattened
+
+    @classmethod
+    def _flatten_tensors(cls, tensors: List[torch.Tensor]):
+        max_seq_len = max(tensor.size(1) for tensor in tensors)
+        padded_tensors = [
+            torch.zeros((tensor.size(0), max_seq_len) + tensor.size()[2:],
+                        dtype=tensor.dtype, device=tensor.device)
+            for tensor in tensors]
+        for tensor, padded_tensor in zip(tensors, padded_tensors):
+            padded_tensor[:, :tensor.size(1)] = tensor
+        return torch.cat(padded_tensors, dim=0)
 
 
 @dataclasses.dataclass
