@@ -2,12 +2,13 @@ import os
 import torch
 import itertools
 import functools
+import dataclasses
 import multiprocessing as mp
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
 from warnings import warn
-from typing import Iterable, Collection, Any, Set, Optional, Dict, List
+from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
 from typing_extensions import Protocol
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
@@ -44,8 +45,85 @@ def truncate_and_pad(vector: Collection, max_length: int, pad_word: str = '<PAD>
     return itertools.chain(itertools.islice(vector, max_length), (pad_word for _ in range(padding_len)))
 
 
+@dataclasses.dataclass
+class PreprocessLimitation:
+    object_name: str
+    value: Union[int, float]
+    min_val: Union[int, float] = None
+    max_val: Union[int, float] = None
+    custom_msg: Optional[str] = None
+    warn: bool = False
+
+    @property
+    def exceeds(self) -> bool:
+        return (self.min_val is not None and self.value < self.min_val) or \
+               (self.max_val is not None and self.value > self.max_val)
+
+    def __str__(self):
+        if not self.exceeds:
+            return f'Limitation does not exceed.'
+        if self.custom_msg is not None:
+            return self.custom_msg
+        msg = f'Limitation exceed: `{self.object_name}` ({self.value})'
+        if self.min_val is not None and self.value < self.min_val:
+            msg += f' < {self.min_val}'
+        if self.max_val is not None and self.value > self.max_val:
+            msg += f' > {self.max_val}'
+        return msg
+
+
 class PreprocessLimitExceedError(ValueError):
-    pass
+    def __init__(self, exceeding_limitations: List[PreprocessLimitation]):
+        self.exceeding_limitations = exceeding_limitations
+        assert all(limitation.exceeds for limitation in exceeding_limitations)
+        msg = '; '.join(str(limitation) for limitation in exceeding_limitations)
+        super(PreprocessLimitExceedError, self).__init__(msg)
+
+
+def enforce_code_task_input_pp_limitations(
+        model_hps: NDFAModelHyperParams, method: SerMethod, method_pdg: SerMethodPDG, method_ast: SerMethodAST):
+    limitations = []
+    limitations.append(PreprocessLimitation(
+            object_name='#identifiers', value=len(method_pdg.sub_identifiers_by_idx),
+            max_val=model_hps.method_code_encoder.max_nr_identifiers))
+    min_sub_identifiers_in_identifier = min(
+        (len(sub_identifiers_in_identifier) for sub_identifiers_in_identifier in method_pdg.sub_identifiers_by_idx),
+        default=float('inf'))
+    limitations.append(PreprocessLimitation(
+        object_name='#sub_identifiers', value=min_sub_identifiers_in_identifier,
+        min_val=1, custom_msg=f'Empty identifier (no sub-identifiers) in method {method.hash}.', warn=True))
+    limitations.append(PreprocessLimitation(
+        object_name='#pdg_nodes', value=len(method_pdg.pdg_nodes),
+        min_val=model_hps.method_code_encoder.min_nr_pdg_nodes,
+        max_val=model_hps.method_code_encoder.max_nr_pdg_nodes))
+    nr_pdg_nodes_with_expression = sum(
+        (int(pdg_node.code_sub_token_range_ref is not None) for pdg_node in method_pdg.pdg_nodes), start=0)
+    limitations.append(PreprocessLimitation(
+        object_name='#pdg_nodes_with_expression', value=nr_pdg_nodes_with_expression,
+        min_val=4))  # TODO: plug-in HP here.
+    longest_pdg_node_expression = max(
+        (len(get_pdg_node_tokenized_expression(method, pdg_node))
+         for pdg_node in method_pdg.pdg_nodes
+         if pdg_node.code_sub_token_range_ref is not None), default=0)
+    limitations.append(PreprocessLimitation(
+        object_name='|longest_pdg_node_expression|', value=longest_pdg_node_expression,
+        max_val=model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression))
+    limitations.append(PreprocessLimitation(
+        object_name='#symbols', value=len(method_pdg.symbols),
+        min_val=model_hps.method_code_encoder.min_nr_symbols,
+        max_val=model_hps.method_code_encoder.max_nr_symbols))
+    nr_edges = sum((len(pdg_node.control_flow_out_edges) +
+                   sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
+                   for pdg_node in method_pdg.pdg_nodes), start=0)
+    limitations.append(PreprocessLimitation(
+        object_name='#edges', value=nr_edges,
+        max_val=model_hps.method_code_encoder.max_nr_pdg_edges))
+    exceeding_limitations = [limitation for limitation in limitations if limitation.exceeds]
+    for exceeding_limitation in exceeding_limitations:
+        if exceeding_limitation.warn:
+            warn(str(exceeding_limitation))
+    if len(exceeding_limitations) > 0:
+        raise PreprocessLimitExceedError(exceeding_limitations=exceeding_limitations)
 
 
 def preprocess_code_task_example(
@@ -53,31 +131,13 @@ def preprocess_code_task_example(
         method: SerMethod, method_pdg: SerMethodPDG, method_ast: SerMethodAST,
         remove_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None,
         pdg_nodes_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodCodeInputToEncoder]:
-    # todo raise exception with failure reason
-    nr_identifiers = len(method_pdg.sub_identifiers_by_idx)
-    if nr_identifiers > model_hps.method_code_encoder.max_nr_identifiers:
-        raise PreprocessLimitExceedError(f'#identifiers ({nr_identifiers}) > MAX_NR_IDENTIFIERS ({model_hps.method_code_encoder.max_nr_identifiers})')
-    if any(len(sub_identifiers_in_identifier) < 1 for sub_identifiers_in_identifier in method_pdg.sub_identifiers_by_idx):
-        warn(f'Found method {method.hash} with an empty identifier (no sub-identifiers). ignoring.')
-        raise PreprocessLimitExceedError(f'Empty identifier (no sub-identifiers)')
-    if len(method_pdg.pdg_nodes) < model_hps.method_code_encoder.min_nr_pdg_nodes:
-        raise PreprocessLimitExceedError(f'#pdg_nodes ({len(method_pdg.pdg_nodes)}) < MIN_NR_PDG_NODES ({model_hps.method_code_encoder.min_nr_pdg_nodes})')
-    if len(method_pdg.pdg_nodes) > model_hps.method_code_encoder.max_nr_pdg_nodes:
-        raise PreprocessLimitExceedError(f'#pdg_nodes ({len(method_pdg.pdg_nodes)}) > MAX_NR_PDG_NODES ({model_hps.method_code_encoder.max_nr_pdg_nodes})')
-    if any(len(get_pdg_node_tokenized_expression(method, pdg_node)) > model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression
-           for pdg_node in method_pdg.pdg_nodes if pdg_node.code_sub_token_range_ref is not None):
-        raise PreprocessLimitExceedError(f'Too long tokenized expression for one of the PDG nodes.')
-    nr_symbols = len(method_pdg.symbols)
-    if nr_symbols < model_hps.method_code_encoder.min_nr_symbols:
-        raise PreprocessLimitExceedError(f'#symbols ({nr_symbols}) < MIN_NR_SYMBOLS ({model_hps.method_code_encoder.min_nr_symbols})')
-    if nr_symbols > model_hps.method_code_encoder.max_nr_symbols:
-        raise PreprocessLimitExceedError(f'#symbols ({nr_symbols}) > MAX_NR_SYMBOLS ({model_hps.method_code_encoder.max_nr_symbols})')
-    nr_edges = sum(len(pdg_node.control_flow_out_edges) +
-                   sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
-                   for pdg_node in method_pdg.pdg_nodes)
-    if nr_edges > model_hps.method_code_encoder.max_nr_pdg_edges:
-        raise PreprocessLimitExceedError(f'#edges ({nr_edges}) > MAX_NR_PDG_EDGES ({model_hps.method_code_encoder.max_nr_pdg_edges})')
+    enforce_code_task_input_pp_limitations(
+        model_hps=model_hps, method=method, method_pdg=method_pdg, method_ast=method_ast)
 
+    nr_symbols = len(method_pdg.symbols)
+    nr_edges = sum((len(pdg_node.control_flow_out_edges) +
+                    sum(len(edge.symbols) for edge in pdg_node.data_dependency_out_edges)
+                    for pdg_node in method_pdg.pdg_nodes), start=0)
     sub_identifiers_pad = [code_task_vocabs.sub_identifiers.get_word_idx_or_unk(
         '<PAD>')] * model_hps.method_code_encoder.max_nr_identifier_sub_parts
     identifiers = torch.tensor(
