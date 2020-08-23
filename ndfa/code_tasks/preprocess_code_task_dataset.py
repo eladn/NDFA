@@ -173,11 +173,13 @@ def preprocess_code_task_example(
             torch.LongTensor([symbol.identifier_idx for symbol in method_pdg.symbols]),
             self_indexing_group='symbols', tgt_indexing_group='identifiers'),
         symbols_appearances_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([symbol_idx for _, _, symbol_idx in symbols_occurrences])),
-        symbols_appearances_expression_token_idx=BatchedFlattenedIndicesFlattenedTensor(
+            torch.LongTensor([symbol_idx for _, _, symbol_idx in symbols_occurrences]),
+            tgt_indexing_group='symbols'),
+        symbols_appearances_expression_token_idx=BatchFlattenedTensor(
             torch.LongTensor([token_idx for _, token_idx, _ in symbols_occurrences])),
         symbols_appearances_cfg_expression_idx=BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([expression_idx for expression_idx, _, _ in symbols_occurrences])))
+            torch.LongTensor([expression_idx for expression_idx, _, _ in symbols_occurrences]),
+            tgt_indexing_group='cfg_expressions'))
 
     cfg_nodes_tokenized_expressions = CodeExpressionTokensSequenceInputTensors(
         token_type=BatchFlattenedSeq(
@@ -185,7 +187,8 @@ def preprocess_code_task_example(
                 [code_task_vocabs.tokens_kinds.get_word_idx(token.kind.value)
                  for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
              for pdg_node in method_pdg.pdg_nodes
-             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]),
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask],
+            self_indexing_group='cfg_expressions'),
         kos_token_index=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))
              for pdg_node in method_pdg.pdg_nodes

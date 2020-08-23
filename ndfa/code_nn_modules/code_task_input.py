@@ -43,7 +43,7 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
 class SymbolsInputTensors(TensorsDataClass):  # TODO: inherit from some other version of `TensorsDataClass` that supports indexing
     symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_in_batch,);  value meaning: identifier batched index
     symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_appearances,);
-    symbols_appearances_expression_token_idx: BatchedFlattenedIndicesFlattenedTensor = None  # (nr_symbols_appearances,);
+    symbols_appearances_expression_token_idx: BatchFlattenedTensor = None  # (nr_symbols_appearances,);
     symbols_appearances_cfg_expression_idx: BatchedFlattenedIndicesFlattenedTensor = None  # (nr_symbols_appearances,);
 
 
