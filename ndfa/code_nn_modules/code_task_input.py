@@ -1,17 +1,19 @@
 import torch
 import dataclasses
-from typing import Optional, Dict
+from typing import Optional
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor
 
 
-__all__ = ['MethodCodeInputToEncoder']
+__all__ = ['MethodCodeInputPaddedTensors',
+           'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
+           'SymbolsInputTensors', 'PDGInputTensors']
 
 
 # TODO: this is an old impl - REMOVE!
 @dataclasses.dataclass
-class MethodCodeInputToEncoder(TensorsDataClass):
+class MethodCodeInputPaddedTensors(TensorsDataClass):
     method_hash: str
     identifiers: torch.LongTensor
     sub_identifiers_mask: torch.BoolTensor
@@ -45,6 +47,7 @@ class SymbolsInputTensors(TensorsDataClass):  # TODO: inherit from some other ve
     symbols_appearances_cfg_expression_idx: BatchedFlattenedIndicesFlattenedTensor = None  # (nr_symbols_appearances,);
 
 
+@dataclasses.dataclass
 class PDGInputTensors(TensorsDataClass):
     cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
     cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )

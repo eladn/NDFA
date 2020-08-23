@@ -17,25 +17,28 @@ from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethod
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
-from ndfa.misc.tensors_data_class import TensorWithCollateMask
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, MethodCodeInputTensors, \
+    CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors
+from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor
 
 
 __all__ = [
-    'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError']
+    'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
+    'PreprocessLimitation']
 
 
 def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
     assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR,
                           SerTokenKind.IDENTIFIER, SerTokenKind.LITERAL}
     if token.kind == SerTokenKind.IDENTIFIER:
-        return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
+        return [vocabs.tokens_kinds.get_word_idx(token.kind.value),
                 token.identifier_idx,
                 (-1 if token.symbol_idx is None else token.symbol_idx)]
     if token.kind == SerTokenKind.LITERAL:
-        return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
+        return [vocabs.tokens_kinds.get_word_idx(token.kind.value),
                 vocabs.kos_tokens.get_word_idx('<PAD>'), -1]  # TODO: add some '<NON-RELEVANT>' special word
-    return [vocabs.tokens_kinds.get_word_idx_or_unk(token.kind.value),
+    return [vocabs.tokens_kinds.get_word_idx(token.kind.value),
             vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token)), -1]
 
 
@@ -105,9 +108,15 @@ def enforce_code_task_input_pp_limitations(
         (len(get_pdg_node_tokenized_expression(method, pdg_node))
          for pdg_node in method_pdg.pdg_nodes
          if pdg_node.code_sub_token_range_ref is not None), default=0)
+    shortest_pdg_node_expression = max(
+        (len(get_pdg_node_tokenized_expression(method, pdg_node))
+         for pdg_node in method_pdg.pdg_nodes
+         if pdg_node.code_sub_token_range_ref is not None), default=0)
     limitations.append(PreprocessLimitation(
         object_name='|longest_pdg_node_expression|', value=longest_pdg_node_expression,
         max_val=model_hps.method_code_encoder.max_nr_tokens_in_pdg_node_expression))
+    limitations.append(PreprocessLimitation(
+        object_name='|shortest_pdg_node_expression|', value=shortest_pdg_node_expression, min_val=1, warn=True))
     limitations.append(PreprocessLimitation(
         object_name='#symbols', value=len(method_pdg.symbols),
         min_val=model_hps.method_code_encoder.min_nr_symbols,
@@ -130,7 +139,88 @@ def preprocess_code_task_example(
         model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
         method: SerMethod, method_pdg: SerMethodPDG, method_ast: SerMethodAST,
         remove_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None,
-        pdg_nodes_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodCodeInputToEncoder]:
+        pdg_nodes_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodCodeInputTensors]:
+    enforce_code_task_input_pp_limitations(
+        model_hps=model_hps, method=method, method_pdg=method_pdg, method_ast=method_ast)
+    if pdg_nodes_to_mask is None:
+        pdg_nodes_to_mask = {}
+
+    identifiers_sub_parts = BatchFlattenedSeq(
+        sequences=[
+            torch.LongTensor([
+                code_task_vocabs.sub_identifiers.get_word_idx_or_unk(sub_part)
+                for sub_part in identifier_sub_parts])
+            for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
+        self_indexing_group='identifiers')
+
+    _counter = itertools.count()
+    pdg_node_idx_to_expression_idx_mapping = {
+        pdg_node.idx: next(_counter)
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask}
+    del _counter
+
+    symbols_occurrences = [
+        (pdg_node_idx_to_expression_idx_mapping[pdg_node.idx], token_idx, token.symbol_idx)
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
+        for token_idx, token in enumerate(
+            get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node),
+            start=pdg_node.code_sub_token_range_ref.begin_token_idx)
+        if token.symbol_idx is not None]
+    symbols = SymbolsInputTensors(
+        symbols_identifier_indices=BatchedFlattenedIndicesFlattenedTensor(
+            torch.LongTensor([symbol.identifier_idx for symbol in method_pdg.symbols]),
+            self_indexing_group='symbols', tgt_indexing_group='identifiers'),
+        symbols_appearances_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
+            torch.LongTensor([symbol_idx for _, _, symbol_idx in symbols_occurrences])),
+        symbols_appearances_expression_token_idx=BatchedFlattenedIndicesFlattenedTensor(
+            torch.LongTensor([token_idx for _, token_idx, _ in symbols_occurrences])),
+        symbols_appearances_cfg_expression_idx=BatchedFlattenedIndicesFlattenedTensor(
+            torch.LongTensor([expression_idx for expression_idx, _, _ in symbols_occurrences])))
+
+    cfg_nodes_tokenized_expressions = CodeExpressionTokensSequenceInputTensors(
+        token_type=BatchFlattenedSeq(
+            [torch.LongTensor(
+                [code_task_vocabs.tokens_kinds.get_word_idx(token.kind.value)
+                 for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
+             for pdg_node in method_pdg.pdg_nodes
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]),
+        kos_token_index=BatchFlattenedTensor(torch.LongTensor(
+            [code_task_vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))
+             for pdg_node in method_pdg.pdg_nodes
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
+             for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)
+             if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR}])),
+        identifier_index=BatchedFlattenedIndicesFlattenedTensor(torch.LongTensor(
+            [token.identifier_idx
+             for pdg_node in method_pdg.pdg_nodes
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
+             for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)
+             if token.kind == SerTokenKind.IDENTIFIER]),
+            tgt_indexing_group='identifiers'))
+
+    pdg = PDGInputTensors(
+        cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
+            [code_task_vocabs.pdg_node_control_kinds.get_word_idx(
+                pdg_node.control_kind.value
+                if pdg_node.idx not in pdg_nodes_to_mask else
+                pdg_nodes_to_mask[pdg_node.idx])
+             for pdg_node in method_pdg.pdg_nodes])),
+        cfg_nodes_has_expression_mask=BatchFlattenedTensor(torch.LongTensor(
+            [pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
+             for pdg_node in method_pdg.pdg_nodes])),
+        cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions)
+
+    return MethodCodeInputTensors(
+        method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts, symbols=symbols, pdg=pdg)
+
+
+def preprocess_code_task_example_with_padding(
+        model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+        method: SerMethod, method_pdg: SerMethodPDG, method_ast: SerMethodAST,
+        remove_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None,
+        pdg_nodes_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodCodeInputPaddedTensors]:
     enforce_code_task_input_pp_limitations(
         model_hps=model_hps, method=method, method_pdg=method_pdg, method_ast=method_ast)
 
@@ -236,7 +326,7 @@ def preprocess_code_task_example(
         build_edge_attrs_vector(edge_vertices)
         for edge_vertices in edges], max_length=model_hps.method_code_encoder.max_nr_pdg_edges, pad_word=pad_edge_attrs_vector)), dtype=torch.long)
 
-    return MethodCodeInputToEncoder(
+    return MethodCodeInputPaddedTensors(
         method_hash=method.hash,
         identifiers=identifiers,
         sub_identifiers_mask=sub_identifiers_mask,
@@ -272,7 +362,7 @@ def catch_preprocess_limit_exceed_error(
         assert pp_example is not None
         return pp_example
     except PreprocessLimitExceedError as err:
-        return err
+        return err.exceeding_limitations
 
 
 def preprocess_code_task_dataset(
@@ -301,7 +391,7 @@ def preprocess_code_task_dataset(
                         pp_example_fn, model_hps, code_task_vocabs),
                     iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
                 assert pp_example is not None
-                if isinstance(pp_example, PreprocessLimitExceedError):
+                if isinstance(pp_example, list):
                     pass  # TODO: add to limit exceed statistics
                 else:
                     chunks_examples_writer.write_example(pp_example)

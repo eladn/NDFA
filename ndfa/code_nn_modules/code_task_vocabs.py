@@ -104,7 +104,7 @@ class CodeTaskVocabs(NamedTuple):
             identifiers_special_words=identifiers_special_words_vocab)
 
 
-def kos_token_to_kos_token_vocab_word(token: SerToken):
+def kos_token_to_kos_token_vocab_word(token: SerToken) -> str:
     assert token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR}
     if token.kind == SerTokenKind.KEYWORD:
         return f'kwrd_{token.text}'

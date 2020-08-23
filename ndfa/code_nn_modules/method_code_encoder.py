@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from typing import NamedTuple, Optional
 
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputToEncoder
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
@@ -47,7 +47,7 @@ class MethodCodeEncoder(nn.Module):
             symbol_embedding_dim=self.identifier_embedding_dim)  # it might change...
         self.dropout_layer = nn.Dropout(dropout_p)
 
-    def forward(self, code_task_input: MethodCodeInputToEncoder) -> EncodedMethodCode:
+    def forward(self, code_task_input: MethodCodeInputPaddedTensors) -> EncodedMethodCode:
         encoded_identifiers = self.identifier_encoder(
             sub_identifiers_indices=code_task_input.identifiers,
             sub_identifiers_mask=code_task_input.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
