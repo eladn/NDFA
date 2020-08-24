@@ -48,8 +48,10 @@ class ExpressionEncoder(nn.Module):
         self.identifiers_special_words_embedding_layer = nn.Embedding(
             num_embeddings=len(self.identifiers_special_words_vocab), embedding_dim=self.identifier_embedding_dim)
 
+        assert self.kos_token_embedding_dim == self.identifier_embedding_dim
+        self.token_embedding_dim = self.kos_token_embedding_dim
         self.projection_linear_layer = nn.Linear(
-            self.token_kind_embedding_dim + self.kos_token_embedding_dim + self.identifier_embedding_dim, self.expr_encoding_dim)
+            self.token_kind_embedding_dim + self.token_embedding_dim, self.expr_encoding_dim)
         self.additional_linear_layers = nn.ModuleList(
             [nn.Linear(self.expr_encoding_dim, self.expr_encoding_dim) for _ in range(nr_out_linear_layers - 1)])
 
@@ -80,14 +82,17 @@ class ExpressionEncoder(nn.Module):
         is_kos_token = reduce(
             torch.Tensor.logical_or,
             ((expressions.token_type.sequences == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
-        assert self.kos_token_embedding_dim == self.identifier_embedding_dim
+
+        # Note: we could consider concatenate kos & identifier embeddings: <kos|None> or <None|identifier>.
         kos_or_identifier_token_encoding = torch.zeros(
-            size=token_kind_embeddings.size()[:-1] + (self.token_kind_embedding_dim + self.kos_token_embedding_dim,),
+            size=token_kind_embeddings.size()[:-1] + (self.token_embedding_dim,),
             dtype=identifiers_embeddings.dtype, device=identifiers_embeddings.device)
         kos_or_identifier_token_encoding.masked_scatter_(mask=is_identifier_token, source=identifiers_embeddings)
         kos_or_identifier_token_encoding.masked_scatter_(mask=is_kos_token, source=kos_tokens_embeddings)
+
         final_token_seqs_encodings = torch.cat([token_kind_embeddings, kos_or_identifier_token_encoding], dim=-1)
         assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
+
         final_token_seqs_encodings = self.dropout_layer(final_token_seqs_encodings)
         final_token_seqs_encodings_projected = self.dropout_layer(F.relu(
             self.projection_linear_layer(final_token_seqs_encodings)))
