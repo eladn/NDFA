@@ -506,6 +506,11 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
 class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, TensorDataClassWithSingleDataTensor):
     within_example_indexing_start: int = dataclasses.field(default=0)
 
+    @classmethod
+    def get_management_fields(cls) -> Tuple[str, ...]:
+        return super(BatchedFlattenedIndicesTensor, cls).get_management_fields() + \
+               ('within_example_indexing_start', )
+
     def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
         raise NotImplementedError  # TODO: implement!
 
