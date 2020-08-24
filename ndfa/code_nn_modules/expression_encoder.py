@@ -87,8 +87,10 @@ class ExpressionEncoder(nn.Module):
         kos_or_identifier_token_encoding = torch.zeros(
             size=token_kind_embeddings.size()[:-1] + (self.token_embedding_dim,),
             dtype=identifiers_embeddings.dtype, device=identifiers_embeddings.device)
-        kos_or_identifier_token_encoding.masked_scatter_(mask=is_identifier_token, source=identifiers_embeddings)
-        kos_or_identifier_token_encoding.masked_scatter_(mask=is_kos_token, source=kos_tokens_embeddings)
+        kos_or_identifier_token_encoding.masked_scatter_(
+            mask=is_identifier_token, source=identifiers_embeddings)
+        kos_or_identifier_token_encoding = kos_or_identifier_token_encoding.masked_scatter(
+            is_kos_token, kos_tokens_embeddings)
 
         final_token_seqs_encodings = torch.cat([token_kind_embeddings, kos_or_identifier_token_encoding], dim=-1)
         assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
