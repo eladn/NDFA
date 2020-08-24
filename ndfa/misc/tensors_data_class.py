@@ -11,6 +11,13 @@ __all__ = [
     'BatchedFlattenedIndicesTensor']
 
 
+# TODO:
+#  Wrap `dataclasses.field()` initiator for classes with additional structural metadata (like `BatchFlattenedSeq`).
+#  That would allow defining these structural meta-parameters once in the tensors-data-class definition instead of
+#    within each instance.
+#  Of course it should also be supported by the relevant methods (like `collate()`). These params would have to be
+#   propagated towards the nested collate() call and be used there.
+
 def collate_tensors_with_variable_shapes(
         tensors: Tuple[torch.Tensor], create_collate_mask: bool = True,
         create_collate_lengths: bool = False, last_variable_dim: int = -1,
@@ -137,7 +144,8 @@ class TensorsDataClass:
     def batch_size(self) -> int:
         if self._batch_size is None:
             raise ValueError(
-                f'called `batch_size()` on a not batched `{self.__class__.__name__}(TensorsDataClass)`. object id: {id(self)}')
+                f'called `batch_size()` on a not batched `{self.__class__.__name__}(TensorsDataClass)`. '
+                f'object id: {id(self)}')
         return self._batch_size
 
     @property
@@ -373,6 +381,7 @@ class BatchFlattenedTensor(BatchFlattenedTensorsDataClass, TensorDataClassWithSi
     pass  # the double inheritance is all the impl needed
 
 
+# TODO: generalize & inherit from `BatchFlattenedSequencesDataClass`
 @final
 @dataclasses.dataclass
 class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSequences):
@@ -423,7 +432,7 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls).get_management_fields() + \
-               ('example_index',)
+               ('example_index', 'within_example_indexing_start')
 
     @classmethod
     def get_indices_fields(cls):
@@ -455,7 +464,7 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
             original_indices = getattr(self, field.name)
             offsets_fixes = torch.where(
                 original_indices < self.within_example_indexing_start,
-                torch.zeros((1, ), dtype=original_indices.dtype, device=original_indices.device),
+                torch.zeros(1, dtype=original_indices.dtype, device=original_indices.device),
                 addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index])
             setattr(self, field.name, original_indices + offsets_fixes)
 
