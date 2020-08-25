@@ -16,11 +16,11 @@ from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMe
 from ndfa.misc.code_data_structure_api import *
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDataset
-from ndfa.misc.tensors_data_class import TensorsDataClass
+from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
 from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, truncate_and_pad, \
     PreprocessLimitExceedError, PreprocessLimitation
 from ndfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
@@ -60,7 +60,7 @@ class PredictLogVarsTask(CodeTaskBase):
         code_task_input = pp_example.code_task_input
         model.to(device)
         model.eval()
-        code_task_input = MethodCodeInputPaddedTensors.collate([code_task_input])
+        code_task_input = MethodCodeInputTensors.collate([code_task_input])
         code_task_input = code_task_input.to(device)
         output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
         decoder_outputs = output.decoder_outputs.squeeze(dim=0)
@@ -133,8 +133,8 @@ class PredictLoggingCallVarsModelOutput(TensorsDataClass):
 @dataclasses.dataclass
 class PredictLogVarsTaggedExample(TensorsDataClass):
     example_hash: str
-    code_task_input: MethodCodeInputPaddedTensors
-    target_symbols_idxs_used_in_logging_call: torch.Tensor
+    code_task_input: MethodCodeInputTensors
+    target_symbols_idxs_used_in_logging_call: BatchedFlattenedIndicesTensor
 
     def __iter__(self):  # To support unpacking into (x_batch, y_batch)
         yield self.code_task_input
@@ -163,7 +163,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             encoder_output_dim=self.code_task_encoder.cfg_node_encoder.output_dim,
             symbols_encoding_dim=self.identifier_embedding_dim)
 
-    def forward(self, code_task_input: MethodCodeInputPaddedTensors, target_symbols_idxs_used_in_logging_call: Optional[torch.IntTensor] = None):
+    def forward(self, code_task_input: MethodCodeInputTensors,
+                target_symbols_idxs_used_in_logging_call: Optional[BatchedFlattenedIndicesTensor] = None):
         self.dbg_log_new_fwd()
 
         encoded_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
@@ -221,8 +222,8 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
         example = super(PredictLogVarsTaskDataset, self).__getitem__(idx)
         assert isinstance(example, PredictLogVarsTaggedExample)
         assert all(hasattr(example, field.name) for field in dataclasses.fields(PredictLogVarsTaggedExample))
-        assert isinstance(example.code_task_input, MethodCodeInputPaddedTensors)
-        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputPaddedTensors))
+        assert isinstance(example.code_task_input, MethodCodeInputTensors)
+        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputTensors))
         return example
 
 
@@ -251,13 +252,23 @@ def preprocess_logging_call_example(
     if len(exceeding_limitations) > 0:
         raise PreprocessLimitExceedError(exceeding_limitations=exceeding_limitations)
 
-    target_symbols_idxs_used_in_logging_call = None if not add_tag else torch.tensor(list(truncate_and_pad(
-        [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
-        [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
-         for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
-        [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')],
-        max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
-        pad_word=code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))), dtype=torch.long)
+    # target_symbols_idxs_used_in_logging_call = None if not add_tag else torch.tensor(list(truncate_and_pad(
+    #     [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
+    #     [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
+    #      for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
+    #     [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')],
+    #     max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
+    #     pad_word=code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))), dtype=torch.long)
+
+    target_symbols_idxs_used_in_logging_call = None if not add_tag else BatchedFlattenedIndicesTensor(
+        torch.LongTensor(
+            [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
+            [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
+             for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
+            [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')] +
+            [code_task_vocabs.symbols_special_words.get_word_idx('<PAD>')] *
+            (model_hps.method_code_encoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call))),
+        tgt_indexing_group='symbols', within_example_indexing_start=len(code_task_vocabs.symbols_special_words))
 
     return PredictLogVarsTaggedExample(
         example_hash=raw_example.logging_call.hash,

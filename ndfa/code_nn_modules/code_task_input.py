@@ -30,7 +30,6 @@ class MethodCodeInputPaddedTensors(TensorsDataClass):
     symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions: TensorWithCollateMask
 
 
-# TODO: complete impl and use
 @dataclasses.dataclass
 class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     token_type: BatchFlattenedSeq  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
@@ -38,9 +37,8 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     identifier_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_identifier_tokens_in_all_expressions_in_batch,)
 
 
-# TODO: complete impl and use
 @dataclasses.dataclass
-class SymbolsInputTensors(TensorsDataClass):  # TODO: inherit from some other version of `TensorsDataClass` that supports indexing
+class SymbolsInputTensors(TensorsDataClass):
     symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_in_batch,);  value meaning: identifier batched index
     symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbols_appearances,);
     symbols_appearances_expression_token_idx: BatchFlattenedTensor = None  # (nr_symbols_appearances,);
@@ -61,7 +59,6 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_control_flow_paths: Optional[Dict[str, ExampleBasedIndicesBatchFlattenedTensor]] = None
 
 
-# TODO: complete impl and use
 @dataclasses.dataclass
 class MethodCodeInputTensors(TensorsDataClass):
     method_hash: str
