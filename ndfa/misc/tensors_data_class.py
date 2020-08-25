@@ -188,7 +188,7 @@ class TensorsDataClass:
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
             return {key: cls.collate_values((dct[key] for dct in values_as_tuple if key in dct))
                     for key in all_keys}
-        if isinstance(values_as_tuple[0], list) or isinstance(values_as_tuple[0], tuple):
+        if isinstance(values_as_tuple[0], (list, tuple)):
             collection_type = type(values_as_tuple[0])
             assert all(len(lst) == len(values_as_tuple[0]) for lst in values_as_tuple)
             return collection_type(cls.collate_values(vals) for vals in zip(*values_as_tuple))
@@ -307,6 +307,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
     nr_items_per_example: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)  # (bsz,)
     max_nr_items: Optional[int] = dataclasses.field(init=False, default=None)
     unflattener: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)
+    flattener: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)
     _nr_examples: Optional[int] = dataclasses.field(init=False, default=None)
 
     # collate auxiliaries
@@ -320,7 +321,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchFlattenedTensorsDataClass, cls).get_management_fields() + (
-            'nr_items_per_example', 'max_nr_items', 'unflattener',
+            'nr_items_per_example', 'max_nr_items', 'unflattener', 'flattener',
             'batched_index_offset_additive_fix_per_example', '_nr_examples')
 
     @classmethod
@@ -360,6 +361,9 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
                 flattened.batched_index_offset_additive_fix_per_example[example_idx],
                 torch.zeros(flattened.max_nr_items - getattr(inp, non_none_data_field_names[0]).size(0))], dim=0)
             for example_idx, inp in enumerate(inputs)], dim=0)
+        flattened.flattener = torch.cat([
+            torch.arange(nr_items) + example_idx * flattened.max_nr_items
+            for example_idx, nr_items in enumerate(flattened.nr_items_per_example)], dim=0)
         flattened._nr_examples = len(inputs)
         flattened._batch_size = getattr(flattened, non_none_data_field_names[0]).size(0)  # FIXME: does it make sense?
         return flattened
@@ -372,7 +376,10 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
         self.batched_index_offset_additive_fix_per_example = None
 
     def unflatten(self, tensor: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError  # TODO: implement!
+        raise NotImplementedError  # TODO: implement! use `self.unflattener`
+
+    def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError  # TODO: implement! use `self.flattener`
 
 
 @final
