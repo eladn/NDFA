@@ -116,6 +116,13 @@ class HasTargetIndexingGroup:
             if hasattr(super(HasTargetIndexingGroup, cls), 'get_management_fields') else ()
         return supers + ('tgt_indexing_group',)
 
+    def find_addressed_batched_flattened_tensor(self, tensors_data_class_root: 'TensorsDataClass') \
+            -> Optional['BatchFlattenedTensorsDataClass']:
+        return next((tensor_data_class for tensor_data_class in tensors_data_class_root.traverse()
+                     if isinstance(tensor_data_class, BatchFlattenedTensorsDataClass) and
+                     tensor_data_class.self_indexing_group == self.tgt_indexing_group), None)
+
+
 
 CollatableValuesTuple = Union[
     Tuple[str, ...], Tuple[bool, ...], Tuple[Dict, ...], Tuple[List, ...], Tuple[Tuple, ...],
@@ -453,6 +460,7 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
         flattened = super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls)._collate_first_pass(inputs)
         indices_fields = cls.get_indices_fields()
         flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
+        flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
         flattened.example_index = torch.cat([
             torch.full(size=(getattr(inp, indices_fields[0].name).size(0),),
                        fill_value=example_idx, dtype=torch.long)
@@ -465,7 +473,7 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
         addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
         if addressed_flattened_tensor is None:
             raise ValueError(
-                f'Not found field in tensors data class which is addressable'
+                f'Not found field in tensors data class which is addressable '
                 f'via index group `{self.tgt_indexing_group}`.')
         for field in self.get_indices_fields():
             original_indices = getattr(self, field.name)
@@ -474,12 +482,6 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
                 torch.zeros(1, dtype=original_indices.dtype, device=original_indices.device),
                 addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index])
             setattr(self, field.name, original_indices + offsets_fixes)
-
-    def find_addressed_batched_flattened_tensor(self, tensors_data_class_root: TensorsDataClass) \
-            -> Optional['BatchedFlattenedIndicesFlattenedTensorsDataClass']:
-        return next((tensor_data_class for tensor_data_class in tensors_data_class_root.traverse()
-                     if isinstance(tensor_data_class, BatchFlattenedTensorsDataClass) and
-                     tensor_data_class.self_indexing_group == self.tgt_indexing_group), None)
 
     def post_collate_remove_unnecessary_collate_info(self):
         self.example_index = None
@@ -510,7 +512,7 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
 # TODO: complete implementation!
 @final
 @dataclasses.dataclass
-class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, TensorDataClassWithSingleDataTensor):
+class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, TensorDataClassWithSingleIndicesTensor):
     within_example_indexing_start: int = dataclasses.field(default=0)
 
     @classmethod
@@ -518,20 +520,34 @@ class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, Te
         return super(BatchedFlattenedIndicesTensor, cls).get_management_fields() + \
                ('within_example_indexing_start', )
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
-        raise NotImplementedError  # TODO: implement!
+    @classmethod
+    def get_indices_fields(cls):
+        return super(BatchedFlattenedIndicesTensor, cls).get_data_fields()
 
-        # if self.tgt_indexing_group is None:
-        #     raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
-        # addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
-        # if addressed_flattened_tensor is None:
-        #     raise ValueError(
-        #         f'Not found field in tensors data class which is addressable'
-        #         f'via index group `{self.tgt_indexing_group}`.')
-        # for field in self.get_indices_fields():
-        #     original_indices = getattr(self, field.name)
-        #     offsets_fixes = torch.where(
-        #         original_indices < self.within_example_indexing_start,
-        #         torch.zeros((1, ), dtype=original_indices.dtype, device=original_indices.device),
-        #         addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index])
-        #     setattr(self, field.name, original_indices + offsets_fixes)
+    @classmethod
+    def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesTensor']) -> 'BatchedFlattenedIndicesTensor':
+        assert all(inp.within_example_indexing_start == inputs[0].within_example_indexing_start for inp in inputs)
+        collated = super(BatchedFlattenedIndicesTensor, cls)._collate_first_pass(inputs)
+        collated.tgt_indexing_group = inputs[0].tgt_indexing_group
+        collated.within_example_indexing_start = inputs[0].within_example_indexing_start
+        return collated
+
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+        if self.tgt_indexing_group is None:
+            raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
+        addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
+        if addressed_flattened_tensor is None:
+            raise ValueError(
+                f'Not found field in tensors data class which is addressable '
+                f'via index group `{self.tgt_indexing_group}`.')
+        for field in self.get_indices_fields():
+            original_indices = getattr(self, field.name)
+            assert addressed_flattened_tensor.batched_index_offset_additive_fix_per_example.size(0) == \
+                   addressed_flattened_tensor.nr_examples
+            assert addressed_flattened_tensor.nr_examples == self.nr_examples
+            assert self.nr_examples == original_indices.size(0)
+            offsets_fixes = torch.where(
+                original_indices < self.within_example_indexing_start,
+                torch.zeros((1, ), dtype=original_indices.dtype, device=original_indices.device),
+                addressed_flattened_tensor.batched_index_offset_additive_fix_per_example.unsqueeze(-1).expand(original_indices.size()))
+            setattr(self, field.name, original_indices + offsets_fixes)
