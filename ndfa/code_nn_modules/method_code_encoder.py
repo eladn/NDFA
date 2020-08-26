@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from typing import NamedTuple, Optional
 
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
@@ -44,43 +44,21 @@ class MethodCodeEncoder(nn.Module):
             for _ in range(nr_encoder_decoder_bridge_layers)]) if nr_encoder_decoder_bridge_layers else None
         self.symbols_encoder = SymbolsEncoder(
             symbols_special_words_vocab=code_task_vocabs.symbols_special_words,
-            symbol_embedding_dim=self.identifier_embedding_dim)  # it might change...
+            symbol_embedding_dim=self.identifier_embedding_dim,
+            expr_encoding_dim=self.expr_encoding_dim)  # it might change...
         self.dropout_layer = nn.Dropout(dropout_p)
 
-    def forward(self, code_task_input: MethodCodeInputPaddedTensors) -> EncodedMethodCode:
+    def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCode:
         encoded_identifiers = self.identifier_encoder(
-            sub_identifiers_indices=code_task_input.identifiers,
-            sub_identifiers_mask=code_task_input.sub_identifiers_mask)  # (batch_size, nr_identifiers, identifier_encoding_dim)
+            identifiers_sub_parts=code_task_input.identifiers_sub_parts)  # (nr_identifiers_in_batch, identifier_encoding_dim)
         encoded_cfg_nodes: EncodedCFGNode = self.cfg_node_encoder(
-            encoded_identifiers=encoded_identifiers, cfg_nodes_expressions=code_task_input.cfg_nodes_expressions,
-            cfg_nodes_expressions_mask=code_task_input.cfg_nodes_expressions_mask,
-            cfg_nodes_mask=code_task_input.cfg_nodes_mask,
-            cfg_nodes_control_kind=code_task_input.cfg_nodes_control_kind)  # (batch_size, nr_cfg_nodes, cfg_node_encoding_dim)
+            encoded_identifiers=encoded_identifiers,
+            pdg=code_task_input.pdg)  # (nr_cfg_nodes_in_batch, cfg_node_encoding_dim)
 
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,
-            identifiers_idxs_of_all_symbols=code_task_input.identifiers_idxs_of_all_symbols,
-            identifiers_idxs_of_all_symbols_mask=code_task_input.identifiers_idxs_of_all_symbols_mask)
-
-        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.ndim == 3
-        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size(0) == \
-               code_task_input.batch_size
-        assert code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor.size(2) == 2
-        flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
-            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size(2) * \
-            code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 0] + \
-            code_task_input.indices_of_symbols_occurrences_in_cfg_nodes_expressions.tensor[:, :, 1]
-        flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions = \
-            flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.unsqueeze(-1)\
-                .expand(flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions.size() +
-                        (encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.size(-1),))
-        symbol_occurrences_encodings = torch.gather(
-            encoded_cfg_nodes.encoded_cfg_nodes_expressions.full_expr_encoded.flatten(1, 2),
-            dim=1, index=flattened_indices_of_symbols_occurrences_in_cfg_nodes_expressions)
-        symbols_occurrences_scattered_encodings = ScatteredEncodings(
-            encodings=symbol_occurrences_encodings,
-            indices=code_task_input.symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions.tensor,
-            mask=code_task_input.symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions.collate_mask)
+            symbols=code_task_input.symbols,
+            encoded_cfg_expressions=encoded_cfg_nodes.encoded_cfg_nodes_expressions)
 
         encoded_cfg_nodes_after_bridge = encoded_cfg_nodes.encoded_cfg_nodes
         if self.encoder_decoder_bridge_dense_layers:
@@ -94,5 +72,4 @@ class MethodCodeEncoder(nn.Module):
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes.encoded_cfg_nodes,
             encoded_symbols=encoded_symbols,
-            encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge,
-            encoded_symbols_occurrences=symbols_occurrences_scattered_encodings)
+            encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)
