@@ -9,12 +9,12 @@ from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 class SymbolsDecoder(nn.Module):
     def __init__(self, symbols_special_words_embedding: nn.Embedding, symbols_special_words_vocab: Vocabulary,
-                 max_nr_taget_symbols: int, encoder_output_len: int = 80, encoder_output_dim: int = 256,
+                 max_nr_taget_symbols: int, encoder_output_dim: int = 256,
                  symbols_encoding_dim: int = 256, symbols_emb_dropout_p: float = 0.3):
         super(SymbolsDecoder, self).__init__()
         # FIXME: might be problematic because 2 different modules hold `symbols_special_words_embedding` (both SymbolsEncoder and SymbolsDecoder).
         self.attn_rnn_decoder = AttnRNNDecoder(
-            encoder_output_len=encoder_output_len, encoder_output_dim=encoder_output_dim,
+            encoder_output_dim=encoder_output_dim,
             max_target_seq_len=max_nr_taget_symbols, decoder_hidden_dim=max(symbols_encoding_dim * 4, encoder_output_dim),
             decoder_output_dim=symbols_encoding_dim, embedding_dropout_p=symbols_emb_dropout_p,
             rnn_type='lstm', nr_rnn_layers=2, output_common_embedding=symbols_special_words_embedding,
