@@ -210,7 +210,7 @@ def preprocess_code_task_example(
                 if pdg_node.idx not in pdg_nodes_to_mask else
                 pdg_nodes_to_mask[pdg_node.idx])
              for pdg_node in method_pdg.pdg_nodes])),
-        cfg_nodes_has_expression_mask=BatchFlattenedTensor(torch.LongTensor(
+        cfg_nodes_has_expression_mask=BatchFlattenedTensor(torch.BoolTensor(
             [pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
              for pdg_node in method_pdg.pdg_nodes])),
         cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions)
