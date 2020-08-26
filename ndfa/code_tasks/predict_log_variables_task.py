@@ -134,7 +134,7 @@ class PredictLoggingCallVarsModelOutput(TensorsDataClass):
 class PredictLogVarsTaggedExample(TensorsDataClass):
     example_hash: str
     code_task_input: MethodCodeInputTensors
-    target_symbols_idxs_used_in_logging_call: BatchedFlattenedIndicesTensor
+    target_symbols_idxs_used_in_logging_call: Union[BatchedFlattenedIndicesTensor, torch.LongTensor]
 
     def __iter__(self):  # To support unpacking into (x_batch, y_batch)
         yield self.code_task_input
@@ -159,13 +159,17 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             symbols_special_words_embedding=self.code_task_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.method_code_encoder.max_nr_target_symbols + 2,
-            encoder_output_len=model_hps.method_code_encoder.max_nr_pdg_nodes,
             encoder_output_dim=self.code_task_encoder.cfg_node_encoder.output_dim,
             symbols_encoding_dim=self.identifier_embedding_dim)
 
-    def forward(self, code_task_input: MethodCodeInputTensors,
-                target_symbols_idxs_used_in_logging_call: Optional[BatchedFlattenedIndicesTensor] = None):
+    def forward(
+            self, code_task_input: MethodCodeInputTensors,
+            target_symbols_idxs_used_in_logging_call: Optional[Union[BatchedFlattenedIndicesTensor, torch.LongTensor]] = None):
         self.dbg_log_new_fwd()
+        target_symbols_idxs_used_in_logging_call = \
+            target_symbols_idxs_used_in_logging_call.indices \
+            if isinstance(target_symbols_idxs_used_in_logging_call, BatchedFlattenedIndicesTensor) else \
+            target_symbols_idxs_used_in_logging_call
 
         encoded_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
         self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
@@ -175,9 +179,9 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
 
         decoder_outputs = self.symbols_decoder(
             encoder_outputs=encoded_code.encoded_cfg_nodes_after_bridge,
-            encoder_outputs_mask=code_task_input.cfg_nodes_mask,
+            encoder_outputs_mask=code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask,
             symbols_encodings=encoded_code.encoded_symbols,
-            symbols_encodings_mask=code_task_input.identifiers_idxs_of_all_symbols_mask,
+            symbols_encodings_mask=code_task_input.symbols.symbols_identifier_indices.unflattener_mask,
             encoded_symbols_occurrences=encoded_code.encoded_symbols_occurrences,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
         self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
@@ -194,7 +198,13 @@ class PredictLogVarsModelLoss(nn.Module):
         self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
         self.dbg__example_idx_to_test_grads = 3
 
-    def dbg_forward_test_grads(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
+    def dbg_forward_test_grads(
+            self, model_output: PredictLoggingCallVarsModelOutput,
+            target_symbols_idxs: Union[BatchedFlattenedIndicesTensor, torch.LongTensor]):
+        target_symbols_idxs = \
+            target_symbols_idxs.indices \
+            if isinstance(target_symbols_idxs, BatchedFlattenedIndicesTensor) else \
+            target_symbols_idxs
         # Change this to be the forward() when debugging gradients.
         assert model_output.decoder_outputs.ndim == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
         assert target_symbols_idxs.ndim == 2  # (bsz, nr_target_symbols)
@@ -203,7 +213,12 @@ class PredictLogVarsModelLoss(nn.Module):
         assert target_symbols_idxs.dtype == torch.long
         return model_output.decoder_outputs[self.dbg__example_idx_to_test_grads, :, :].sum()
 
-    def forward(self, model_output: PredictLoggingCallVarsModelOutput, target_symbols_idxs: torch.LongTensor):
+    def forward(self, model_output: PredictLoggingCallVarsModelOutput,
+                target_symbols_idxs: Union[BatchedFlattenedIndicesTensor, torch.LongTensor]):
+        target_symbols_idxs = \
+            target_symbols_idxs.indices \
+            if isinstance(target_symbols_idxs, BatchedFlattenedIndicesTensor) else \
+            target_symbols_idxs
         assert model_output.decoder_outputs.ndim == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
         assert target_symbols_idxs.ndim == 2  # (bsz, nr_target_symbols)
         assert model_output.decoder_outputs.size(0) == target_symbols_idxs.size(0)  # bsz
@@ -260,15 +275,22 @@ def preprocess_logging_call_example(
     #     max_length=model_hps.method_code_encoder.max_nr_target_symbols + 2,
     #     pad_word=code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))), dtype=torch.long)
 
-    target_symbols_idxs_used_in_logging_call = None if not add_tag else BatchedFlattenedIndicesTensor(
-        torch.LongTensor(
+    target_symbols_idxs_used_in_logging_call = None
+    if add_tag:
+        target_symbols_idxs_used_in_logging_call = torch.LongTensor(
             [code_task_vocabs.symbols_special_words.get_word_idx('<SOS>')] +
             [symbol_idx_wo_specials + len(code_task_vocabs.symbols_special_words)
              for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
             [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')] +
             [code_task_vocabs.symbols_special_words.get_word_idx('<PAD>')] *
-            (model_hps.method_code_encoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call))),
-        tgt_indexing_group='symbols', within_example_indexing_start=len(code_task_vocabs.symbols_special_words))
+            (model_hps.method_code_encoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call)))
+        if False:  # TODO: plug here real condition
+            # Used for batched target vocab decoder
+            # (using encodings of symbols of all examples in the batch as tgt vocab)
+            target_symbols_idxs_used_in_logging_call = BatchedFlattenedIndicesTensor(
+                indices=target_symbols_idxs_used_in_logging_call,
+                tgt_indexing_group='symbols',
+                within_example_indexing_start=len(code_task_vocabs.symbols_special_words))
 
     return PredictLogVarsTaggedExample(
         example_hash=raw_example.logging_call.hash,
