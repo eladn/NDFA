@@ -19,7 +19,8 @@ class EncodedCFGNode:
 class CFGNodeEncoder(nn.Module):
     def __init__(self, expression_encoder: ExpressionEncoder, pdg_node_control_kinds_vocab: Vocabulary,
                  pdg_node_control_kinds_embedding_dim: int = 8, rnn_type: str = 'lstm',
-                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True, nr_cfg_nodes_encoding_linear_layers: int = 2):
+                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True, nr_cfg_nodes_encoding_linear_layers: int = 2,
+                 dropout_rate: float = 0.3):
         assert nr_cfg_nodes_encoding_linear_layers >= 1
         super(CFGNodeEncoder, self).__init__()
         self.expression_encoder = expression_encoder
@@ -43,6 +44,8 @@ class CFGNodeEncoder(nn.Module):
             input_size=self.output_dim, hidden_size=self.output_dim,
             bidirectional=rnn_bi_direction, num_layers=self.nr_rnn_layers)
 
+        self.dropout_layer = nn.Dropout(p=dropout_rate)
+
     def forward(self, encoded_identifiers: torch.Tensor, pdg: PDGInputTensors):
         encoded_expressions: EncodedExpression = self.expression_encoder(
             expressions=pdg.cfg_nodes_tokenized_expressions, encoded_identifiers=encoded_identifiers)
@@ -53,8 +56,11 @@ class CFGNodeEncoder(nn.Module):
         cfg_nodes_expressions_encodings = torch.zeros(
             size=(nr_cfg_nodes_in_batch, encoded_expressions.expr_encoded_merge.size(-1)),
             dtype=encoded_expressions.expr_encoded_merge.dtype, device=encoded_expressions.expr_encoded_merge.device)
+        # TODO: remove `.to(torch.bool)`
         cfg_nodes_expressions_encodings.masked_scatter_(
-            mask=pdg.cfg_nodes_has_expression_mask, source=encoded_expressions.expr_encoded_merge)
+            mask=pdg.cfg_nodes_has_expression_mask.tensor.to(torch.bool)
+            .unsqueeze(-1).expand(cfg_nodes_expressions_encodings.size()),
+            source=encoded_expressions.expr_encoded_merge)
         cfg_nodes_encodings = torch.cat(
             [cfg_nodes_expressions_encodings, embedded_cfg_nodes_control_kind], dim=-1)  # (nr_cfg_nodes_in_batch, expr_embed_dim + control_kind_embedding)
 
@@ -74,11 +80,13 @@ class CFGNodeEncoder(nn.Module):
             enforce_sorted=False, batch_first=True)
         rnn_outputs, (_, _) = self.rnn_layer(packed_input)
         rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
-        assert rnn_outputs.size() == (nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions * self.output_dim)
+        print('rnn_outputs.size()', rnn_outputs.size())
+        print('(nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions * self.output_dim)', (nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions * self.output_dim))
+        assert rnn_outputs.size() == (max_nr_cfg_nodes, nr_examples, self.nr_rnn_directions * self.output_dim)
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \
-                .view(nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions, self.output_dim).sum(dim=-2)
-        # rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (batch_size, max_nr_cfg_nodes, output_dim)
+                .view(max_nr_cfg_nodes, nr_examples, self.nr_rnn_directions, self.output_dim).sum(dim=-2)
+        rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (batch_size, max_nr_cfg_nodes, output_dim)
         assert rnn_outputs.size() == (nr_examples, max_nr_cfg_nodes, self.output_dim)
 
         return EncodedCFGNode(
