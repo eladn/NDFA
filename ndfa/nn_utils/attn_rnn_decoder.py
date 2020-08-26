@@ -13,14 +13,13 @@ __all__ = ['AttnRNNDecoder']
 
 
 class AttnRNNDecoder(nn.Module):
-    def __init__(self, encoder_output_len: int, encoder_output_dim: int, decoder_hidden_dim: int,
+    def __init__(self, encoder_output_dim: int, decoder_hidden_dim: int,
                  decoder_output_dim: int, max_target_seq_len: int,  embedding_dropout_p: Optional[float] = 0.3,
                  rnn_type: str = 'lstm', nr_rnn_layers: int = 1,
                  output_common_embedding: Optional[Union[torch.Tensor, nn.Embedding]] = None,
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
-        self.encoder_output_len = encoder_output_len  # TODO: remove!
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim
@@ -64,10 +63,9 @@ class AttnRNNDecoder(nn.Module):
         nr_all_possible_output_words_encodings = nr_output_batched_words_per_example + self.nr_output_common_embeddings
         assert output_batched_encodings_mask is None or output_batched_encodings_mask.size() == \
                (batch_size, nr_output_batched_words_per_example)
-        assert encoder_output_len <= self.encoder_output_len
         assert encoder_output_dim == self.encoder_output_dim
-        assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, self.encoder_output_len)
-        encoder_outputs_mask = None if encoder_outputs_mask is None else encoder_outputs_mask[:, :encoder_output_len]
+        assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, encoder_output_len)
+        # encoder_outputs_mask = None if encoder_outputs_mask is None else encoder_outputs_mask[:, :encoder_output_len]
 
         # TODO: export to `init_hidden()` method.
         hidden_shape = (self.nr_rnn_layers, batch_size, self.decoder_hidden_dim)
