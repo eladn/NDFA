@@ -18,7 +18,7 @@ class SymbolsEncoder(nn.Module):
             num_embeddings=len(self.symbols_special_words_vocab),
             embedding_dim=symbol_embedding_dim,
             padding_idx=self.symbols_special_words_vocab.get_word_idx('<PAD>'))
-        self.symbols_token_occurrences_and_identifiers_embeddings_projection = nn.Linear(
+        self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
             in_features=expr_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
@@ -51,7 +51,7 @@ class SymbolsEncoder(nn.Module):
         combined_symbols_encoding = torch.cat(
             [encoded_symbols_wo_commons, symbols_occurrences_encodings], dim=-1)
         combined_symbols_encoding = \
-            self.symbols_token_occurrences_and_identifiers_embeddings_projection(combined_symbols_encoding)
+            self.symbols_token_occurrences_and_identifiers_embeddings_combiner(combined_symbols_encoding)
         combined_symbols_encoding = self.dropout_layer(F.relu(combined_symbols_encoding))
 
         unflattened_combined_symbols_encoding = \
