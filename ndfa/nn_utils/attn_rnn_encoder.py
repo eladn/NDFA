@@ -40,7 +40,7 @@ class AttnRNNEncoder(nn.Module):
             lengths = torch.where(lengths <= torch.zeros(1, dtype=torch.long, device=lengths.device),
                                   torch.ones(1, dtype=torch.long, device=lengths.device), lengths)
         elif lengths is not None:
-            batched_ranges = torch.arange(start=1, end=seq_len + 1)\
+            batched_ranges = torch.arange(start=1, end=seq_len + 1, dtype=torch.long, device=lengths.device)\
                 .unsqueeze(0).expand(batch_size, seq_len)
             mask = (batched_ranges <= lengths.unsqueeze(-1).expand(batch_size, seq_len))
 
