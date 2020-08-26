@@ -364,12 +364,15 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
             flattened.nr_items_per_example.cumsum(dim=-1) - flattened.nr_items_per_example
         flattened.unflattener = torch.stack([
             torch.cat([
-                torch.arange(getattr(inp, non_none_data_field_names[0]).size(0)) +
+                torch.arange(getattr(inp, non_none_data_field_names[0]).size(0), dtype=torch.long) +
                 flattened.batched_index_offset_additive_fix_per_example[example_idx],
-                torch.zeros(flattened.max_nr_items - getattr(inp, non_none_data_field_names[0]).size(0))], dim=0)
+                torch.zeros(
+                    size=(flattened.max_nr_items - getattr(inp, non_none_data_field_names[0]).size(0),),
+                    dtype=torch.long)
+            ], dim=0)
             for example_idx, inp in enumerate(inputs)], dim=0)
         flattened.flattener = torch.cat([
-            torch.arange(nr_items) + example_idx * flattened.max_nr_items
+            torch.arange(nr_items, dtype=torch.long) + example_idx * flattened.max_nr_items
             for example_idx, nr_items in enumerate(flattened.nr_items_per_example)], dim=0)
         flattened._nr_examples = len(inputs)
         flattened._batch_size = getattr(flattened, non_none_data_field_names[0]).size(0)  # FIXME: does it make sense?
@@ -383,7 +386,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
         self.batched_index_offset_additive_fix_per_example = None
 
     def unflatten(self, tensor: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError  # TODO: implement! use `self.unflattener`
+        return tensor[self.unflattener.to(torch.long)]  # TODO: remove `.to(torch.long)`
 
     def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError  # TODO: implement! use `self.flattener`
