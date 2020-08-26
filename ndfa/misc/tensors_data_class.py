@@ -314,6 +314,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
     nr_items_per_example: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)  # (bsz,)
     max_nr_items: Optional[int] = dataclasses.field(init=False, default=None)
     unflattener: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)
+    unflattener_mask: Optional[torch.BoolTensor] = dataclasses.field(init=False, default=None)
     flattener: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)
     _nr_examples: Optional[int] = dataclasses.field(init=False, default=None)
 
@@ -328,7 +329,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchFlattenedTensorsDataClass, cls).get_management_fields() + (
-            'nr_items_per_example', 'max_nr_items', 'unflattener', 'flattener',
+            'nr_items_per_example', 'max_nr_items', 'unflattener', 'unflattener_mask', 'flattener',
             'batched_index_offset_additive_fix_per_example', '_nr_examples')
 
     @classmethod
@@ -371,6 +372,12 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
                     dtype=torch.long)
             ], dim=0)
             for example_idx, inp in enumerate(inputs)], dim=0)
+
+        batched_ranges = torch.arange(start=1, end=flattened.unflattener.size(-1) + 1) \
+            .unsqueeze(0).expand(flattened.unflattener.size())
+        flattened.unflattener_mask = \
+            (batched_ranges <= flattened.nr_items_per_example.unsqueeze(-1).expand(flattened.unflattener.size()))
+
         flattened.flattener = torch.cat([
             torch.arange(nr_items, dtype=torch.long) + example_idx * flattened.max_nr_items
             for example_idx, nr_items in enumerate(flattened.nr_items_per_example)], dim=0)
@@ -386,7 +393,14 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
         self.batched_index_offset_additive_fix_per_example = None
 
     def unflatten(self, tensor: torch.Tensor) -> torch.Tensor:
-        return tensor[self.unflattener]
+        expanded_mask = self.unflattener_mask
+        tensor_additional_dims = tensor.size()[1:]
+        new_dim = expanded_mask.size() + tensor_additional_dims
+        expanded_mask = expanded_mask.view(expanded_mask.size() + (1,) * len(tensor_additional_dims)).expand(new_dim)
+        return torch.where(
+            expanded_mask,
+            tensor[self.unflattener],
+            torch.zeros(1, dtype=tensor.dtype, device=tensor.device))
 
     def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError  # TODO: implement! use `self.flattener`
