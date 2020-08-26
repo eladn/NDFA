@@ -8,15 +8,14 @@ from torch.nn.modules.normalization import LayerNorm
 
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
-from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
 from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
 @dataclasses.dataclass
 class EncodedExpression:
-    expr_encoded_merge: torch.Tensor
-    full_expr_encoded: torch.Tensor
+    expr_encoded_merge: torch.Tensor  # (nr_expressions_in_batch, expr_encoding_dim)
+    full_expr_encoded: torch.Tensor  # (nr_expressions_in_batch, max_nr_tokens_in_expr, expr_encoding_dim)
 
 
 class ExpressionEncoder(nn.Module):
@@ -49,9 +48,9 @@ class ExpressionEncoder(nn.Module):
             num_embeddings=len(self.identifiers_special_words_vocab), embedding_dim=self.identifier_embedding_dim)
 
         assert self.kos_token_embedding_dim == self.identifier_embedding_dim
-        self.token_embedding_dim = self.kos_token_embedding_dim
+        self.kos_or_identifier_token_embedding_dim = self.kos_token_embedding_dim
         self.projection_linear_layer = nn.Linear(
-            self.token_kind_embedding_dim + self.token_embedding_dim, self.expr_encoding_dim)
+            self.token_kind_embedding_dim + self.kos_or_identifier_token_embedding_dim, self.expr_encoding_dim)
         self.additional_linear_layers = nn.ModuleList(
             [nn.Linear(self.expr_encoding_dim, self.expr_encoding_dim) for _ in range(nr_out_linear_layers - 1)])
 
@@ -71,10 +70,12 @@ class ExpressionEncoder(nn.Module):
     def forward(self, expressions: CodeExpressionTokensSequenceInputTensors,
                 encoded_identifiers: torch.Tensor):
         token_kind_embeddings = self.tokens_kinds_embedding_layer(expressions.token_type.sequences)
-        kos_tokens_embeddings = self.kos_tokens_embedding_layer(expressions.kos_token_index)
-        identifiers_embeddings = encoded_identifiers[expressions.identifier_index]
+        kos_tokens_embeddings = self.kos_tokens_embedding_layer(expressions.kos_token_index.tensor)
+        identifiers_embeddings = encoded_identifiers[expressions.identifier_index.indices]
         is_identifier_token = \
             expressions.token_type.sequences == self.tokens_kinds_vocab.get_word_idx(SerTokenKind.IDENTIFIER.value)
+        is_identifier_token_mask = is_identifier_token.unsqueeze(-1).expand(
+            is_identifier_token.size() + (self.identifier_embedding_dim,))
         token_kinds_for_kos_tokens_vocab = (
             self.tokens_kinds_vocab.get_word_idx(SerTokenKind.OPERATOR.value),
             self.tokens_kinds_vocab.get_word_idx(SerTokenKind.SEPARATOR.value),
@@ -82,15 +83,19 @@ class ExpressionEncoder(nn.Module):
         is_kos_token = reduce(
             torch.Tensor.logical_or,
             ((expressions.token_type.sequences == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
+        is_kos_token_mask = is_kos_token.unsqueeze(-1).expand(
+            is_kos_token.size() + (self.kos_token_embedding_dim,))
 
         # Note: we could consider concatenate kos & identifier embeddings: <kos|None> or <None|identifier>.
         kos_or_identifier_token_encoding = torch.zeros(
-            size=token_kind_embeddings.size()[:-1] + (self.token_embedding_dim,),
+            size=token_kind_embeddings.size()[:-1] + (self.kos_or_identifier_token_embedding_dim,),
             dtype=identifiers_embeddings.dtype, device=identifiers_embeddings.device)
+
         kos_or_identifier_token_encoding.masked_scatter_(
-            mask=is_identifier_token, source=identifiers_embeddings)
+            mask=is_identifier_token_mask,
+            source=identifiers_embeddings)
         kos_or_identifier_token_encoding = kos_or_identifier_token_encoding.masked_scatter(
-            is_kos_token, kos_tokens_embeddings)
+            is_kos_token_mask, kos_tokens_embeddings)
 
         final_token_seqs_encodings = torch.cat([token_kind_embeddings, kos_or_identifier_token_encoding], dim=-1)
         assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
