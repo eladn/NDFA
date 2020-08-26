@@ -56,10 +56,8 @@ class CFGNodeEncoder(nn.Module):
         cfg_nodes_expressions_encodings = torch.zeros(
             size=(nr_cfg_nodes_in_batch, encoded_expressions.expr_encoded_merge.size(-1)),
             dtype=encoded_expressions.expr_encoded_merge.dtype, device=encoded_expressions.expr_encoded_merge.device)
-        # TODO: remove `.to(torch.bool)`
         cfg_nodes_expressions_encodings.masked_scatter_(
-            mask=pdg.cfg_nodes_has_expression_mask.tensor.to(torch.bool)
-            .unsqueeze(-1).expand(cfg_nodes_expressions_encodings.size()),
+            mask=pdg.cfg_nodes_has_expression_mask.tensor.unsqueeze(-1).expand(cfg_nodes_expressions_encodings.size()),
             source=encoded_expressions.expr_encoded_merge)
         cfg_nodes_encodings = torch.cat(
             [cfg_nodes_expressions_encodings, embedded_cfg_nodes_control_kind], dim=-1)  # (nr_cfg_nodes_in_batch, expr_embed_dim + control_kind_embedding)
@@ -80,8 +78,6 @@ class CFGNodeEncoder(nn.Module):
             enforce_sorted=False, batch_first=True)
         rnn_outputs, (_, _) = self.rnn_layer(packed_input)
         rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
-        print('rnn_outputs.size()', rnn_outputs.size())
-        print('(nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions * self.output_dim)', (nr_examples, max_nr_cfg_nodes, self.nr_rnn_directions * self.output_dim))
         assert rnn_outputs.size() == (max_nr_cfg_nodes, nr_examples, self.nr_rnn_directions * self.output_dim)
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \

@@ -386,7 +386,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
         self.batched_index_offset_additive_fix_per_example = None
 
     def unflatten(self, tensor: torch.Tensor) -> torch.Tensor:
-        return tensor[self.unflattener.to(torch.long)]  # TODO: remove `.to(torch.long)`
+        return tensor[self.unflattener]
 
     def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError  # TODO: implement! use `self.flattener`
