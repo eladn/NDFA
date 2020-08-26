@@ -160,13 +160,14 @@ def preprocess_code_task_example(
         if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask}
     del _counter
 
+    # Note: If we would like the absolute token idx (within the whole method) we could just add the param
+    #       `start=pdg_node.code_sub_token_range_ref.begin_token_idx` to enumerate(...)
     symbols_occurrences = [
-        (pdg_node_idx_to_expression_idx_mapping[pdg_node.idx], token_idx, token.symbol_idx)
+        (pdg_node_idx_to_expression_idx_mapping[pdg_node.idx], within_expr_token_idx, token.symbol_idx)
         for pdg_node in method_pdg.pdg_nodes
         if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
-        for token_idx, token in enumerate(
-            get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node),
-            start=pdg_node.code_sub_token_range_ref.begin_token_idx)
+        for within_expr_token_idx, token in enumerate(
+            get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node))
         if token.symbol_idx is not None]
     symbols = SymbolsInputTensors(
         symbols_identifier_indices=BatchedFlattenedIndicesFlattenedTensor(
