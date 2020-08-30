@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch_scatter import scatter_mean
 
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.code_nn_modules.vocabulary import Vocabulary
@@ -35,18 +36,25 @@ class SymbolsEncoder(nn.Module):
             cfg_expr_tokens_encodings_of_symbols_occurrences = \
                 encoded_cfg_expressions.full_expr_encoded\
                 .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
-            symbols_occurrences_encodings_sum = \
-                torch.zeros(
-                    size=symbols.symbols_identifier_indices.indices.size() +
-                         (cfg_expr_tokens_encodings_of_symbols_occurrences.size(-1),),
-                    dtype=cfg_expr_tokens_encodings_of_symbols_occurrences.dtype,
-                    device=cfg_expr_tokens_encodings_of_symbols_occurrences.device)
-            symbols_occurrences_encodings = symbols_occurrences_encodings_sum.scatter_add(
-                dim=0,
-                index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
-                .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
-                src=cfg_expr_tokens_encodings_of_symbols_occurrences)
-            # TODO: we might want to normalize the `symbols_occurrences_encodings` (maybe using `nn.BatchNorm1d`)
+            if False:
+                symbols_occurrences_zeros = \
+                    torch.zeros(
+                        size=symbols.symbols_identifier_indices.indices.size() +
+                             (cfg_expr_tokens_encodings_of_symbols_occurrences.size(-1),),
+                        dtype=cfg_expr_tokens_encodings_of_symbols_occurrences.dtype,
+                        device=cfg_expr_tokens_encodings_of_symbols_occurrences.device)
+                symbols_occurrences_encodings = symbols_occurrences_zeros.scatter_add(
+                    dim=0,
+                    index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
+                    .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
+                    src=cfg_expr_tokens_encodings_of_symbols_occurrences)
+                # TODO: we might want to normalize the `symbols_occurrences_encodings` (maybe using `nn.BatchNorm1d`)
+            else:
+                symbols_occurrences_encodings = scatter_mean(
+                    src=cfg_expr_tokens_encodings_of_symbols_occurrences,
+                    index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
+                    .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
+                    dim=0)
 
             assert encoded_symbols_wo_commons.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
             combined_symbols_encoding = torch.cat(

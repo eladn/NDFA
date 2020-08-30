@@ -154,7 +154,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
             expr_encoding_dim=self.expr_encoding_dim,  # TODO: plug-in model hps
-            use_copy_attn_with_symbols_occurrences_in_cfg_expressions=False)
+            use_copy_attn_with_symbols_occurrences_in_cfg_expressions=True)
 
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.code_task_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).

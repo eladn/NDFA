@@ -1,4 +1,4 @@
-torch>=1.4.0
+torch>=1.6.0
 tqdm>=4.45.0
 tabulate
 numpy
@@ -12,3 +12,5 @@ confclass
 # torch-geometric
 typing_extensions
 notify_run
+# pip install torch-scatter==latest+cpu -f https://pytorch-geometric.com/whl/torch-1.6.0.html
+# pip install torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
