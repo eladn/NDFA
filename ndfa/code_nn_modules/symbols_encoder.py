@@ -36,6 +36,7 @@ class SymbolsEncoder(nn.Module):
             cfg_expr_tokens_encodings_of_symbols_occurrences = \
                 encoded_cfg_expressions.full_expr_encoded\
                 .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
+            nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
             if False:
                 symbols_occurrences_zeros = \
                     torch.zeros(
@@ -54,7 +55,7 @@ class SymbolsEncoder(nn.Module):
                     src=cfg_expr_tokens_encodings_of_symbols_occurrences,
                     index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
                     .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
-                    dim=0)
+                    dim=0, dim_size=nr_symbols)
 
             assert encoded_symbols_wo_commons.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
             combined_symbols_encoding = torch.cat(
