@@ -69,11 +69,15 @@ class AuxTaskSchedulerDuringTrainEpoch:
 
         nr_calls_during_train_epoch = self.calc_nr_calls_during_train_epoch(
             total_nr_steps_in_epoch=total_nr_steps_in_epoch, train_step_avg_time=train_step_avg_time)
+        if nr_calls_during_train_epoch < 1:
+            return False
         nr_steps_performed_since_last_call = self.get_nr_steps_performed_since_last_call(cur_step_nr)
         nr_train_steps_to_spread_calls_over = \
             total_nr_steps_in_epoch - cur_step_nr + nr_steps_performed_since_last_call
         nr_remaining_calls_to_perform = \
             nr_calls_during_train_epoch - self.nr_calls_performed_during_epoch
+        if nr_remaining_calls_to_perform < 1:
+            return False
         perform_call_every_nr_train_steps = \
             nr_train_steps_to_spread_calls_over // nr_remaining_calls_to_perform
         do_call_this_step = \
