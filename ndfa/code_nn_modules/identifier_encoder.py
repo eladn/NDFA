@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
+from typing import Optional
 
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
@@ -10,7 +12,7 @@ from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary, method: str = 'bi-lstm', embedding_dim: int = 256,
-                 nr_rnn_layers: int = 2):
+                 nr_rnn_layers: int = 2, dropout_rate: float = 0.3):
         assert method in {'bi-lstm', 'transformer_encoder'}
         self.method = method
         super(IdentifierEncoder, self).__init__()
@@ -30,17 +32,38 @@ class IdentifierEncoder(nn.Module):
             self.attn_rnn_encoder = AttnRNNEncoder(
                 input_dim=self.embedding_dim, hidden_dim=self.embedding_dim, rnn_type='lstm',
                 nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
+        self.dropout_layer = nn.Dropout(p=dropout_rate)
+        nr_hashing_features = 256  # TODO: plug-in HP
+        self.identifier_sub_parts_hashing_linear = nn.Linear(nr_hashing_features, nr_hashing_features, bias=False)
+        self.vocab_and_hashing_combiner = nn.Linear(embedding_dim + nr_hashing_features, embedding_dim)
 
-    def forward(self, identifiers_sub_parts: BatchFlattenedSeq):
+    def forward(self, identifiers_sub_parts: BatchFlattenedSeq,
+                identifiers_sub_parts_hashings: Optional[BatchFlattenedSeq] = None):
         assert isinstance(identifiers_sub_parts, BatchFlattenedSeq)
         assert isinstance(identifiers_sub_parts.sequences, torch.Tensor)
+        assert identifiers_sub_parts_hashings is None or \
+               isinstance(identifiers_sub_parts_hashings, BatchFlattenedSeq)
+        assert identifiers_sub_parts_hashings is None or \
+               isinstance(identifiers_sub_parts_hashings.sequences, torch.Tensor)
         assert identifiers_sub_parts.sequences.dtype == torch.long
         assert identifiers_sub_parts.sequences.ndim == 2
         nr_identifiers_in_batch, max_nr_sub_identifiers_in_identifier = identifiers_sub_parts.sequences.size()
 
-        identifiers_sub_parts_embeddings = self.sub_identifiers_embedding_layer(identifiers_sub_parts.sequences)
-        assert identifiers_sub_parts_embeddings.size() == \
+        identifiers_sub_parts_vocab_embeddings = self.sub_identifiers_embedding_layer(identifiers_sub_parts.sequences)
+        assert identifiers_sub_parts_vocab_embeddings.size() == \
                (nr_identifiers_in_batch, max_nr_sub_identifiers_in_identifier, self.embedding_dim)
+        identifiers_sub_parts_vocab_embeddings = self.dropout_layer(F.relu(identifiers_sub_parts_vocab_embeddings))
+
+        if identifiers_sub_parts_hashings is not None:
+            identifiers_sub_parts_hashings_projected = self.identifier_sub_parts_hashing_linear(
+                identifiers_sub_parts_hashings.sequences.to(torch.float32))  # TODO: remove `to(torch.float32)`!
+            identifiers_sub_parts_hashings_projected = self.dropout_layer(F.relu(identifiers_sub_parts_hashings_projected))
+            identifiers_sub_parts_vocab_embeddings_and_hashings_combined = self.vocab_and_hashing_combiner(
+                torch.cat([identifiers_sub_parts_vocab_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
+            identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(
+                identifiers_sub_parts_vocab_embeddings_and_hashings_combined))
+        else:
+            identifiers_sub_parts_embeddings = identifiers_sub_parts_vocab_embeddings
 
         if self.method == 'transformer_encoder':
             raise NotImplementedError

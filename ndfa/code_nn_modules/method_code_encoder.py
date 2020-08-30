@@ -53,7 +53,8 @@ class MethodCodeEncoder(nn.Module):
 
     def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCode:
         encoded_identifiers = self.identifier_encoder(
-            identifiers_sub_parts=code_task_input.identifiers_sub_parts)  # (nr_identifiers_in_batch, identifier_encoding_dim)
+            identifiers_sub_parts=code_task_input.identifiers_sub_parts,
+            identifiers_sub_parts_hashings=code_task_input.identifiers_sub_parts_hashings)  # (nr_identifiers_in_batch, identifier_encoding_dim)
         encoded_cfg_nodes: EncodedCFGNode = self.cfg_node_encoder(
             encoded_identifiers=encoded_identifiers,
             pdg=code_task_input.pdg)  # (nr_cfg_nodes_in_batch, cfg_node_encoding_dim)
