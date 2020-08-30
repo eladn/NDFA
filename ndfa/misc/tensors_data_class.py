@@ -1,6 +1,7 @@
 import torch
 import dataclasses
-from typing import List, Union, Optional, Tuple, Dict, Any, final
+from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
+from typing_extensions import Protocol
 
 
 __all__ = [
@@ -129,6 +130,10 @@ CollatableValuesTuple = Union[
     Tuple['TensorsDataClass', ...], Tuple[torch.Tensor, ...]]
 
 
+class MapFn(Protocol):
+    def __call__(self, value: Optional[CollatableValuesTuple]) -> Optional[CollatableValuesTuple]: ...
+
+
 @dataclasses.dataclass
 class TensorsDataClass:
     _batch_size: Optional[int] = dataclasses.field(init=False, default=None)
@@ -162,6 +167,10 @@ class TensorsDataClass:
     def to(self, device):
         return self.map(lambda field_val, _: field_val.to(device) if hasattr(field_val, 'to') else field_val)
 
+    def lazy_to(self, device, lazy_usage_history):
+        map_fn = lambda field_val: field_val.to(device) if hasattr(field_val, 'to') else field_val
+        return self.deep_lazy_map(map_fn=map_fn, lazy_map_usage_history=lazy_usage_history)
+
     def cpu(self):
         return self.map(lambda field_val, _: field_val.cpu() if hasattr(field_val, 'cpu') else field_val)
 
@@ -177,11 +186,89 @@ class TensorsDataClass:
             for field in dataclasses.fields(self) if field.init})
         for field in dataclasses.fields(self):
             if not field.init:
-                if field.name in {'_batch_size'}:
-                    setattr(new_obj, field.name, getattr(self, field.name))
-                else:
-                    setattr(new_obj, field.name, map_fn(getattr(self, field.name), field.name))
+                setattr(new_obj, field.name, map_fn(getattr(self, field.name), field.name))
         return new_obj
+
+    def deep_map(
+            self,
+            map_fn: MapFn,
+            parents_path: Tuple['TensorsDataClass', ...] = (),
+            fields_path: Tuple[str, ...] = ()) -> 'TensorsDataClass':
+        if hasattr(self, '_lazy_map_fn_per_field'):
+            raise RuntimeError('Cannot map() a TensorsDataClass that has been lazy_map()ed before.')
+        mapped_field_values = {}
+        new_parents_path = parents_path + (self,)
+        for field in dataclasses.fields(self):
+            field_value = getattr(self, field.name)
+            new_fields_path = fields_path + (field.name,)
+            if isinstance(field_value, TensorsDataClass):
+                mapped_field_values[field.name] = field_value.deep_map(
+                    map_fn=map_fn, parents_path=new_parents_path, fields_path=new_fields_path)
+            else:
+                mapped_field_values[field.name] = map_fn(field_value)
+        new_obj = self.__class__(
+            **{field.name: mapped_field_values[field.name] for field in dataclasses.fields(self) if field.init})
+        for field in dataclasses.fields(self):
+            if not field.init:
+                setattr(new_obj, field.name, mapped_field_values[field.name])
+        return new_obj
+
+    def deep_lazy_map(
+            self,
+            map_fn: MapFn,
+            lazy_map_usage_history: Dict[Tuple[str, ...], Set[str]] = None,
+            parents_path: Tuple['TensorsDataClass', ...] = (),
+            fields_path: Tuple[str, ...] = ()) -> 'TensorsDataClass':
+        assert '_lazy_map_fn_per_field' not in (field.name for field in dataclasses.fields(self))
+        if lazy_map_usage_history is None:
+            lazy_map_usage_history = {}
+        mapped_field_values = {}
+        lazy_map_fn_per_field = {}
+        new_parents_path = parents_path + (self,)
+        if fields_path not in lazy_map_usage_history:
+            lazy_map_usage_history[fields_path] = set()
+        lazy_map_usage_history_for_obj = lazy_map_usage_history[fields_path]
+        for field in dataclasses.fields(self):
+            field_value = object.__getattribute__(self, field.name)
+            new_fields_path = fields_path + (field.name,)
+            if isinstance(field_value, TensorsDataClass):
+                assert field.name not in lazy_map_usage_history_for_obj
+                assert not hasattr(self, '_lazy_map_fn_per_field') or field.name not in self._lazy_map_fn_per_field
+                mapped_field_values[field.name] = field_value.deep_lazy_map(
+                    map_fn=map_fn, lazy_map_usage_history=lazy_map_usage_history,
+                    parents_path=new_parents_path, fields_path=new_fields_path)
+            elif field.name in lazy_map_usage_history_for_obj:
+                assert not hasattr(self, '_lazy_map_fn_per_field') or field.name not in self._lazy_map_fn_per_field
+                mapped_field_values[field.name] = map_fn(field_value)
+            else:
+                mapped_field_values[field.name] = field_value
+                if hasattr(self, '_lazy_map_fn_per_field') and field.name in self._lazy_map_fn_per_field:
+                    lazy_map_fn_per_field[field.name] = \
+                        lambda val: map_fn(
+                            self._lazy_map_fn_per_field[field.name](val))
+                else:
+                    lazy_map_fn_per_field[field.name] = map_fn
+        new_obj = self.__class__(
+            **{field.name: mapped_field_values[field.name] for field in dataclasses.fields(self) if field.init})
+        for field in dataclasses.fields(self):
+            if not field.init:
+                setattr(new_obj, field.name, mapped_field_values[field.name])
+        new_obj._lazy_map_fn_per_field = lazy_map_fn_per_field
+        new_obj._lazy_map_usage_history = lazy_map_usage_history_for_obj
+        return new_obj
+
+    def __getattribute__(self, field_name):
+        # `__getattribute__` is overridden to support `lazy_map()`.
+        if field_name == '_lazy_map_fn_per_field':
+            return object.__getattribute__(self, field_name)
+        if hasattr(self, '_lazy_map_fn_per_field') and field_name in self._lazy_map_fn_per_field:
+            old_val = object.__getattribute__(self, field_name)
+            setattr(self, field_name, self._lazy_map_fn_per_field[field_name](old_val))
+            del self._lazy_map_fn_per_field[field_name]
+            if len(self._lazy_map_fn_per_field) == 0:
+                del self._lazy_map_fn_per_field
+            self._lazy_map_usage_history.add(field_name)
+        return object.__getattribute__(self, field_name)
 
     @classmethod
     def collate_values(cls, values_as_tuple: CollatableValuesTuple):

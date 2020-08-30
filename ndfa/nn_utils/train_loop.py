@@ -19,9 +19,24 @@ __all__ = ['fit', 'evaluate']
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
                                 criterion: nn.Module, optimizer: Optional[Optimizer] = None,
                                 batch_idx: Optional[int] = None, nr_batches: Optional[int] = None,
-                                nr_gradient_accumulation_steps: int = 1, dbg_test_grads: bool = False):
+                                nr_gradient_accumulation_steps: int = 1, dbg_test_grads: bool = False,
+                                lazy_move_to_device_history=None):
+    if lazy_move_to_device_history is None:
+        lazy_move_to_device_history = {'x': {}, 'y': {}}
+    else:
+        if 'x' not in lazy_move_to_device_history:
+            lazy_move_to_device_history['x'] = {}
+        if 'y' not in lazy_move_to_device_history:
+            lazy_move_to_device_history['y'] = {}
+
     # torch.cuda.empty_cache()  # this avoids OOM on bigger bsz, but makes all work slowly
-    x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+
+    # x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+    x_batch = x_batch.lazy_to(device, lazy_move_to_device_history['x']) \
+        if hasattr(x_batch, 'lazy_to') else x_batch.to(device)
+    y_batch = y_batch.lazy_to(device, lazy_move_to_device_history['y']) \
+        if hasattr(y_batch, 'lazy_to') else y_batch.to(device)
+
     y_pred = model(x_batch, y_batch)
     loss = criterion(y_pred, y_batch) / nr_gradient_accumulation_steps
     if optimizer is not None:
@@ -64,6 +79,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
     train_step_avg_time = None
     avg_throughput = None
+    train_lazy_move_to_device_history = {}
     for epoch_nr in range(1, nr_epochs + 1):  # TODO: allow resuming from given epoch number
         print(f'Starting training epoch #{epoch_nr} ..')
         for callback in callbacks:
@@ -84,7 +100,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
-                nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps)
+                nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
+                lazy_move_to_device_history=train_lazy_move_to_device_history)
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
                 train_step_avg_time * 0.8 + cur_step_duration * 0.2
@@ -180,14 +197,25 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
 
 def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,
-             evaluation_metrics_types: List[Type[EvaluationMetric]]) -> Tuple[float, Dict[str, float]]:
+             evaluation_metrics_types: List[Type[EvaluationMetric]], lazy_move_to_device_history=None) \
+        -> Tuple[float, Dict[str, float]]:
+    if lazy_move_to_device_history is None:
+        lazy_move_to_device_history = {'x': {}, 'y': {}}
+    else:
+        if 'x' not in lazy_move_to_device_history:
+            lazy_move_to_device_history['x'] = {}
+        if 'y' not in lazy_move_to_device_history:
+            lazy_move_to_device_history['y'] = {}
     model.to(device)
     model.eval()
     metrics = [metric() for metric in evaluation_metrics_types]
     eval_epoch_loss_sum = eval_epoch_nr_examples = 0
     with torch.no_grad():
         for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True, position=0, leave=True):
-            x_batch, y_batch = x_batch.to(device), y_batch.to(device)
+            x_batch = x_batch.lazy_to(device, lazy_move_to_device_history['x']) \
+                if hasattr(x_batch, 'lazy_to') else x_batch.to(device)
+            y_batch = y_batch.lazy_to(device, lazy_move_to_device_history['y']) \
+                if hasattr(y_batch, 'lazy_to') else y_batch.to(device)
             y_hat = model(x_batch)
             batch_loss = criterion(y_hat, y_batch).item()
             batch_nr_examples = x_batch.batch_size
