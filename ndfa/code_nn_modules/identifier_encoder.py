@@ -52,12 +52,12 @@ class IdentifierEncoder(nn.Module):
         identifiers_sub_parts_vocab_embeddings = self.sub_identifiers_embedding_layer(identifiers_sub_parts.sequences)
         assert identifiers_sub_parts_vocab_embeddings.size() == \
                (nr_identifiers_in_batch, max_nr_sub_identifiers_in_identifier, self.embedding_dim)
-        identifiers_sub_parts_vocab_embeddings = self.dropout_layer(F.relu(identifiers_sub_parts_vocab_embeddings))
+        identifiers_sub_parts_vocab_embeddings = self.dropout_layer(identifiers_sub_parts_vocab_embeddings)
 
         if identifiers_sub_parts_hashings is not None:
             identifiers_sub_parts_hashings_projected = self.identifier_sub_parts_hashing_linear(
-                identifiers_sub_parts_hashings.sequences.to(torch.float32))  # TODO: remove `to(torch.float32)`!
-            identifiers_sub_parts_hashings_projected = self.dropout_layer(F.relu(identifiers_sub_parts_hashings_projected))
+                identifiers_sub_parts_hashings.sequences)
+            identifiers_sub_parts_hashings_projected = self.dropout_layer(identifiers_sub_parts_hashings_projected)
             identifiers_sub_parts_vocab_embeddings_and_hashings_combined = self.vocab_and_hashing_combiner(
                 torch.cat([identifiers_sub_parts_vocab_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
             identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(
