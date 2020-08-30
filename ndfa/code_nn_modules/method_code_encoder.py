@@ -26,7 +26,8 @@ class EncodedMethodCode(NamedTuple):
 
 class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int = 256,
-                 expr_encoding_dim: int = 1028, nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3):
+                 expr_encoding_dim: int = 1028, nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3,
+                 use_copy_attn_with_symbols_occurrences_in_cfg_expressions: bool = True):
         super(MethodCodeEncoder, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
         self.expr_encoding_dim = expr_encoding_dim
@@ -47,6 +48,8 @@ class MethodCodeEncoder(nn.Module):
             symbol_embedding_dim=self.identifier_embedding_dim,
             expr_encoding_dim=self.expr_encoding_dim)  # it might change...
         self.dropout_layer = nn.Dropout(dropout_p)
+        self.use_copy_attn_with_symbols_occurrences_in_cfg_expressions = \
+            use_copy_attn_with_symbols_occurrences_in_cfg_expressions
 
     def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCode:
         encoded_identifiers = self.identifier_encoder(
@@ -58,7 +61,8 @@ class MethodCodeEncoder(nn.Module):
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,
             symbols=code_task_input.symbols,
-            encoded_cfg_expressions=encoded_cfg_nodes.encoded_cfg_nodes_expressions)
+            encoded_cfg_expressions=encoded_cfg_nodes.encoded_cfg_nodes_expressions
+            if self.use_copy_attn_with_symbols_occurrences_in_cfg_expressions else None)
 
         encoded_cfg_nodes_after_bridge = encoded_cfg_nodes.encoded_cfg_nodes
         if self.encoder_decoder_bridge_dense_layers:

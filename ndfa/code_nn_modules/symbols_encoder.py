@@ -27,32 +27,35 @@ class SymbolsEncoder(nn.Module):
                 encoded_cfg_expressions: EncodedExpression):
         encoded_symbols_wo_commons = encoded_identifiers[symbols.symbols_identifier_indices.indices]
 
-        max_nr_tokens_per_expression = encoded_cfg_expressions.full_expr_encoded.size(1)
-        cfg_expr_tokens_indices_of_symbols_occurrences = \
-            max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
-            symbols.symbols_appearances_expression_token_idx.tensor
-        cfg_expr_tokens_encodings_of_symbols_occurrences = \
-            encoded_cfg_expressions.full_expr_encoded\
-            .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
-        symbols_occurrences_encodings_sum = \
-            torch.zeros(
-                size=symbols.symbols_identifier_indices.indices.size() +
-                     (cfg_expr_tokens_encodings_of_symbols_occurrences.size(-1),),
-                dtype=cfg_expr_tokens_encodings_of_symbols_occurrences.dtype,
-                device=cfg_expr_tokens_encodings_of_symbols_occurrences.device)
-        symbols_occurrences_encodings = symbols_occurrences_encodings_sum.scatter_add(
-            dim=0,
-            index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
-            .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
-            src=cfg_expr_tokens_encodings_of_symbols_occurrences)
-        # TODO: we might want to normalize the `symbols_occurrences_encodings` (maybe using `nn.BatchNorm1d`)
+        if encoded_cfg_expressions is not None:
+            max_nr_tokens_per_expression = encoded_cfg_expressions.full_expr_encoded.size(1)
+            cfg_expr_tokens_indices_of_symbols_occurrences = \
+                max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
+                symbols.symbols_appearances_expression_token_idx.tensor
+            cfg_expr_tokens_encodings_of_symbols_occurrences = \
+                encoded_cfg_expressions.full_expr_encoded\
+                .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
+            symbols_occurrences_encodings_sum = \
+                torch.zeros(
+                    size=symbols.symbols_identifier_indices.indices.size() +
+                         (cfg_expr_tokens_encodings_of_symbols_occurrences.size(-1),),
+                    dtype=cfg_expr_tokens_encodings_of_symbols_occurrences.dtype,
+                    device=cfg_expr_tokens_encodings_of_symbols_occurrences.device)
+            symbols_occurrences_encodings = symbols_occurrences_encodings_sum.scatter_add(
+                dim=0,
+                index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
+                .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
+                src=cfg_expr_tokens_encodings_of_symbols_occurrences)
+            # TODO: we might want to normalize the `symbols_occurrences_encodings` (maybe using `nn.BatchNorm1d`)
 
-        assert encoded_symbols_wo_commons.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
-        combined_symbols_encoding = torch.cat(
-            [encoded_symbols_wo_commons, symbols_occurrences_encodings], dim=-1)
-        combined_symbols_encoding = \
-            self.symbols_token_occurrences_and_identifiers_embeddings_combiner(combined_symbols_encoding)
-        combined_symbols_encoding = self.dropout_layer(F.relu(combined_symbols_encoding))
+            assert encoded_symbols_wo_commons.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
+            combined_symbols_encoding = torch.cat(
+                [encoded_symbols_wo_commons, symbols_occurrences_encodings], dim=-1)
+            combined_symbols_encoding = \
+                self.symbols_token_occurrences_and_identifiers_embeddings_combiner(combined_symbols_encoding)
+            combined_symbols_encoding = self.dropout_layer(F.relu(combined_symbols_encoding))
+        else:
+            combined_symbols_encoding = encoded_symbols_wo_commons
 
         unflattened_combined_symbols_encoding = \
             symbols.symbols_identifier_indices.unflatten(combined_symbols_encoding)
