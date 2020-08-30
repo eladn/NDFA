@@ -52,6 +52,52 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
     return y_pred, loss.item() * nr_gradient_accumulation_steps, x_batch.batch_size
 
 
+class AuxTaskSchedulerDuringTrainEpoch:
+    def __init__(self, min_train_epoch_minutes_to_perform_task: float,
+                 task_time_consumption_ratio: float, task_duration_est: float):
+        self.min_train_epoch_minutes_to_perform_task = min_train_epoch_minutes_to_perform_task
+        self.task_time_consumption_ratio = task_time_consumption_ratio
+        self.step_nr_of_last_call = None
+        self.nr_calls_performed_during_epoch = 0
+        self.task_avg_duration = task_duration_est
+
+    def whether_to_call_this_step(
+            self, cur_step_nr: int, total_nr_steps_in_epoch: int, train_step_avg_time: float) -> bool:
+        if cur_step_nr == total_nr_steps_in_epoch:
+            return False
+        assert self.task_avg_duration is not None
+
+        nr_calls_during_train_epoch = self.calc_nr_calls_during_train_epoch(
+            total_nr_steps_in_epoch=total_nr_steps_in_epoch, train_step_avg_time=train_step_avg_time)
+        nr_steps_performed_since_last_call = self.get_nr_steps_performed_since_last_call(cur_step_nr)
+        nr_train_steps_to_spread_calls_over = \
+            total_nr_steps_in_epoch - cur_step_nr + nr_steps_performed_since_last_call
+        nr_remaining_calls_to_perform = \
+            nr_calls_during_train_epoch - self.nr_calls_performed_during_epoch
+        perform_call_every_nr_train_steps = \
+            nr_train_steps_to_spread_calls_over // nr_remaining_calls_to_perform
+        do_call_this_step = \
+            nr_steps_performed_since_last_call >= perform_call_every_nr_train_steps
+        return do_call_this_step
+
+    def calc_nr_calls_during_train_epoch(self, total_nr_steps_in_epoch: int, train_step_avg_time: float):
+        train_epoch_avg_time = total_nr_steps_in_epoch * train_step_avg_time
+        if self.min_train_epoch_minutes_to_perform_task > train_epoch_avg_time:
+            return 0
+        total_allowed_task_time_during_epoch = \
+            train_epoch_avg_time * self.task_time_consumption_ratio
+        return round(total_allowed_task_time_during_epoch / self.task_avg_duration)
+
+    def get_nr_steps_performed_since_last_call(self, cur_step_nr: int) -> int:
+        return cur_step_nr if self.step_nr_of_last_call is None else cur_step_nr - self.step_nr_of_last_call
+
+    def report_task_performed(self, cur_step_nr: int, duration: float):
+        self.nr_calls_performed_during_epoch += 1
+        self.step_nr_of_last_call += cur_step_nr
+        self.task_avg_duration = duration if self.task_avg_duration is None else \
+            0.8 * self.task_avg_duration + 0.2 * duration
+
+
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer,
         lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler], criterion: nn.Module = F.nll_loss,
@@ -60,6 +106,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
         callbacks: Optional[Collection[TrainCallback]] = None,
         evaluation_time_consumption_ratio: float = 1/8,
+        min_train_epoch_minutes_to_perform_evaluation_during: float = 10,
         perform_evaluation_before_starting_training: bool = True):
     if callbacks is None:
         callbacks = ()
@@ -88,7 +135,10 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
-        nr_steps_performed_since_last_evaluation = 0
+        evaluation_scheduler = None if valid_loader is None else AuxTaskSchedulerDuringTrainEpoch(
+            min_train_epoch_minutes_to_perform_task=min_train_epoch_minutes_to_perform_evaluation_during,
+            task_time_consumption_ratio=evaluation_time_consumption_ratio,
+            task_duration_est=evaluation_avg_duration)
         train_epoch_window_loss = WindowAverage(max_window_size=50)
         train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True, position=0, leave=True)
         nr_steps = len(train_data_loader_with_progress)
@@ -108,7 +158,6 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             cur_step_throughput = batch_nr_examples / cur_step_duration
             avg_throughput = cur_step_throughput if avg_throughput is None else \
                 avg_throughput * 0.8 + cur_step_throughput * 0.2
-            nr_steps_performed_since_last_evaluation += 1
             train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
             train_epoch_window_loss.update(batch_loss)
@@ -120,9 +169,10 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
                  'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
 
-            if valid_loader is not None and batch_idx + 1 < nr_steps and \
-                    (evaluation_avg_duration / (nr_steps_performed_since_last_evaluation * train_step_avg_time)) < \
-                    evaluation_time_consumption_ratio:
+            if valid_loader is not None and evaluation_scheduler.whether_to_call_this_step(
+                    cur_step_nr=batch_idx + 1,
+                    total_nr_steps_in_epoch=nr_steps,
+                    train_step_avg_time=train_step_avg_time):
                 for callback in callbacks:
                     callback.step_end_before_evaluation(
                         epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
@@ -137,8 +187,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     model=model, device=device, valid_loader=valid_loader, criterion=criterion,
                     evaluation_metrics_types=evaluation_metrics_types)
                 last_evaluation_duration = time.time() - evaluate_start_time
-                evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
-                    (evaluation_avg_duration * 0.7 + last_evaluation_duration * 0.3)
+                evaluation_scheduler.report_task_performed(
+                    cur_step_nr=batch_idx + 1, duration=last_evaluation_duration)
                 print(f'Completed performing evaluation DURING epoch #{epoch_nr} '
                       f'(after step {batch_idx + 1}/{nr_steps}).'
                       f'\n\t validation loss: {val_loss:.4f}'
@@ -151,7 +201,6 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                         epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
                         validation_loss=val_loss, validation_metrics_results=val_metrics_results)
 
-                nr_steps_performed_since_last_evaluation = 0
                 model.train()
 
             for callback in callbacks:
@@ -165,6 +214,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             save_checkpoint_fn(model, optimizer, epoch_nr, None)
 
         if valid_loader is not None:
+            evaluation_avg_duration = evaluation_scheduler.task_avg_duration
             for callback in callbacks:
                 callback.epoch_end_before_evaluation(
                     epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
@@ -177,7 +227,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             evaluate_start_time = time.time()
             last_evaluation_duration = time.time() - evaluate_start_time
             evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
-                (evaluation_avg_duration * 0.7 + last_evaluation_duration * 0.3)
+                (evaluation_avg_duration * 0.8 + last_evaluation_duration * 0.2)
             print(f'Completed performing training & evaluation for epoch #{epoch_nr}.'
                   f'\n\t validation loss: {val_loss:.4f}'
                   f'\n\t validation metrics: {val_metrics_results}')
