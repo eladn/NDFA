@@ -159,7 +159,7 @@ def preprocess_code_task_example(
     identifiers_sub_parts_hashings = BatchFlattenedSeq(
         sequences=[
             torch.stack([
-                torch.tensor(sub_identifiers_hasher.transform([sub_part]).toarray()).squeeze()
+                torch.tensor(sub_identifiers_hasher.transform([sub_part]).toarray(), dtype=torch.float32).squeeze()
                 for sub_part in identifier_sub_parts])
             for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
         self_indexing_group='identifiers')
