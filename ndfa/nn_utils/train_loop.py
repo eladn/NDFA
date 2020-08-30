@@ -79,7 +79,7 @@ class AuxTaskSchedulerDuringTrainEpoch:
         if nr_remaining_calls_to_perform < 1:
             return False
         perform_call_every_nr_train_steps = \
-            nr_train_steps_to_spread_calls_over // nr_remaining_calls_to_perform
+            nr_train_steps_to_spread_calls_over // (nr_remaining_calls_to_perform + 1)
         do_call_this_step = \
             nr_steps_performed_since_last_call >= perform_call_every_nr_train_steps
         return do_call_this_step
