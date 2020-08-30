@@ -93,7 +93,7 @@ class AuxTaskSchedulerDuringTrainEpoch:
 
     def report_task_performed(self, cur_step_nr: int, duration: float):
         self.nr_calls_performed_during_epoch += 1
-        self.step_nr_of_last_call += cur_step_nr
+        self.step_nr_of_last_call = cur_step_nr
         self.task_avg_duration = duration if self.task_avg_duration is None else \
             0.8 * self.task_avg_duration + 0.2 * duration
 
