@@ -10,6 +10,7 @@ from collections import defaultdict
 from warnings import warn
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
 from typing_extensions import Protocol
+from sklearn.feature_extraction.text import HashingVectorizer
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.dataset_properties import DataFold
@@ -153,6 +154,16 @@ def preprocess_code_task_example(
             for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
         self_indexing_group='identifiers')
 
+    # TODO: plug HP for hasher `n_features`
+    sub_identifiers_hasher = HashingVectorizer(analyzer='char', n_features=256, ngram_range=(1, 3))
+    identifiers_sub_parts_hashings = BatchFlattenedSeq(
+        sequences=[
+            torch.stack([
+                torch.tensor(sub_identifiers_hasher.transform([sub_part]).toarray()).squeeze()
+                for sub_part in identifier_sub_parts])
+            for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
+        self_indexing_group='identifiers')
+
     _counter = itertools.count()
     pdg_node_idx_to_expression_idx_mapping = {
         pdg_node.idx: next(_counter)
@@ -217,7 +228,9 @@ def preprocess_code_task_example(
         cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions)
 
     return MethodCodeInputTensors(
-        method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts, symbols=symbols, pdg=pdg)
+        method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts,
+        identifiers_sub_parts_hashings=identifiers_sub_parts_hashings,
+        symbols=symbols, pdg=pdg)
 
 
 def preprocess_code_task_example_with_padding(

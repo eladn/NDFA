@@ -64,6 +64,7 @@ class MethodCodeInputTensors(TensorsDataClass):
     method_hash: str
 
     identifiers_sub_parts: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifiers_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
     symbols: SymbolsInputTensors
 
     method_tokenized_code: Optional[CodeExpressionTokensSequenceInputTensors] = None

@@ -3,6 +3,7 @@ tqdm>=4.45.0
 tabulate
 numpy
 scipy
+sklearn
 confclass
 # OpenNMT-py>=1.1.1
 # torch-scatter==latest+cpu
