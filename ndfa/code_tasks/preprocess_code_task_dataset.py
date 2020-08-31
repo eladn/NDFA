@@ -6,7 +6,7 @@ import dataclasses
 import multiprocessing as mp
 import torch.nn as nn
 import torch.nn.functional as F
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from warnings import warn
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
 from typing_extensions import Protocol
@@ -173,24 +173,28 @@ def preprocess_code_task_example(
 
     # Note: If we would like the absolute token idx (within the whole method) we could just add the param
     #       `start=pdg_node.code_sub_token_range_ref.begin_token_idx` to enumerate(...)
+    SymbolOccurrence = namedtuple('SymbolOccurrence', ['expression_idx', 'within_expr_token_idx', 'symbol_idx'])
     symbols_occurrences = [
-        (pdg_node_idx_to_expression_idx_mapping[pdg_node.idx], within_expr_token_idx, token.symbol_idx)
+        SymbolOccurrence(
+            expression_idx=pdg_node_idx_to_expression_idx_mapping[pdg_node.idx],
+            within_expr_token_idx=within_expr_token_idx, symbol_idx=token.symbol_idx)
         for pdg_node in method_pdg.pdg_nodes
         if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
         for within_expr_token_idx, token in enumerate(
             get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node))
         if token.symbol_idx is not None]
+    symbols_occurrences.sort(key=lambda symbol_occurrence: symbol_occurrence.symbol_idx)
     symbols = SymbolsInputTensors(
         symbols_identifier_indices=BatchedFlattenedIndicesFlattenedTensor(
             torch.LongTensor([symbol.identifier_idx for symbol in method_pdg.symbols]),
             self_indexing_group='symbols', tgt_indexing_group='identifiers'),
         symbols_appearances_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([symbol_idx for _, _, symbol_idx in symbols_occurrences]),
+            torch.LongTensor([symbol_occurrence.symbol_idx for symbol_occurrence in symbols_occurrences]),
             tgt_indexing_group='symbols'),
         symbols_appearances_expression_token_idx=BatchFlattenedTensor(
-            torch.LongTensor([token_idx for _, token_idx, _ in symbols_occurrences])),
+            torch.LongTensor([symbol_occurrence.within_expr_token_idx for symbol_occurrence in symbols_occurrences])),
         symbols_appearances_cfg_expression_idx=BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([expression_idx for expression_idx, _, _ in symbols_occurrences]),
+            torch.LongTensor([symbol_occurrence.expression_idx for symbol_occurrence in symbols_occurrences]),
             tgt_indexing_group='cfg_expressions'))
 
     cfg_nodes_tokenized_expressions = CodeExpressionTokensSequenceInputTensors(
