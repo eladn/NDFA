@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_scatter.segment_coo import segment_sum_coo
+from torch_scatter import segment_sum_coo
 
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.code_nn_modules.vocabulary import Vocabulary
@@ -39,9 +39,13 @@ class SymbolsEncoder(nn.Module):
             nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
             symbols_occurrences_encodings = segment_sum_coo(
                 src=cfg_expr_tokens_encodings_of_symbols_occurrences,
-                index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
-                .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
-                dim=0, dim_size=nr_symbols)
+                index=symbols.symbols_appearances_symbol_idx.indices,
+                dim_size=nr_symbols)
+            # symbols_occurrences_encodings = scatter_sum(
+            #     src=cfg_expr_tokens_encodings_of_symbols_occurrences,
+            #     index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
+            #         .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
+            #     dim=0, dim_size=nr_symbols)
 
             assert encoded_symbols_wo_commons.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
             combined_symbols_encoding = torch.cat(
