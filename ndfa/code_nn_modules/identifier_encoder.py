@@ -36,6 +36,7 @@ class IdentifierEncoder(nn.Module):
         nr_hashing_features = 256  # TODO: plug-in HP
         self.identifier_sub_parts_hashing_linear = nn.Linear(nr_hashing_features, nr_hashing_features, bias=False)
         self.vocab_and_hashing_combiner = nn.Linear(embedding_dim + nr_hashing_features, embedding_dim)
+        self.final_linear_layer = nn.Linear(embedding_dim, embedding_dim)
 
     def forward(self, identifiers_sub_parts: BatchFlattenedSeq,
                 identifiers_sub_parts_hashings: Optional[BatchFlattenedSeq] = None):
@@ -62,6 +63,8 @@ class IdentifierEncoder(nn.Module):
                 torch.cat([identifiers_sub_parts_vocab_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
             identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(
                 identifiers_sub_parts_vocab_embeddings_and_hashings_combined))
+            identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(self.final_linear_layer(
+                identifiers_sub_parts_embeddings)))
         else:
             identifiers_sub_parts_embeddings = identifiers_sub_parts_vocab_embeddings
 
