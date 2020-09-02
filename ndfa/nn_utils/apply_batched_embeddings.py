@@ -4,7 +4,7 @@ import torch.nn as nn
 from typing import Optional, Union
 
 
-__all__ = ['apply_batched_embeddings']
+__all__ = ['apply_batched_embeddings', 'apply_batched_flattened_embeddings']
 
 
 def apply_batched_embeddings(
@@ -79,6 +79,27 @@ def apply_batched_embeddings(
         batch_size * nr_indices_per_example, embedding_dim)
     selected_embedding_vectors = selected_embedding_vectors_flattened.view(indices.size() + (embedding_dim,))
     return selected_embedding_vectors
+
+
+def apply_batched_flattened_embeddings(
+        indices: torch.LongTensor,
+        batched_flattened_encodings: torch.Tensor,
+        common_embeddings: Optional[Union[torch.Tensor, nn.Embedding]] = None) -> torch.Tensor:
+    assert batched_flattened_encodings.ndim == 2
+    nr_common_embeddings = 0 if common_embeddings is None else \
+        common_embeddings.num_embeddings if isinstance(common_embeddings, nn.Embedding) else \
+        int(common_embeddings.size(0))
+    if nr_common_embeddings < 1:
+        return batched_flattened_encodings[indices]
+    commons_cond = indices < indices.new_full(size=(1,), fill_value=nr_common_embeddings)
+    common_indices = torch.where(commons_cond, indices, indices.new_zeros(1))
+    applied_common_encodings = common_embeddings(common_indices) if isinstance(common_embeddings, nn.Embedding) else \
+        common_embeddings[common_indices]
+    bathed_embeddings_indices = torch.where(commons_cond, indices.new_zeros(1), indices)
+    applied_batched_encodings = batched_flattened_encodings[bathed_embeddings_indices]
+    return torch.where(
+        commons_cond.unsqueeze(-1).expand(applied_common_encodings.size()),
+        applied_common_encodings, applied_batched_encodings)
 
 
 def apply_batched_embeddings_test():
