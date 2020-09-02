@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_scatter import segment_sum_coo
+from torch_scatter import scatter_mean
 
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.code_nn_modules.vocabulary import Vocabulary
@@ -10,7 +10,7 @@ from ndfa.code_nn_modules.expression_encoder import EncodedExpression
 
 class SymbolsEncoder(nn.Module):
     def __init__(self, symbols_special_words_vocab: Vocabulary, symbol_embedding_dim: int, expr_encoding_dim: int,
-                 dropout_rate: float = 0.3):
+                 dropout_rate: float = 0.3, use_flattened_batch_for_encoded_symbols: bool = False):
         super(SymbolsEncoder, self).__init__()
         self.symbols_special_words_vocab = symbols_special_words_vocab
         self.symbol_embedding_dim = symbol_embedding_dim
@@ -22,6 +22,7 @@ class SymbolsEncoder(nn.Module):
         self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
             in_features=expr_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
+        self.use_flattened_batch_for_encoded_symbols = use_flattened_batch_for_encoded_symbols
 
     def forward(self, encoded_identifiers: torch.Tensor,
                 symbols: SymbolsInputTensors,
@@ -37,10 +38,10 @@ class SymbolsEncoder(nn.Module):
                 encoded_cfg_expressions.full_expr_encoded\
                 .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
             nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
-            symbols_occurrences_encodings = segment_sum_coo(
+            symbols_occurrences_encodings = scatter_mean(
                 src=cfg_expr_tokens_encodings_of_symbols_occurrences,
                 index=symbols.symbols_appearances_symbol_idx.indices,
-                dim_size=nr_symbols)
+                dim=0, dim_size=nr_symbols)
             # symbols_occurrences_encodings = scatter_sum(
             #     src=cfg_expr_tokens_encodings_of_symbols_occurrences,
             #     index=symbols.symbols_appearances_symbol_idx.indices.unsqueeze(-1)
@@ -55,6 +56,9 @@ class SymbolsEncoder(nn.Module):
             combined_symbols_encoding = self.dropout_layer(F.relu(combined_symbols_encoding))
         else:
             combined_symbols_encoding = encoded_symbols_wo_commons
+
+        if self.use_flattened_batch_for_encoded_symbols:
+            return combined_symbols_encoding
 
         unflattened_combined_symbols_encoding = \
             symbols.symbols_identifier_indices.unflatten(combined_symbols_encoding)

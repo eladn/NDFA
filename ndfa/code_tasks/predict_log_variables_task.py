@@ -150,11 +150,13 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         self.identifier_embedding_dim = 256  # TODO: plug-in model hps
         self.expr_encoding_dim = 1028  # TODO: plug-in model hps
 
+        self.use_flattened_batch_for_encoded_symbols = True
         self.code_task_encoder = MethodCodeEncoder(
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
             expr_encoding_dim=self.expr_encoding_dim,  # TODO: plug-in model hps
-            use_copy_attn_with_symbols_occurrences_in_cfg_expressions=True)
+            use_copy_attn_with_symbols_occurrences_in_cfg_expressions=True,
+            use_flattened_batch_for_encoded_symbols=self.use_flattened_batch_for_encoded_symbols)
 
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.code_task_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
@@ -175,21 +177,22 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         encoded_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
         self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_code.encoded_cfg_nodes)
-        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
+        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.batched_encoded_symbols)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
 
         decoder_outputs = self.symbols_decoder(
             encoder_outputs=encoded_code.encoded_cfg_nodes_after_bridge,
             encoder_outputs_mask=code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask,
-            symbols_encodings=encoded_code.encoded_symbols,
-            symbols_encodings_mask=code_task_input.symbols.symbols_identifier_indices.unflattener_mask,
+            batched_flattened_symbols_encodings=encoded_code.batched_flattened_encoded_symbols,
+            symbols_encodings=encoded_code.batched_encoded_symbols,
+            symbols_encodings_mask=None if self.use_flattened_batch_for_encoded_symbols else code_task_input.symbols.symbols_identifier_indices.unflattener_mask,
             encoded_symbols_occurrences=encoded_code.encoded_symbols_occurrences,
             target_symbols_idxs=target_symbols_idxs_used_in_logging_call)
         self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
 
         return PredictLoggingCallVarsModelOutput(
             decoder_outputs=decoder_outputs,
-            all_symbols_encodings=encoded_code.encoded_symbols)
+            all_symbols_encodings=encoded_code.batched_encoded_symbols)
 
 
 class PredictLogVarsModelLoss(nn.Module):

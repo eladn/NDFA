@@ -4,12 +4,32 @@ import torch.nn.functional as F
 from typing import Optional, Union
 
 from ndfa.code_nn_modules.vocabulary import Vocabulary
-from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings
+from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
 from ndfa.nn_utils.attention import Attention
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 
 
 __all__ = ['AttnRNNDecoder']
+
+
+def apply_embeddings(
+        indices: torch.LongTensor,
+        common_embeddings: Optional[Union[torch.Tensor, nn.Embedding]] = None,
+        batched_flattened_encodings: Optional[torch.Tensor] = None,
+        batched_encodings: Optional[torch.Tensor] = None) -> torch.Tensor:
+    if common_embeddings is not None and batched_encodings is None and batched_flattened_encodings is None:
+        return common_embeddings(indices) if isinstance(common_embeddings, nn.Embedding) else common_embeddings[indices]
+    if batched_flattened_encodings is not None and batched_encodings is None:
+        return apply_batched_flattened_embeddings(
+            indices=indices, batched_flattened_encodings=batched_flattened_encodings,
+            common_embeddings=common_embeddings)
+    if batched_encodings is not None and batched_flattened_encodings is None:
+        return apply_batched_embeddings(
+            batched_embeddings=batched_encodings, indices=indices,
+            common_embeddings=common_embeddings)  # (batch_size, target_seq_len, decoder_output_dim)
+    raise ValueError(
+        'Cannot specify both `batched_flattened_encodings` and `batched_encodings`. '
+        'Must specify at least one of `common_embeddings` or `batched_flattened_encodings` or `batched_encodings`.')
 
 
 class AttnRNNDecoder(nn.Module):
@@ -49,6 +69,7 @@ class AttnRNNDecoder(nn.Module):
 
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: Optional[torch.BoolTensor] = None,
+                output_batched_flattened_encodings: Optional[torch.Tensor] = None,
                 output_batched_encodings: Optional[torch.Tensor] = None,
                 output_batched_encodings_mask: Optional[torch.BoolTensor] = None,
                 dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
@@ -59,7 +80,16 @@ class AttnRNNDecoder(nn.Module):
                output_batched_encodings.ndim == 3 and \
                output_batched_encodings.size(0) == batch_size and \
                output_batched_encodings.size(2) == self.decoder_output_dim
-        nr_output_batched_words_per_example = output_batched_encodings.size(1)
+        assert output_batched_flattened_encodings is None or output_batched_encodings is None  # cannot be set together
+
+        if output_batched_encodings is not None and output_batched_flattened_encodings is None:
+            nr_output_batched_words_per_example = output_batched_encodings.size(1)
+        elif output_batched_flattened_encodings is not None and output_batched_encodings is None:
+            nr_output_batched_words_per_example = output_batched_flattened_encodings.size(0)
+        else:
+            raise ValueError(
+                'Must specify exactly one of `output_batched_flattened_encodings` and `output_batched_encodings`.')
+
         nr_all_possible_output_words_encodings = nr_output_batched_words_per_example + self.nr_output_common_embeddings
         assert output_batched_encodings_mask is None or output_batched_encodings_mask.size() == \
                (batch_size, nr_output_batched_words_per_example)
@@ -83,9 +113,11 @@ class AttnRNNDecoder(nn.Module):
             assert target_idxs.ndim == 2 and target_idxs.size(0) == batch_size
             target_seq_len = target_idxs.size(1)
             assert target_seq_len <= self.max_target_seq_len
-            target_encodings = apply_batched_embeddings(
-                batched_embeddings=output_batched_encodings, indices=target_idxs,
-                common_embeddings=self.output_common_embedding)  # (batch_size, target_seq_len, decoder_output_dim)
+            target_encodings = apply_embeddings(
+                indices=target_idxs,
+                common_embeddings=self.output_common_embedding,
+                batched_flattened_encodings=output_batched_flattened_encodings,
+                batched_encodings=output_batched_encodings)
             assert target_encodings.size() == (batch_size, target_seq_len, self.decoder_output_dim)
             if self.output_common_embedding_dropout_layer is not None:
                 target_encodings = self.output_common_embedding_dropout_layer(
@@ -99,9 +131,11 @@ class AttnRNNDecoder(nn.Module):
             if self.training:
                 prev_cell_encoding = target_encodings[:, T, :]
             else:
-                prev_cell_encoding = apply_batched_embeddings(
-                    batched_embeddings=output_batched_encodings, indices=prev_cell_output_idx,
-                    common_embeddings=self.output_common_embedding)
+                prev_cell_encoding = apply_embeddings(
+                    indices=prev_cell_output_idx,
+                    common_embeddings=self.output_common_embedding,
+                    batched_flattened_encodings=output_batched_flattened_encodings,
+                    batched_encodings=output_batched_encodings)
             assert prev_cell_encoding.size() == (batch_size, self.decoder_output_dim)
 
             attn_key_from = torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1)
@@ -119,17 +153,23 @@ class AttnRNNDecoder(nn.Module):
 
             next_output_after_linear = self.out_linear_layer(rnn_cell_output[0])  # (batch_size, decoder_output_dim)
 
-            projection_on_batched_target_encodings_wo_common = torch.bmm(
-                output_batched_encodings, next_output_after_linear.unsqueeze(-1))\
-                .view(batch_size, nr_output_batched_words_per_example)
-            if output_batched_encodings_mask is not None:
-                # TODO: does it really makes sense to mask this?
-                projection_on_batched_target_encodings_wo_common = projection_on_batched_target_encodings_wo_common + torch.where(
-                    output_batched_encodings_mask,
-                    torch.zeros(1, dtype=torch.float, device=projection_on_batched_target_encodings_wo_common.device),
-                    torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float,
-                               device=projection_on_batched_target_encodings_wo_common.device))
-            assert projection_on_batched_target_encodings_wo_common.size() == (batch_size, nr_output_batched_words_per_example)
+            if output_batched_encodings is not None:
+                projection_on_batched_target_encodings_wo_common = torch.bmm(
+                    output_batched_encodings, next_output_after_linear.unsqueeze(-1))\
+                    .view(batch_size, nr_output_batched_words_per_example)
+                if output_batched_encodings_mask is not None:
+                    # TODO: does it really makes sense to mask this?
+                    projection_on_batched_target_encodings_wo_common = projection_on_batched_target_encodings_wo_common + torch.where(
+                        output_batched_encodings_mask,
+                        torch.zeros(1, dtype=torch.float, device=projection_on_batched_target_encodings_wo_common.device),
+                        torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float,
+                                   device=projection_on_batched_target_encodings_wo_common.device))
+            elif output_batched_flattened_encodings is not None:
+                projection_on_batched_target_encodings_wo_common = torch.mm(
+                    next_output_after_linear, output_batched_flattened_encodings.permute(1, 0)) \
+                    .view(batch_size, nr_output_batched_words_per_example)
+            assert projection_on_batched_target_encodings_wo_common.size() == \
+                   (batch_size, nr_output_batched_words_per_example)
 
             if dyn_vocab_scattered_encodings is not None:
                 dyn_vocab_scattered_encodings_projected = self.dyn_vocab_linear_projection(
@@ -153,15 +193,6 @@ class AttnRNNDecoder(nn.Module):
                         torch.zeros_like(projection_on_dyn_vocab_scattered_encodings_wo_common).masked_scatter(
                             mask=dyn_vocab_scattered_encodings.mask,  # (bsz, max_nr_symbols_occurrences)
                             source=projection_on_dyn_vocab_scattered_encodings_wo_common)
-
-                # print('dyn_vocab_scattered_encodings.encodings', dyn_vocab_scattered_encodings.encodings.size())
-                # print('dyn_vocab_scattered_encodings.indices', dyn_vocab_scattered_encodings.indices.size())
-                # print('dyn_vocab_scattered_encodings.mask', dyn_vocab_scattered_encodings.mask.size())
-                # print('projection_on_dyn_vocab_scattered_encodings_wo_common', projection_on_dyn_vocab_scattered_encodings_wo_common.size())
-                # print('dyn_vocab_scattered_encodings.encodings', dyn_vocab_scattered_encodings.encodings)
-                # print('dyn_vocab_scattered_encodings.indices', dyn_vocab_scattered_encodings.indices)
-                # print('dyn_vocab_scattered_encodings.mask', dyn_vocab_scattered_encodings.mask)
-                # print('projection_on_dyn_vocab_scattered_encodings_wo_common', projection_on_dyn_vocab_scattered_encodings_wo_common)
 
             # (batch_size, decoder_output_dim) * (nr_output_common_embeddings, decoder_output_dim).T
             #   -> (batch_size, nr_output_common_embeddings)

@@ -19,15 +19,17 @@ __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
 class EncodedMethodCode(NamedTuple):
     encoded_identifiers: torch.Tensor
     encoded_cfg_nodes: torch.Tensor
-    encoded_symbols: torch.Tensor
     encoded_cfg_nodes_after_bridge: torch.Tensor
     encoded_symbols_occurrences: Optional[ScatteredEncodings] = None
+    batched_encoded_symbols: Optional[torch.Tensor] = None
+    batched_flattened_encoded_symbols: Optional[torch.Tensor] = None
 
 
 class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int = 256,
                  expr_encoding_dim: int = 1028, nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3,
-                 use_copy_attn_with_symbols_occurrences_in_cfg_expressions: bool = True):
+                 use_copy_attn_with_symbols_occurrences_in_cfg_expressions: bool = True,
+                 use_flattened_batch_for_encoded_symbols: bool = False):
         super(MethodCodeEncoder, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
         self.expr_encoding_dim = expr_encoding_dim
@@ -43,10 +45,12 @@ class MethodCodeEncoder(nn.Module):
         self.encoder_decoder_bridge_dense_layers = nn.ModuleList([
             nn.Linear(in_features=self.cfg_node_encoder.output_dim, out_features=self.cfg_node_encoder.output_dim)
             for _ in range(nr_encoder_decoder_bridge_layers)]) if nr_encoder_decoder_bridge_layers else None
+        self.use_flattened_batch_for_encoded_symbols = use_flattened_batch_for_encoded_symbols
         self.symbols_encoder = SymbolsEncoder(
             symbols_special_words_vocab=code_task_vocabs.symbols_special_words,
             symbol_embedding_dim=self.identifier_embedding_dim,
-            expr_encoding_dim=self.expr_encoding_dim)  # it might change...
+            expr_encoding_dim=self.expr_encoding_dim,
+            use_flattened_batch_for_encoded_symbols=self.use_flattened_batch_for_encoded_symbols)  # it might change...
         self.dropout_layer = nn.Dropout(dropout_p)
         self.use_copy_attn_with_symbols_occurrences_in_cfg_expressions = \
             use_copy_attn_with_symbols_occurrences_in_cfg_expressions
@@ -76,5 +80,6 @@ class MethodCodeEncoder(nn.Module):
         return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes.encoded_cfg_nodes,
-            encoded_symbols=encoded_symbols,
+            batched_encoded_symbols=None if self.use_copy_attn_with_symbols_occurrences_in_cfg_expressions else encoded_symbols,
+            batched_flattened_encoded_symbols=encoded_symbols if self.use_copy_attn_with_symbols_occurrences_in_cfg_expressions else None,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)
