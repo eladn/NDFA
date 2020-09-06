@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
-from typing import Optional
+from typing import Optional, Tuple
 import itertools
 
 from ndfa.execution_parameters import ModelExecutionParams
@@ -22,11 +22,15 @@ def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) 
     # return torch.optim.Adam(model.parameters(), lr=0.0005)
 
 
-def create_lr_scheduler(model: nn.Module, train_hps: NDFAModelTrainingHyperParams, optimizer: Optimizer) \
-        -> torch.optim.lr_scheduler._LRScheduler:
+def create_lr_schedulers(model: nn.Module, train_hps: NDFAModelTrainingHyperParams, optimizer: Optimizer) \
+        -> Tuple[torch.optim.lr_scheduler._LRScheduler, ...]:
     # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
-    return torch.optim.lr_scheduler.LambdaLR(
-        optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1)
+    return (
+        torch.optim.lr_scheduler.LambdaLR(
+            optimizer=optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1),
+        torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer=optimizer, mode='min', factor=0.8, patience=4, verbose=True,
+            threshold=0.1, threshold_mode='rel'))
 
 
 def main():
@@ -108,9 +112,10 @@ def main():
         if loaded_checkpoint:
             optimizer.load_state_dict(loaded_checkpoint['optimizer_state_dict'])
         # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
-        lr_scheduler = create_lr_scheduler(model, exec_params.experiment_setting.train_hyper_params, optimizer)
+        lr_schedulers = create_lr_schedulers(model, exec_params.experiment_setting.train_hyper_params, optimizer)
         if loaded_checkpoint:
-            lr_scheduler.load_state_dict(loaded_checkpoint['lr_scheduler_state_dict'])
+            for lr_scheduler_idx, lr_scheduler in enumerate(lr_schedulers):
+                lr_scheduler.load_state_dict(loaded_checkpoint[f'lr_scheduler_{lr_scheduler_idx}_state_dict'])
 
         saved_ckpts = []
         def save_checkpoint(model: nn.Module, optimizer: Optimizer, epoch_nr: int, step_nr: Optional[int] = None):
@@ -119,13 +124,16 @@ def main():
             ckpt_filepath = os.path.join(exec_params.model_save_path, f'model_{expr_settings_hash_base64}_ep={epoch_nr}_.ckpt')
             with open(ckpt_filepath, 'bw') as checkpoint_file:
                 model.state_dict()
-                torch.save({  # FIXME: we might want to modify these params
+                # FIXME: we might want to modify these params
+                new_ckpt_state_dict = {
                     'experiment_setting': exec_params.experiment_setting,
                     'epoch_nr': epoch_nr,
                     'step_nr': step_nr,
                     'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'lr_scheduler_state_dict': lr_scheduler.state_dict()}, checkpoint_file)
+                    'optimizer_state_dict': optimizer.state_dict()}
+                for lr_scheduler_idx, lr_scheduler in enumerate(lr_schedulers):
+                    new_ckpt_state_dict[f'lr_scheduler_{lr_scheduler_idx}_state_dict'] = lr_scheduler.state_dict()
+                torch.save(new_ckpt_state_dict, checkpoint_file)
             saved_ckpts.append((epoch_nr, ckpt_filepath))
             if exec_params.max_latest_checkpoints_to_keep is not None and \
                     len(saved_ckpts) > exec_params.max_latest_checkpoints_to_keep:
@@ -167,7 +175,7 @@ def main():
             train_loader=train_loader,
             valid_loader=eval_loader,
             optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
+            lr_schedulers=lr_schedulers,
             criterion=criterion,
             nr_gradient_accumulation_steps=
             exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size,

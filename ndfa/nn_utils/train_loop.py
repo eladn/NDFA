@@ -104,7 +104,8 @@ class AuxTaskSchedulerDuringTrainEpoch:
 
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer,
-        lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler], criterion: nn.Module = F.nll_loss,
+        lr_schedulers: Tuple[torch.optim.lr_scheduler._LRScheduler, ...] = (),
+        criterion: nn.Module = F.nll_loss,
         nr_gradient_accumulation_steps: int = 1,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
@@ -246,8 +247,11 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             callback.epoch_end(
                 epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
 
-        if lr_scheduler is not None:
-            lr_scheduler.step()
+        for lr_scheduler in lr_schedulers:
+            if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                lr_scheduler.step(train_epoch_avg_loss)
+            else:
+                lr_scheduler.step()
 
 
 def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,
