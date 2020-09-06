@@ -202,16 +202,22 @@ class AttnRNNDecoder(nn.Module):
                 next_output_after_linear, self.output_common_embedding.weight.t())
             assert projection_on_output_common_embeddings.size() == (batch_size, self.nr_output_common_embeddings)
 
-            if self.dyn_vocab_strategy == 'after_softmax':
-                # Use this masking is summing occurrences AFTER applying softmax
+            if dyn_vocab_scattered_encodings is None:
                 projection_on_all_output_encodings = torch.cat(
-                    (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common)
-                    + (() if dyn_vocab_scattered_encodings is None else (projection_on_dyn_vocab_scattered_encodings_wo_common,)), dim=-1)
+                    (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common),
+                    dim=-1)
             else:
-                # Use this masking is summing occurrences BEFORE applying softmax
-                projection_on_all_output_encodings = torch.cat(
-                    (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common), dim=-1)
-                if dyn_vocab_scattered_encodings is not None:
+                if self.dyn_vocab_strategy == 'after_softmax':
+                    # Use this masking is summing occurrences AFTER applying softmax
+                    projection_on_all_output_encodings = torch.cat(
+                        (projection_on_output_common_embeddings,
+                         projection_on_batched_target_encodings_wo_common,
+                         projection_on_dyn_vocab_scattered_encodings_wo_common),
+                        dim=-1)
+                else:
+                    # Use this masking is summing occurrences BEFORE applying softmax
+                    projection_on_all_output_encodings = torch.cat(
+                        (projection_on_output_common_embeddings, projection_on_batched_target_encodings_wo_common), dim=-1)
                     projection_on_all_output_encodings = projection_on_all_output_encodings.scatter_add(
                         dim=1,
                         index=dyn_vocab_scattered_encodings.indices + self.nr_output_common_embeddings,  # We assume the indexing here is w/o the common
