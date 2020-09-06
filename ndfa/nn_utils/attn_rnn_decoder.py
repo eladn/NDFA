@@ -165,6 +165,8 @@ class AttnRNNDecoder(nn.Module):
                         torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float,
                                    device=projection_on_batched_target_encodings_wo_common.device))
             elif output_batched_flattened_encodings is not None:
+                # (batch_size, decoder_output_dim) * (nr_symbols, decoder_output_dim).T
+                #   -> (batch_size, nr_symbols)
                 projection_on_batched_target_encodings_wo_common = torch.mm(
                     next_output_after_linear, output_batched_flattened_encodings.permute(1, 0)) \
                     .view(batch_size, nr_output_batched_words_per_example)

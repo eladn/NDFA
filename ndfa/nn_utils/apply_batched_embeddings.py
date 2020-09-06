@@ -95,8 +95,8 @@ def apply_batched_flattened_embeddings(
     common_indices = torch.where(commons_cond, indices, indices.new_zeros(1))
     applied_common_encodings = common_embeddings(common_indices) if isinstance(common_embeddings, nn.Embedding) else \
         common_embeddings[common_indices]
-    bathed_embeddings_indices = torch.where(commons_cond, indices.new_zeros(1), indices)
-    applied_batched_encodings = batched_flattened_encodings[bathed_embeddings_indices]
+    batch_flattened_embeddings_indices = torch.where(commons_cond, indices.new_zeros(1), indices)
+    applied_batched_encodings = batched_flattened_encodings[batch_flattened_embeddings_indices]
     return torch.where(
         commons_cond.unsqueeze(-1).expand(applied_common_encodings.size()),
         applied_common_encodings, applied_batched_encodings)
