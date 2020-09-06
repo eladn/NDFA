@@ -102,8 +102,10 @@ class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
         super(LoggingCallTaskEvaluationMetric, self).__init__()
         self.nr_symbols_special_words = nr_symbols_special_words
 
-    def update(self, y_hat: 'PredictLoggingCallVarsModelOutput', target: torch.Tensor):
-        batch_target_symbols_indices = target
+    def update(self, y_hat: 'PredictLoggingCallVarsModelOutput',
+               target: Union[BatchedFlattenedIndicesTensor, torch.LongTensor]):
+        batch_target_symbols_indices = \
+            target.indices if isinstance(target, BatchedFlattenedIndicesTensor) else target
         _, batch_pred_symbols_indices = y_hat.decoder_outputs.topk(k=1, dim=-1)
         batch_pred_symbols_indices = batch_pred_symbols_indices.squeeze(dim=-1)
         assert batch_pred_symbols_indices.ndim == batch_target_symbols_indices.ndim == 2
