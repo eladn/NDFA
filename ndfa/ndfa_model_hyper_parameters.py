@@ -107,6 +107,9 @@ class NDFAModelHyperParams:
         default_factory=MethodCodeEncoderParams,
         arg_prefix='code-encoder')
 
+    use_batched_target_symbols_vocab: bool = confparam(
+        default=False)
+
 
 @confclass
 class NDFAModelTrainingHyperParams:

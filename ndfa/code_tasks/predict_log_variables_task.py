@@ -150,7 +150,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         self.identifier_embedding_dim = 256  # TODO: plug-in model hps
         self.expr_encoding_dim = 1028  # TODO: plug-in model hps
 
-        self.use_flattened_batch_for_encoded_symbols = True
+        self.use_flattened_batch_for_encoded_symbols = self.model_hps.use_batched_target_symbols_vocab
         self.code_task_encoder = MethodCodeEncoder(
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
@@ -288,7 +288,7 @@ def preprocess_logging_call_example(
             [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')] +
             [code_task_vocabs.symbols_special_words.get_word_idx('<PAD>')] *
             (model_hps.method_code_encoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call)))
-        if False:  # TODO: plug here real condition
+        if model_hps.use_batched_target_symbols_vocab:  # TODO: plug here real condition
             # Used for batched target vocab decoder
             # (using encodings of symbols of all examples in the batch as tgt vocab)
             target_symbols_idxs_used_in_logging_call = BatchedFlattenedIndicesTensor(
