@@ -99,6 +99,10 @@ def main():
     if loaded_checkpoint:
         model.load_state_dict(loaded_checkpoint['model_state_dict'])
 
+    dataloader_cuda_kwargs = {
+        'num_workers': exec_params.dataloader_num_workers,
+        'pin_memory': exec_params.dataloader_pin_memory} if use_gpu else {}
+
     if exec_params.perform_training:
         optimizer = create_optimizer(model, exec_params.experiment_setting.train_hyper_params)
         if loaded_checkpoint:
@@ -134,7 +138,6 @@ def main():
             dataset_props=exec_params.experiment_setting.dataset,
             datafold=DataFold.Train,
             pp_data_path=exec_params.pp_data_dir_path)
-        dataloader_cuda_kwargs = {'num_workers': 3, 'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
         train_loader = DataLoader(
             train_dataset, batch_size=exec_params.batch_size,
             collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
@@ -175,7 +178,6 @@ def main():
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
-        dataloader_cuda_kwargs = {'num_workers': 3, 'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
         eval_dataset = task.create_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
             dataset_props=exec_params.experiment_setting.dataset,
@@ -222,8 +224,6 @@ def main():
         elif exec_params.predict_pp_data_path:
             print(f'Performing prediction (over preprocessed data in `{exec_params.predict_pp_data_path}`) ..')
             raise NotImplementedError
-            # dataloader_cuda_kwargs = {'num_workers': 3,
-            #                           'pin_memory': True} if use_gpu else {}  # TODO: play with `num_workers` and `pin_memory`; add these to `exec_params`
             # pp_data = task.create_dataset(
             #     model_hps=exec_params.experiment_setting.model_hyper_params,
             #     dataset_props=exec_params.experiment_setting.dataset,

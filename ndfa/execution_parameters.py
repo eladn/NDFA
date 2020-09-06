@@ -133,6 +133,12 @@ class ModelExecutionParams:
         default=True,
         arg_names=['--use-notify'])
 
+    dataloader_num_workers: int = confparam(
+        default=6)
+
+    dataloader_pin_memory: bool = confparam(
+        default=True)
+
     @property
     def perform_prediction(self):
         return bool(self.predict_pp_data_path) or bool(self.predict_raw_data_path)
