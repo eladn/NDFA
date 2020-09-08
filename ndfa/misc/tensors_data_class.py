@@ -1,4 +1,5 @@
 import torch
+import functools
 import dataclasses
 from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 from typing_extensions import Protocol
@@ -18,6 +19,11 @@ __all__ = [
 #    within each instance.
 #  Of course it should also be supported by the relevant methods (like `collate()`). These params would have to be
 #   propagated towards the nested collate() call and be used there.
+
+
+def compose_fns(*functions):
+    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions, lambda x: x)
+
 
 def collate_tensors_with_variable_shapes(
         tensors: Tuple[torch.Tensor], create_collate_mask: bool = True,
@@ -165,45 +171,53 @@ class TensorsDataClass:
         return self.batch_size  # for flattened batches it should be overridden
 
     def to(self, device):
-        return self.map(lambda field_val, _: field_val.to(device) if hasattr(field_val, 'to') else field_val)
+        return self.deep_map(
+            map_fn=lambda field_val: field_val.to(device) if hasattr(field_val, 'to') else field_val,
+            mapper_override_group='device')
 
-    def lazy_to(self, device, lazy_usage_history):
+    def lazy_to(self, device, lazy_usage_history=None):
         map_fn = lambda field_val: field_val.to(device) if hasattr(field_val, 'to') else field_val
-        return self.deep_lazy_map(map_fn=map_fn, lazy_map_usage_history=lazy_usage_history)
+        return self.deep_lazy_map(
+            map_fn=map_fn, mapper_override_group='device', lazy_map_usage_history=lazy_usage_history)
 
     def cpu(self):
-        return self.map(lambda field_val, _: field_val.cpu() if hasattr(field_val, 'cpu') else field_val)
+        return self.deep_map(
+            map_fn=lambda field_val: field_val.cpu() if hasattr(field_val, 'cpu') else field_val,
+            mapper_override_group='device')
 
     def numpy(self):
-        return self.cpu().map(lambda field_val, _: field_val.numpy() if hasattr(field_val, 'numpy') else field_val)
+        return self.cpu().deep_map(
+            map_fn=lambda field_val: field_val.numpy() if hasattr(field_val, 'numpy') else field_val)
 
     def tolist(self):
-        return self.cpu().map(lambda field_val, _: field_val.tolist() if hasattr(field_val, 'tolist') else field_val)
-
-    def map(self, map_fn):
-        new_obj = self.__class__(**{
-            field.name: map_fn(getattr(self, field.name), field.name)
-            for field in dataclasses.fields(self) if field.init})
-        for field in dataclasses.fields(self):
-            if not field.init:
-                setattr(new_obj, field.name, map_fn(getattr(self, field.name), field.name))
-        return new_obj
+        return self.cpu().deep_map(
+            map_fn=lambda field_val: field_val.tolist() if hasattr(field_val, 'tolist') else field_val)
 
     def deep_map(
             self,
             map_fn: MapFn,
+            mapper_override_group: Optional[str] = None,
             parents_path: Tuple['TensorsDataClass', ...] = (),
             fields_path: Tuple[str, ...] = ()) -> 'TensorsDataClass':
-        if hasattr(self, '_lazy_map_fn_per_field'):
-            raise RuntimeError('Cannot map() a TensorsDataClass that has been lazy_map()ed before.')
         mapped_field_values = {}
         new_parents_path = parents_path + (self,)
         for field in dataclasses.fields(self):
-            field_value = getattr(self, field.name)
+            field_value = object.__getattribute__(self, field.name)
             new_fields_path = fields_path + (field.name,)
             if isinstance(field_value, TensorsDataClass):
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
                 mapped_field_values[field.name] = field_value.deep_map(
-                    map_fn=map_fn, parents_path=new_parents_path, fields_path=new_fields_path)
+                    map_fn=map_fn, mapper_override_group=mapper_override_group,
+                    parents_path=new_parents_path, fields_path=new_fields_path)
+            elif hasattr(self, '_lazy_map_fns_per_field') and field.name in self._lazy_map_fns_per_field:
+                new_mapping_fns = list(self._lazy_map_fns_per_field[field.name])
+                if mapper_override_group is not None:
+                    while len(new_mapping_fns) > 0 and new_mapping_fns[-1][1] is not None and \
+                            new_mapping_fns[-1][1] == mapper_override_group:
+                        new_mapping_fns.pop()
+                new_mapping_fns.append((map_fn, mapper_override_group))
+                composed_map_fn = compose_fns(*(fn for fn, _ in new_mapping_fns))
+                mapped_field_values[field.name] = composed_map_fn(field_value)
             else:
                 mapped_field_values[field.name] = map_fn(field_value)
         new_obj = self.__class__(
@@ -216,14 +230,15 @@ class TensorsDataClass:
     def deep_lazy_map(
             self,
             map_fn: MapFn,
+            mapper_override_group: Optional[str] = None,
             lazy_map_usage_history: Dict[Tuple[str, ...], Set[str]] = None,
             parents_path: Tuple['TensorsDataClass', ...] = (),
             fields_path: Tuple[str, ...] = ()) -> 'TensorsDataClass':
-        assert '_lazy_map_fn_per_field' not in (field.name for field in dataclasses.fields(self))
+        assert '_lazy_map_fns_per_field' not in (field.name for field in dataclasses.fields(self))
         if lazy_map_usage_history is None:
             lazy_map_usage_history = {}
         mapped_field_values = {}
-        lazy_map_fn_per_field = {}
+        lazy_map_fns_per_field: Dict[str, List[Tuple[MapFn, Optional[str]]]] = {}
         new_parents_path = parents_path + (self,)
         if fields_path not in lazy_map_usage_history:
             lazy_map_usage_history[fields_path] = set()
@@ -233,40 +248,46 @@ class TensorsDataClass:
             new_fields_path = fields_path + (field.name,)
             if isinstance(field_value, TensorsDataClass):
                 assert field.name not in lazy_map_usage_history_for_obj
-                assert not hasattr(self, '_lazy_map_fn_per_field') or field.name not in self._lazy_map_fn_per_field
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
                 mapped_field_values[field.name] = field_value.deep_lazy_map(
-                    map_fn=map_fn, lazy_map_usage_history=lazy_map_usage_history,
+                    map_fn=map_fn, mapper_override_group=mapper_override_group,
+                    lazy_map_usage_history=lazy_map_usage_history,
                     parents_path=new_parents_path, fields_path=new_fields_path)
             elif field.name in lazy_map_usage_history_for_obj:
-                assert not hasattr(self, '_lazy_map_fn_per_field') or field.name not in self._lazy_map_fn_per_field
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
                 mapped_field_values[field.name] = map_fn(field_value)
             else:
                 mapped_field_values[field.name] = field_value
-                if hasattr(self, '_lazy_map_fn_per_field') and field.name in self._lazy_map_fn_per_field:
-                    lazy_map_fn_per_field[field.name] = \
-                        lambda val: map_fn(
-                            self._lazy_map_fn_per_field[field.name](val))
+                if hasattr(self, '_lazy_map_fns_per_field') and field.name in self._lazy_map_fns_per_field:
+                    new_mapping_fns = list(self._lazy_map_fns_per_field[field.name])
+                    if mapper_override_group is not None:
+                        while len(new_mapping_fns) > 0 and new_mapping_fns[-1][1] is not None and \
+                                new_mapping_fns[-1][1] == mapper_override_group:
+                            new_mapping_fns.pop()
+                    new_mapping_fns.append((map_fn, mapper_override_group))
+                    lazy_map_fns_per_field[field.name] = new_mapping_fns
                 else:
-                    lazy_map_fn_per_field[field.name] = map_fn
+                    lazy_map_fns_per_field[field.name] = [(map_fn, mapper_override_group)]
         new_obj = self.__class__(
             **{field.name: mapped_field_values[field.name] for field in dataclasses.fields(self) if field.init})
         for field in dataclasses.fields(self):
             if not field.init:
                 setattr(new_obj, field.name, mapped_field_values[field.name])
-        new_obj._lazy_map_fn_per_field = lazy_map_fn_per_field
+        new_obj._lazy_map_fns_per_field = lazy_map_fns_per_field
         new_obj._lazy_map_usage_history = lazy_map_usage_history_for_obj
         return new_obj
 
     def __getattribute__(self, field_name):
         # `__getattribute__` is overridden to support `lazy_map()`.
-        if field_name == '_lazy_map_fn_per_field':
+        if field_name == '_lazy_map_fns_per_field':
             return object.__getattribute__(self, field_name)
-        if hasattr(self, '_lazy_map_fn_per_field') and field_name in self._lazy_map_fn_per_field:
+        if hasattr(self, '_lazy_map_fns_per_field') and field_name in self._lazy_map_fns_per_field:
             old_val = object.__getattribute__(self, field_name)
-            setattr(self, field_name, self._lazy_map_fn_per_field[field_name](old_val))
-            del self._lazy_map_fn_per_field[field_name]
-            if len(self._lazy_map_fn_per_field) == 0:
-                del self._lazy_map_fn_per_field
+            composed_map_fn = compose_fns(*(fn for fn, _ in self._lazy_map_fns_per_field[field_name]))
+            setattr(self, field_name, composed_map_fn(old_val))
+            del self._lazy_map_fns_per_field[field_name]
+            if len(self._lazy_map_fns_per_field) == 0:
+                del self._lazy_map_fns_per_field
             self._lazy_map_usage_history.add(field_name)
         return object.__getattribute__(self, field_name)
 
