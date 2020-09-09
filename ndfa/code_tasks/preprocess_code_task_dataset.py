@@ -1,4 +1,5 @@
 import os
+import io
 import torch
 import itertools
 import functools
@@ -422,7 +423,10 @@ def catch_preprocess_limit_exceed_error(
     try:
         pp_example = pp_example_fn(model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example)
         assert pp_example is not None
-        return pp_example
+        with io.BytesIO() as bytes_io_stream:
+            torch.save(pp_example, bytes_io_stream)
+            binary_serialized_pp_example = bytes_io_stream.getvalue()
+            return binary_serialized_pp_example
     except PreprocessLimitExceedError as err:
         return err.exceeding_limitations
 
@@ -456,6 +460,9 @@ def preprocess_code_task_dataset(
                 if isinstance(pp_example, list):
                     pass  # TODO: add to limit exceed statistics
                 else:
+                    with io.BytesIO(pp_example) as bytes_io_stream:
+                        bytes_io_stream.seek(0)
+                        pp_example = torch.load(bytes_io_stream)
                     chunks_examples_writer.write_example(pp_example)
 
         chunks_examples_writer.close_last_written_chunk()
