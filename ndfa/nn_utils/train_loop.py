@@ -137,6 +137,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         for callback in callbacks:
             callback.epoch_start(epoch_nr=epoch_nr)
         model.train()
+        criterion.train()
         train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
@@ -207,6 +208,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                         validation_loss=val_loss, validation_metrics_results=val_metrics_results)
 
                 model.train()
+                criterion.train()
 
             for callback in callbacks:
                 callback.step_end(
@@ -266,6 +268,7 @@ def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, c
             lazy_move_to_device_history['y'] = {}
     model.to(device)
     model.eval()
+    criterion.eval()
     metrics = [metric() for metric in evaluation_metrics_types]
     eval_epoch_loss_sum = eval_epoch_nr_examples = 0
     with torch.no_grad():
