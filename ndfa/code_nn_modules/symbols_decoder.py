@@ -26,7 +26,7 @@ class SymbolsDecoder(nn.Module):
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: typing.Optional[torch.BoolTensor],
                 symbols: SymbolsInputTensors,
-                batched_flattened_symbols_encodings: typing.Optional[torch.BoolTensor] = None,
+                batched_flattened_symbols_encodings: torch.Tensor,
                 encoded_symbols_occurrences: typing.Optional[ScatteredEncodings] = None,
                 groundtruth_target_symbols_idxs: typing.Optional[torch.LongTensor] = None):
         output_vocab_batch_flattened_encodings = None
