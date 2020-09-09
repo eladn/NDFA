@@ -15,13 +15,13 @@ from sklearn.feature_extraction.text import HashingVectorizer
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
-from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
+from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, MethodCodeInputTensors, \
-    CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors
+    CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
 
 
 __all__ = [
@@ -74,6 +74,15 @@ class PreprocessLimitation:
         if self.max_val is not None and self.value > self.max_val:
             msg += f' > {self.max_val}'
         return msg
+
+    @classmethod
+    def enforce_limitations(cls, limitations: List['PreprocessLimitation']):
+        exceeding_limitations = [limitation for limitation in limitations if limitation.exceeds]
+        for exceeding_limitation in exceeding_limitations:
+            if exceeding_limitation.warn:
+                warn(str(exceeding_limitation))
+        if len(exceeding_limitations) > 0:
+            raise PreprocessLimitExceedError(exceeding_limitations=exceeding_limitations)
 
 
 class PreprocessLimitExceedError(ValueError):
@@ -128,12 +137,7 @@ def enforce_code_task_input_pp_limitations(
     limitations.append(PreprocessLimitation(
         object_name='#edges', value=nr_edges,
         max_val=model_hps.method_code_encoder.max_nr_pdg_edges))
-    exceeding_limitations = [limitation for limitation in limitations if limitation.exceeds]
-    for exceeding_limitation in exceeding_limitations:
-        if exceeding_limitation.warn:
-            warn(str(exceeding_limitation))
-    if len(exceeding_limitations) > 0:
-        raise PreprocessLimitExceedError(exceeding_limitations=exceeding_limitations)
+    PreprocessLimitation.enforce_limitations(limitations=limitations)
 
 
 def preprocess_code_task_example(
@@ -219,17 +223,54 @@ def preprocess_code_task_example(
              if token.kind == SerTokenKind.IDENTIFIER]),
             tgt_indexing_group='identifiers'))
 
+    control_flow_paths = get_all_pdg_simple_paths(
+        method_pdg=method_pdg,
+        src_pdg_node_idx=method_pdg.entry_pdg_node_idx, tgt_pdg_node_idx=method_pdg.exit_pdg_node_idx,
+        control_flow=True, data_dependency=False,
+        max_nr_paths=model_hps.method_code_encoder.max_nr_control_flow_paths)
+    if control_flow_paths is None:
+        PreprocessLimitation.enforce_limitations(limitations=[
+            PreprocessLimitation(
+                object_name='#control_flow_paths', value=float('inf'),
+                max_val=model_hps.method_code_encoder.max_nr_control_flow_paths)])
+    assert control_flow_paths is not None
+
+    limitations = []
+    limitations.append(PreprocessLimitation(
+        object_name='#control_flow_paths', value=len(control_flow_paths),
+        min_val=model_hps.method_code_encoder.min_nr_control_flow_paths,
+        max_val=model_hps.method_code_encoder.max_nr_control_flow_paths))
+    shortest_control_flow_path = min(len(path) for path in control_flow_paths)
+    longest_control_flow_path = max(len(path) for path in control_flow_paths)
+    limitations.append(PreprocessLimitation(
+        object_name='|shortest_control_flow_paths|', value=shortest_control_flow_path,
+        min_val=model_hps.method_code_encoder.min_control_flow_path_len))
+    limitations.append(PreprocessLimitation(
+        object_name='|longest_control_flow_path|', value=longest_control_flow_path,
+        max_val=model_hps.method_code_encoder.max_control_flow_path_len))
+    PreprocessLimitation.enforce_limitations(limitations=limitations)
+
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.pdg_node_control_kinds.get_word_idx(
                 pdg_node.control_kind.value
                 if pdg_node.idx not in pdg_nodes_to_mask else
                 pdg_nodes_to_mask[pdg_node.idx])
-             for pdg_node in method_pdg.pdg_nodes])),
+             for pdg_node in method_pdg.pdg_nodes]), self_indexing_group='cfg_nodes'),
         cfg_nodes_has_expression_mask=BatchFlattenedTensor(torch.BoolTensor(
             [pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
              for pdg_node in method_pdg.pdg_nodes])),
-        cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions)
+        cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions,
+        cfg_control_flow_paths=CFGPathsInputTensors(
+            nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
+                sequences=[torch.LongTensor([node_idx for node_idx, _ in path]) for path in control_flow_paths],
+                tgt_indexing_group='cfg_nodes'),
+            edges_types=BatchFlattenedSeq(
+                sequences=[torch.LongTensor(
+                    [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(
+                        '<PAD>' if edge is None else edge.type.value)
+                     for _, edge in path])
+                    for path in control_flow_paths])))
 
     return MethodCodeInputTensors(
         method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts,

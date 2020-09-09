@@ -3,12 +3,12 @@ import dataclasses
 from typing import Optional
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
            'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
-           'SymbolsInputTensors', 'PDGInputTensors']
+           'SymbolsInputTensors', 'CFGPathsInputTensors', 'PDGInputTensors']
 
 
 # TODO: this is an old impl - REMOVE!
@@ -46,6 +46,12 @@ class SymbolsInputTensors(TensorsDataClass):
 
 
 @dataclasses.dataclass
+class CFGPathsInputTensors(TensorsDataClass):
+    nodes_indices: BatchedFlattenedIndicesFlattenedSeq
+    edges_types: BatchFlattenedSeq
+
+
+@dataclasses.dataclass
 class PDGInputTensors(TensorsDataClass):
     cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
     cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
@@ -56,7 +62,7 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
     # cfg_edges_attrs: Optional[torch.LongTensor] = None
 
-    # cfg_control_flow_paths: Optional[Dict[str, ExampleBasedIndicesBatchFlattenedTensor]] = None
+    cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
 
 
 @dataclasses.dataclass
