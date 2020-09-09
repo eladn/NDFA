@@ -634,7 +634,6 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
         raise NotImplementedError  # TODO: implement!
 
 
-# TODO: complete implementation!
 @final
 @dataclasses.dataclass
 class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, TensorDataClassWithSingleIndicesTensor):

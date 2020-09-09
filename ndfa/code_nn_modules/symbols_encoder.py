@@ -10,7 +10,7 @@ from ndfa.code_nn_modules.expression_encoder import EncodedExpression
 
 class SymbolsEncoder(nn.Module):
     def __init__(self, symbols_special_words_vocab: Vocabulary, symbol_embedding_dim: int, expr_encoding_dim: int,
-                 dropout_rate: float = 0.3, use_flattened_batch_for_encoded_symbols: bool = False):
+                 dropout_rate: float = 0.3):
         super(SymbolsEncoder, self).__init__()
         self.symbols_special_words_vocab = symbols_special_words_vocab
         self.symbol_embedding_dim = symbol_embedding_dim
@@ -22,7 +22,6 @@ class SymbolsEncoder(nn.Module):
         self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
             in_features=expr_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
-        self.use_flattened_batch_for_encoded_symbols = use_flattened_batch_for_encoded_symbols
 
     def forward(self, encoded_identifiers: torch.Tensor,
                 symbols: SymbolsInputTensors,
@@ -56,11 +55,10 @@ class SymbolsEncoder(nn.Module):
             combined_symbols_encoding = self.dropout_layer(F.relu(combined_symbols_encoding))
         else:
             combined_symbols_encoding = encoded_symbols_wo_commons
+        return combined_symbols_encoding
 
-        if self.use_flattened_batch_for_encoded_symbols:
-            return combined_symbols_encoding
-
-        unflattened_combined_symbols_encoding = \
-            symbols.symbols_identifier_indices.unflatten(combined_symbols_encoding)
-        assert unflattened_combined_symbols_encoding.ndim == 3
-        return unflattened_combined_symbols_encoding
+        # TODO: move to decoder!!
+        # unflattened_combined_symbols_encoding = \
+        #     symbols.symbols_identifier_indices.unflatten(combined_symbols_encoding)
+        # assert unflattened_combined_symbols_encoding.ndim == 3
+        # return unflattened_combined_symbols_encoding
