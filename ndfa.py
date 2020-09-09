@@ -69,7 +69,7 @@ def main():
             raise ValueError(
                 f'No model to load in dir {exec_params.model_load_path} that matches the chosen experiment setting.')
         with open(exec_params.model_load_path, 'br') as checkpoint_file:
-            loaded_checkpoint = torch.load(checkpoint_file)
+            loaded_checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
         # TODO: Modify `exec_params.experiment_setting` according to `loaded_checkpoint['experiment_setting']`.
         #       Verify overridden arguments and raise ArgumentException if needed.
         expr_settings_hash_base64 = base64.b64encode(str(hash(exec_params.experiment_setting)).encode('utf8')) \
