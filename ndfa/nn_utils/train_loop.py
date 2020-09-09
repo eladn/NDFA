@@ -86,7 +86,7 @@ class AuxTaskSchedulerDuringTrainEpoch:
 
     def calc_nr_calls_during_train_epoch(self, total_nr_steps_in_epoch: int, train_step_avg_time: float):
         train_epoch_avg_time = total_nr_steps_in_epoch * train_step_avg_time
-        if self.min_train_epoch_minutes_to_perform_task > train_epoch_avg_time:
+        if self.min_train_epoch_minutes_to_perform_task * 60 > train_epoch_avg_time:
             return 0
         total_allowed_task_time_during_epoch = \
             train_epoch_avg_time * self.task_time_consumption_ratio
