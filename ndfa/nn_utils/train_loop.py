@@ -125,6 +125,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             model=model, device=device, valid_loader=valid_loader, criterion=criterion,
             evaluation_metrics_types=evaluation_metrics_types)
         evaluation_avg_duration = time.time() - evaluate_start_time
+        # TODO: For pretty printing the evaluation metric results:
+        #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
         print(f'Completed performing evaluation (over validation) before starting the training.'
               f'\n\t validation loss: {val_loss:.4f}'
               f'\n\t validation metrics: {val_metrics_results}')
@@ -195,6 +197,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 last_evaluation_duration = time.time() - evaluate_start_time
                 evaluation_scheduler.report_task_performed(
                     cur_step_nr=batch_idx + 1, duration=last_evaluation_duration)
+                # TODO: For pretty printing the evaluation metric results:
+                #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
                 print(f'Completed performing evaluation DURING epoch #{epoch_nr} '
                       f'(after step {batch_idx + 1}/{nr_steps}).'
                       f'\n\t validation loss: {val_loss:.4f}'
@@ -235,6 +239,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             last_evaluation_duration = time.time() - evaluate_start_time
             evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
                 (evaluation_avg_duration * 0.8 + last_evaluation_duration * 0.2)
+            # TODO: For pretty printing the evaluation metric results:
+            #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
             print(f'Completed performing training & evaluation for epoch #{epoch_nr}.'
                   f'\n\t validation loss: {val_loss:.4f}'
                   f'\n\t validation metrics: {val_metrics_results}')

@@ -202,6 +202,8 @@ def main():
             criterion=criterion,
             evaluation_metrics_types=task.evaluation_metrics(
                 model_hps=exec_params.experiment_setting.model_hyper_params))
+        # TODO: For pretty printing the evaluation metric results:
+        #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
         print(f'Completed performing evaluation.'
               f'\n\t validation loss: {val_loss:.4f}'
               f'\n\t validation metrics: {metrics_results}')
