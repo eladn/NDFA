@@ -160,13 +160,13 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,  # TODO: plug-in model hps
             expr_encoding_dim=self.expr_encoding_dim,  # TODO: plug-in model hps
-            use_copy_attn_with_symbols_occurrences_in_cfg_expressions=True)  # TODO: plug-in model hps
+            use_symbols_occurrences_for_symbols_encodings=True)  # TODO: plug-in model hps
 
         self.symbols_decoder = SymbolsDecoder(
-            symbols_special_words_embedding=self.code_task_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
+            symbols_special_words_embedding=self.code_task_encoder.method_cfg_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.method_code_encoder.max_nr_target_symbols + 2,
-            encoder_output_dim=self.code_task_encoder.cfg_node_encoder.output_dim,
+            encoder_output_dim=self.code_task_encoder.method_cfg_encoder.cfg_node_dim,
             symbols_encoding_dim=self.identifier_embedding_dim,
             use_batch_flattened_target_symbols_vocab=self.model_hps.use_batch_flattened_target_symbols_vocab)
 

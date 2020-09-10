@@ -22,7 +22,7 @@ class CFGNodeEncoder(nn.Module):
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
 
         self.cfg_node_projection_linear_layer = nn.Linear(
-            in_features=self.expression_encoder.expression_encoding_dim + self.pdg_node_control_kinds_embedding_dim,
+            in_features=self.cfg_combined_expression_dim + self.pdg_node_control_kinds_embedding_dim,
             out_features=self.cfg_node_dim)
         self.cfg_node_additional_linear_layers = nn.ModuleList(
             [nn.Linear(self.cfg_node_dim, self.cfg_node_dim) for _ in range(nr_cfg_nodes_encoding_linear_layers - 1)])

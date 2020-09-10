@@ -2,14 +2,13 @@ import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 from torch_scatter import scatter_mean
 
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.code_nn_modules.expression_combiner import ExpressionCombiner
-from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
@@ -37,9 +36,6 @@ class MethodCFGEncoder(nn.Module):
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
         self.cfg_node_dim = cfg_node_dim
         self.nr_rnn_layers = nr_rnn_layers
-        self.identifier_encoder = IdentifierEncoder(
-            sub_identifiers_vocab=code_task_vocabs.sub_identifiers,
-            embedding_dim=self.identifier_embedding_dim)
         self.first_expression_encoder = ExpressionEncoder(
             kos_tokens_vocab=code_task_vocabs.kos_tokens,
             tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
@@ -82,12 +78,7 @@ class MethodCFGEncoder(nn.Module):
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
 
-    def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCFG:
-        # (nr_identifiers_in_batch, identifier_encoding_dim)
-        encoded_identifiers = self.identifier_encoder(
-            identifiers_sub_parts=code_task_input.identifiers_sub_parts,
-            identifiers_sub_parts_hashings=code_task_input.identifiers_sub_parts_hashings)
-
+    def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
         encoded_cfg_nodes = self.first_cfg_node_encoder(
             encoded_identifiers=encoded_identifiers, pdg=code_task_input.pdg)
         encoded_expressions = self.first_expression_encoder(
