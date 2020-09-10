@@ -619,19 +619,63 @@ class BatchedFlattenedIndicesFlattenedTensor(BatchedFlattenedIndicesFlattenedTen
     pass  # the double inheritance is all the impl needed
 
 
-# TODO: complete implementation!
+# TODO: check implementation!
 @final
 @dataclasses.dataclass
 class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensorsDataClass,
                                           TensorDataClassWithSequences):
-    # TODO: fix collate() to allow different sequences lengths across examples
-    #  (each example might have another max length - we should take the max)
-    #  We can use here `TensorWithCollateMask.collate()` that actually does the same for the general case.
-    #  Except this issue, the super impl `BatchFlattenedTensorsDataClass.collate()` does the other things correctly.
+    within_example_indexing_start: int = dataclasses.field(default=0)
+
+    @classmethod
+    def get_management_fields(cls) -> Tuple[str, ...]:
+        return super(BatchedFlattenedIndicesFlattenedSeq, cls).get_management_fields() + \
+               ('within_example_indexing_start', )
+
     @classmethod
     def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesFlattenedSeq']) \
             -> 'BatchedFlattenedIndicesFlattenedSeq':
-        raise NotImplementedError  # TODO: implement!
+        assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
+        if not inputs[0].batch_first:
+            raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
+        assert all(inp.sequences_lengths is None for inp in inputs)
+        assert all(isinstance(inp.sequences, list) for inp in inputs) or \
+               all(isinstance(inp.sequences, torch.Tensor) for inp in inputs)
+        assert all(isinstance(seq, torch.Tensor) for inp in inputs for seq in inp.sequences)
+        assert all(seq.ndim >= 1 for inp in inputs for seq in inp.sequences)
+        seq_lengths = [seq.size(0) for inp in inputs for seq in inp.sequences]
+        if isinstance(inputs[0].sequences, list):
+            fixed_inputs = [
+                cls(
+                    sequences=collate_tensors_with_variable_shapes(
+                        tensors=tuple(inp.sequences), create_collate_mask=False,
+                        create_collate_lengths=False, last_variable_dim=0))
+                for inp in inputs]
+            for inp, fixed_inp in zip(inputs, fixed_inputs):
+                for fld in cls.get_management_fields():
+                    setattr(fixed_inp, fld, getattr(inp, fld))
+            inputs = fixed_inputs
+        flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(inputs)
+        flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
+        flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
+        flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
+        return flattened
+
+    @classmethod
+    def _flatten_tensors(cls, tensors: List[torch.Tensor]):
+        max_seq_len = max(tensor.size(1) for tensor in tensors)
+        padded_tensors = [
+            torch.zeros((tensor.size(0), max_seq_len) + tensor.size()[2:],
+                        dtype=tensor.dtype, device=tensor.device)
+            for tensor in tensors]
+        for tensor, padded_tensor in zip(tensors, padded_tensors):
+            padded_tensor[:, :tensor.size(1)] = tensor
+        return torch.cat(padded_tensors, dim=0)
+
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+        super(BatchedFlattenedIndicesFlattenedSeq, self).post_collate_indices_fix(
+            parents=parents, fields_path=fields_path)
+        # TODO: we might want to fix `post_collate_indices_fix` to give 0s
+        #  (without example offset) for sequences paddings.
 
 
 @final
