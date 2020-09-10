@@ -2,14 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_scatter import scatter_mean
+from typing import Optional
 
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.code_nn_modules.vocabulary import Vocabulary
-from ndfa.code_nn_modules.expression_encoder import EncodedExpression
 
 
 class SymbolsEncoder(nn.Module):
-    def __init__(self, symbols_special_words_vocab: Vocabulary, symbol_embedding_dim: int, expr_encoding_dim: int,
+    def __init__(self, symbols_special_words_vocab: Vocabulary,
+                 symbol_embedding_dim: int,
+                 expression_encoding_dim: int,
                  dropout_rate: float = 0.3):
         super(SymbolsEncoder, self).__init__()
         self.symbols_special_words_vocab = symbols_special_words_vocab
@@ -20,22 +22,21 @@ class SymbolsEncoder(nn.Module):
             embedding_dim=symbol_embedding_dim,
             padding_idx=self.symbols_special_words_vocab.get_word_idx('<PAD>'))
         self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
-            in_features=expr_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
+            in_features=expression_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(self, encoded_identifiers: torch.Tensor,
                 symbols: SymbolsInputTensors,
-                encoded_cfg_expressions: EncodedExpression):
+                encoded_cfg_expressions: Optional[torch.Tensor] = None):
         encoded_symbols_wo_commons = encoded_identifiers[symbols.symbols_identifier_indices.indices]
 
         if encoded_cfg_expressions is not None:
-            max_nr_tokens_per_expression = encoded_cfg_expressions.full_expr_encoded.size(1)
+            max_nr_tokens_per_expression = encoded_cfg_expressions.size(1)
             cfg_expr_tokens_indices_of_symbols_occurrences = \
                 max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
                 symbols.symbols_appearances_expression_token_idx.tensor
             cfg_expr_tokens_encodings_of_symbols_occurrences = \
-                encoded_cfg_expressions.full_expr_encoded\
-                .flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
+                encoded_cfg_expressions.flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
             nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
             symbols_occurrences_encodings = scatter_mean(
                 src=cfg_expr_tokens_encodings_of_symbols_occurrences,
@@ -56,9 +57,3 @@ class SymbolsEncoder(nn.Module):
         else:
             combined_symbols_encoding = encoded_symbols_wo_commons
         return combined_symbols_encoding
-
-        # TODO: move to decoder!!
-        # unflattened_combined_symbols_encoding = \
-        #     symbols.symbols_identifier_indices.unflatten(combined_symbols_encoding)
-        # assert unflattened_combined_symbols_encoding.ndim == 3
-        # return unflattened_combined_symbols_encoding
