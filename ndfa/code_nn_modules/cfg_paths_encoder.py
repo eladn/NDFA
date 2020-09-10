@@ -8,10 +8,13 @@ __all__ = ['CFGPathEncoder']
 
 
 class CFGPathEncoder(nn.Module):
-    def __init__(self, cfg_node_dim: int):
+    def __init__(self, cfg_node_dim: int, rnn_type: str = 'lstm',
+                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True):
         super(CFGPathEncoder, self).__init__()
         self.cfg_node_dim = cfg_node_dim
-        self.rnn_encoder_layer = RNNEncoder(input_dim=self.cfg_node_dim)
+        self.rnn_encoder_layer = RNNEncoder(
+            input_dim=self.cfg_node_dim, rnn_type=rnn_type,
+            nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=rnn_bi_direction)
 
     def forward(self, cfg_nodes_encodings: torch.Tensor,
                 cfg_paths_nodes_indices: torch.LongTensor,
