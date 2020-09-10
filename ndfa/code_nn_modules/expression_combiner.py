@@ -29,12 +29,13 @@ class ExpressionCombiner(nn.Module):
 
     def forward(self, expressions_encodings: torch.Tensor,
                 expressions_mask: torch.BoolTensor,
+                expressions_lengths: torch.LongTensor,
                 batch_first: bool = True):
         assert batch_first
         attn_heads = torch.cat([
             attn_layer(sequences=expressions_encodings,
                        attn_key_from=expressions_encodings[:, -1, :],
-                       mask=expressions_mask)
+                       mask=expressions_mask, lengths=expressions_lengths)
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
         for dim_reduction_projection_layer in self.dim_reduction_projection_layers:
