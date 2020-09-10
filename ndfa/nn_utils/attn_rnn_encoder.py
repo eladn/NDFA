@@ -22,15 +22,9 @@ class AttnRNNEncoder(RNNEncoder):
         last_hidden_out, rnn_outputs = super(AttnRNNEncoder, self).forward(
             sequence_input=sequence_input, mask=mask, lengths=lengths)
 
-        batch_size = rnn_outputs.size(0 if batch_first else 1)
-        seq_len = rnn_outputs.size(1 if batch_first else 0)
-        if lengths is not None and mask is None:
-            batched_ranges = torch.arange(start=1, end=seq_len + 1, dtype=torch.long, device=lengths.device) \
-                .unsqueeze(0).expand(batch_size, seq_len)
-            mask = (batched_ranges <= lengths.unsqueeze(-1).expand(batch_size, seq_len))
-
         merged_rnn_outputs = self.attn_layer(
-            sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask)
+            sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask, lengths=lengths)
+        batch_size = rnn_outputs.size(0 if batch_first else 1)
         assert merged_rnn_outputs.size() == (batch_size, self.hidden_dim)
 
         return merged_rnn_outputs, rnn_outputs

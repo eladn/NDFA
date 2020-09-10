@@ -19,7 +19,8 @@ class Attention(nn.Module):
             nn.Linear(in_features=nr_features, out_features=nr_features) if project_query else None
 
     def forward(self, sequences: torch.Tensor, attn_key_from: Optional[torch.Tensor] = None,
-                attn_weights: Optional[torch.Tensor] = None, mask: Optional[torch.Tensor] = None):
+                attn_weights: Optional[torch.Tensor] = None, mask: Optional[torch.BoolTensor] = None,
+                lengths: Optional[torch.LongTensor] = None):
         assert (attn_key_from is None) ^ (attn_weights is None)
         assert attn_weights is None or self.key_linear_projection_layer is None
         assert sequences.ndim == 3  # (bsz, seq_len, nr_features)
@@ -27,7 +28,13 @@ class Attention(nn.Module):
         assert attn_key_from is None or attn_key_from.size() == (batch_size, self.key_in_features)
         assert attn_weights is None or attn_weights.size() == (batch_size, seq_len)
         assert nr_features == self.nr_features
+
         assert mask is None or mask.size() == (batch_size, seq_len)
+        assert lengths is None or lengths.size() == (batch_size,)
+        if lengths is not None and mask is None:
+            batched_ranges = torch.arange(start=1, end=seq_len + 1, dtype=torch.long, device=lengths.device) \
+                .unsqueeze(0).expand(batch_size, seq_len)
+            mask = (batched_ranges <= lengths.unsqueeze(-1).expand(batch_size, seq_len))
 
         if attn_key_from is not None:
             attn_key_vector = F.relu(self.key_linear_projection_layer(attn_key_from)) \
