@@ -9,7 +9,7 @@ __all__ = ['ExpressionCombiner']
 
 class ExpressionCombiner(nn.Module):
     def __init__(self, expression_encoding_dim: int, combined_expression_dim: int,
-                 nr_attn_heads: int = 1, nr_dim_reduction_layers: int = 1):
+                 nr_attn_heads: int = 1, nr_dim_reduction_layers: int = 1, dropout_p: float = 0.3):
         super(ExpressionCombiner, self).__init__()
         self.expression_encoding_dim = expression_encoding_dim
         self.combined_expression_dim = combined_expression_dim
@@ -26,6 +26,7 @@ class ExpressionCombiner(nn.Module):
             nn.Linear(in_features=projection_dimensions[layer_idx],
                       out_features=projection_dimensions[layer_idx + 1])
             for layer_idx in range(nr_dim_reduction_layers)]
+        self.dropout_layer = nn.Dropout(dropout_p)
 
     def forward(self, expressions_encodings: torch.Tensor,
                 expressions_mask: torch.BoolTensor,
@@ -39,6 +40,6 @@ class ExpressionCombiner(nn.Module):
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
         for dim_reduction_projection_layer in self.dim_reduction_projection_layers:
-            projected = dim_reduction_projection_layer(projected)
+            projected = self.dropout_layer(dim_reduction_projection_layer(projected))
         assert projected.size(-1) == self.combined_expression_dim
         return projected
