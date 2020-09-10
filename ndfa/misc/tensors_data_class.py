@@ -612,10 +612,14 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
                 f'via index group `{self.tgt_indexing_group}`.')
         for field in self.get_indices_fields():
             original_indices = getattr(self, field.name)
+            fixes = addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index]
+            assert original_indices.size()[:fixes.ndim] == fixes.size()
+            if original_indices.ndim > fixes.ndim:
+                fixes = fixes.view(fixes.size() + (1,) * (original_indices.ndim - fixes.ndim)).expand(original_indices.size())
             offsets_fixes = torch.where(
                 original_indices < self.within_example_indexing_start,
                 torch.zeros(1, dtype=original_indices.dtype, device=original_indices.device),
-                addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index])
+                fixes)
             setattr(self, field.name, original_indices + offsets_fixes)
 
     def post_collate_remove_unnecessary_collate_info(self):
@@ -634,13 +638,6 @@ class BatchedFlattenedIndicesFlattenedTensor(BatchedFlattenedIndicesFlattenedTen
 @dataclasses.dataclass
 class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensorsDataClass,
                                           TensorDataClassWithSequences):
-    within_example_indexing_start: int = dataclasses.field(default=0)
-
-    @classmethod
-    def get_management_fields(cls) -> Tuple[str, ...]:
-        return super(BatchedFlattenedIndicesFlattenedSeq, cls).get_management_fields() + \
-               ('within_example_indexing_start', )
-
     @classmethod
     def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesFlattenedSeq']) \
             -> 'BatchedFlattenedIndicesFlattenedSeq':
