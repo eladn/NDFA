@@ -66,17 +66,20 @@ class MethodCodeEncoder(nn.Module):
         encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
             code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
 
-        encoded_cfg_nodes_after_bridge = encoded_method_cfg.encoded_cfg_nodes
+        unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
+            encoded_method_cfg.encoded_cfg_nodes)
+
+        encoded_cfg_nodes_after_bridge = unflattened_cfg_nodes_encodings
         if len(self.encoder_decoder_bridge_dense_layers) > 0:
             encoded_cfg_nodes_after_bridge = functools.reduce(
                 lambda last_res, cur_layer: self.dropout_layer(F.relu(cur_layer(last_res))),
                 self.encoder_decoder_bridge_dense_layers,
                 encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
-                .view(encoded_method_cfg.encoded_cfg_nodes.size()[:-1] + (-1,))
+                .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
 
         return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
-            encoded_cfg_nodes=encoded_method_cfg.encoded_cfg_nodes,
+            encoded_cfg_nodes=unflattened_cfg_nodes_encodings,
             encoded_symbols=encoded_method_cfg.encoded_symbols,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)
 
