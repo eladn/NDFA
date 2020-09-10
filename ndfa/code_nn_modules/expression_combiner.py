@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from typing import Optional
 
 from ndfa.nn_utils.attention import Attention
 
@@ -32,10 +33,11 @@ class ExpressionCombiner(nn.Module):
         self.dropout_layer = nn.Dropout(dropout_p)
 
     def forward(self, expressions_encodings: torch.Tensor,
-                expressions_mask: torch.BoolTensor,
-                expressions_lengths: torch.LongTensor,
+                expressions_mask: Optional[torch.BoolTensor] = None,
+                expressions_lengths: Optional[torch.LongTensor] = None,
                 batch_first: bool = True):
         assert batch_first
+        assert expressions_mask is not None or expressions_lengths is not None
         attn_heads = torch.cat([
             attn_layer(sequences=expressions_encodings,
                        attn_key_from=expressions_encodings[:, -1, :],
