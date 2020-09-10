@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 from ndfa.nn_utils.attention import Attention
 
@@ -15,13 +16,14 @@ class ExpressionCombiner(nn.Module):
         self.combined_expression_dim = combined_expression_dim
         self.nr_attn_heads = nr_attn_heads
         self.nr_dim_reduction_layers = nr_dim_reduction_layers
+        assert nr_dim_reduction_layers >= 1
         self.attn_layers = nn.ModuleList([
             Attention(nr_features=self.expression_encoding_dim, project_key=True)
             for _ in range(nr_attn_heads)])
-        # TODO: implement `projection_dimensions` list using `nr_dim_reduction_layers`!
-        #       its length should be nr_dim_reduction_layers+1.
         assert expression_encoding_dim * nr_attn_heads > combined_expression_dim
-        projection_dimensions = [expression_encoding_dim * nr_attn_heads, combined_expression_dim]
+        attn_cat_dim = expression_encoding_dim * nr_attn_heads
+        projection_dimensions = np.linspace(
+            start=attn_cat_dim, stop=combined_expression_dim, num=nr_dim_reduction_layers + 1, dtype=int)
         self.dim_reduction_projection_layers = [
             nn.Linear(in_features=projection_dimensions[layer_idx],
                       out_features=projection_dimensions[layer_idx + 1])
