@@ -79,18 +79,17 @@ class MethodCFGEncoder(nn.Module):
             use_symbols_occurrences_for_symbols_encodings
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
-        encoded_cfg_nodes = self.first_cfg_node_encoder(
-            encoded_identifiers=encoded_identifiers, pdg=code_task_input.pdg)
-        encoded_expressions = self.first_expression_encoder(
-            expressions=code_task_input.pdg.cfg_nodes_tokenized_expressions,
-            encoded_identifiers=encoded_identifiers)
         encoded_expressions_with_context = None
         for expression_encoder, cfg_node_encoder, cfg_path_encoder \
                 in zip(itertools.chain((None,), self.expression_encoders),
                        itertools.chain((None,), self.cfg_node_encoders),
                        self.cfg_path_encoders):
             assert not (encoded_expressions_with_context is None) ^ (expression_encoder is None)
-            if expression_encoder is not None:
+            if expression_encoder is None:
+                encoded_expressions = self.first_expression_encoder(
+                    expressions=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+                    encoded_identifiers=encoded_identifiers)
+            else:
                 _, encoded_expressions = expression_encoder(
                     sequence_input=encoded_expressions_with_context,
                     lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths,
@@ -98,7 +97,10 @@ class MethodCFGEncoder(nn.Module):
             combined_expressions = self.expression_combiner(
                 expressions_encodings=encoded_expressions,
                 expressions_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
-            if cfg_node_encoder is not None:
+            if cfg_node_encoder is None:
+                encoded_cfg_nodes = self.first_cfg_node_encoder(
+                    combined_cfg_expressions_encodings=combined_expressions, pdg=code_task_input.pdg)
+            else:
                 encoded_cfg_nodes = self.dropout_layer(cfg_node_encoder(
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_combined_expressions_encodings=combined_expressions))
