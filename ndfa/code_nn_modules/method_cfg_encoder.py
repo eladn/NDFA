@@ -103,18 +103,21 @@ class MethodCFGEncoder(nn.Module):
             else:
                 encoded_cfg_nodes = self.dropout_layer(cfg_node_encoder(
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
-                    cfg_combined_expressions_encodings=combined_expressions))
+                    cfg_combined_expressions_encodings=combined_expressions,
+                    cfg_nodes_has_expression_mask=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor))
             encoded_cfg_paths = self.dropout_layer(cfg_path_encoder(
                 cfg_nodes_encodings=encoded_cfg_nodes,
                 cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
                 cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths))
             encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
                 encoded_cfg_paths=encoded_cfg_paths,
-                cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths,
-                cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences)
+                cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
+                cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
+                nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
             encoded_expressions_with_context = self.expression_context_adder(
-                encoded_expressions=encoded_expressions,
-                encoded_cfg_nodes=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask])
+                sequence=encoded_expressions,
+                sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
+                context=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor])
 
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,
@@ -129,14 +132,23 @@ class MethodCFGEncoder(nn.Module):
 
 
 class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
-    def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int):
+    def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int, dropout_p: float = 0.3):
         super(CFGNodeEncoderExpressionUpdateLayer, self).__init__()
         self.cfg_node_dim = cfg_node_dim
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
+        self.projection_layer = nn.Linear(
+            in_features=self.cfg_node_dim + self.cfg_combined_expression_dim, out_features=self.cfg_node_dim)
+        self.dropout_layer = nn.Dropout(p=dropout_p)
 
     def forward(self, previous_cfg_nodes_encodings: torch.Tensor,
-                cfg_combined_expressions_encodings: torch.Tensor):
-        raise NotImplementedError
+                cfg_combined_expressions_encodings: torch.Tensor,
+                cfg_nodes_has_expression_mask: torch.BoolTensor):
+        # TODO: consider adding another layer
+        new_cfg_node_embeddings_for_nodes_with_expressions = self.dropout_layer(F.relu(self.projection_layer(torch.cat([
+            previous_cfg_nodes_encodings[cfg_nodes_has_expression_mask], cfg_combined_expressions_encodings], dim=-1))))
+        return previous_cfg_nodes_encodings.masked_scatter(
+            cfg_nodes_has_expression_mask.unsqueeze(-1).expand(previous_cfg_nodes_encodings.size()),
+            new_cfg_node_embeddings_for_nodes_with_expressions)
 
 
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
@@ -144,10 +156,14 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
         super(ScatterCFGEncodedPathsToCFGNodeEncodings, self).__init__()
 
     def forward(self, encoded_cfg_paths: torch.tensor,
-                cfg_paths_lengths: torch.LongTensor,
-                cfg_paths_node_indices: torch.LongTensor):
-        # TODO: complete impl! `encoded_cfg_paths` is in form of sequences. should flatten! should ignore edges (take only nodes)!
-        raise NotImplementedError
-        # cfg_nodes_encodings = scatter_mean(
-        #     src=encoded_cfg_paths, index=cfg_paths_node_indices, dim=0)
-        # return cfg_nodes_encodings
+                cfg_paths_mask: torch.BoolTensor,
+                cfg_paths_node_indices: torch.LongTensor,
+                nr_cfg_nodes: int):
+        # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
+        # The mask also helps to ignore paddings.
+        # TODO: ignore edges (take only nodes)! after we actually add the edges..
+        cfg_nodes_encodings = scatter_mean(
+            src=encoded_cfg_paths[cfg_paths_mask],
+            index=cfg_paths_node_indices[cfg_paths_mask],
+            dim=0, dim_size=nr_cfg_nodes)
+        return cfg_nodes_encodings
