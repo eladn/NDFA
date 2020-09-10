@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 from ndfa.nn_utils.attention import Attention
@@ -42,6 +43,6 @@ class ExpressionCombiner(nn.Module):
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
         for dim_reduction_projection_layer in self.dim_reduction_projection_layers:
-            projected = self.dropout_layer(dim_reduction_projection_layer(projected))
+            projected = self.dropout_layer(F.relu(dim_reduction_projection_layer(projected)))
         assert projected.size(-1) == self.combined_expression_dim
         return projected
