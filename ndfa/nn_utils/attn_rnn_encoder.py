@@ -20,7 +20,7 @@ class AttnRNNEncoder(RNNEncoder):
     def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,
                 lengths: Optional[torch.Tensor] = None, batch_first: bool = False):
         last_hidden_out, rnn_outputs = super(AttnRNNEncoder, self).forward(
-            sequence_input=sequence_input, mask=mask, lengths=lengths)
+            sequence_input=sequence_input, mask=mask, lengths=lengths, batch_first=batch_first)
 
         merged_rnn_outputs = self.attn_layer(
             sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask, lengths=lengths)
