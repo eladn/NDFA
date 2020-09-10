@@ -557,7 +557,7 @@ class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSeque
             .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
         sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
             flattened.batch_size, flattened.max_sequence_length))
-        flattened.sequences_mask = torch.BoolTensor(sequences_mask, device=flattened.sequences.device)
+        flattened.sequences_mask = sequences_mask.to(device=flattened.sequences.device)
         return flattened
 
     @classmethod
@@ -673,7 +673,7 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
             .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
         sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
             flattened.batch_size, flattened.max_sequence_length))
-        flattened.sequences_mask = torch.BoolTensor(sequences_mask, device=flattened.sequences.device)
+        flattened.sequences_mask = sequences_mask.to(device=flattened.sequences.device)
         flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
         flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
         return flattened
