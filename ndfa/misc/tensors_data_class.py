@@ -390,12 +390,14 @@ class TensorDataClassWithSequences:
     sequences: Union[List[torch.Tensor], torch.Tensor]
     batch_first: bool = True
     sequences_lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
+    sequences_mask: Optional[torch.BoolTensor] = dataclasses.field(default=None, init=False)
+    max_sequence_length: Optional[int] = dataclasses.field(default=None, init=False)
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         supers = super(TensorDataClassWithSequences, cls).get_management_fields() \
             if hasattr(super(TensorDataClassWithSequences, cls), 'get_management_fields') else ()
-        return supers + ('batch_first', 'sequences_lengths')
+        return supers + ('batch_first', 'sequences_lengths', 'sequences_mask', 'max_sequence_length')
 
 
 @final
@@ -530,6 +532,7 @@ class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSeque
         if not inputs[0].batch_first:
             raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
         assert all(inp.sequences_lengths is None for inp in inputs)
+        assert all(inp.sequences_mask is None for inp in inputs)
         assert all(isinstance(inp.sequences, list) for inp in inputs) or \
                all(isinstance(inp.sequences, torch.Tensor) for inp in inputs)
         assert all(isinstance(seq, torch.Tensor) for inp in inputs for seq in inp.sequences)
@@ -548,6 +551,13 @@ class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSeque
             inputs = fixed_inputs
         flattened = super(BatchFlattenedSeq, cls)._collate_first_pass(inputs)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
+        flattened.max_sequence_length = max(seq_lengths)
+        batched_ranges = torch.arange(start=1, end=flattened.max_sequence_length + 1,
+                                      dtype=torch.long, device=flattened.sequences.device) \
+            .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
+        sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
+            flattened.batch_size, flattened.max_sequence_length))
+        flattened.sequences_mask = torch.BoolTensor(sequences_mask, device=flattened.sequences.device)
         return flattened
 
     @classmethod
@@ -638,6 +648,7 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
         if not inputs[0].batch_first:
             raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
         assert all(inp.sequences_lengths is None for inp in inputs)
+        assert all(inp.sequences_mask is None for inp in inputs)
         assert all(isinstance(inp.sequences, list) for inp in inputs) or \
                all(isinstance(inp.sequences, torch.Tensor) for inp in inputs)
         assert all(isinstance(seq, torch.Tensor) for inp in inputs for seq in inp.sequences)
@@ -656,6 +667,13 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
             inputs = fixed_inputs
         flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(inputs)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
+        flattened.max_sequence_length = max(seq_lengths)
+        batched_ranges = torch.arange(start=1, end=flattened.max_sequence_length + 1,
+                                      dtype=torch.long, device=flattened.sequences.device) \
+            .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
+        sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
+            flattened.batch_size, flattened.max_sequence_length))
+        flattened.sequences_mask = torch.BoolTensor(sequences_mask, device=flattened.sequences.device)
         flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
         flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
         return flattened
