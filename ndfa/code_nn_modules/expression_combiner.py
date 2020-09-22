@@ -26,10 +26,10 @@ class ExpressionCombiner(nn.Module):
         attn_cat_dim = expression_encoding_dim * nr_attn_heads
         projection_dimensions = np.linspace(
             start=attn_cat_dim, stop=combined_expression_dim, num=nr_dim_reduction_layers + 1, dtype=int)
-        self.dim_reduction_projection_layers = [
+        self.dim_reduction_projection_layers = nn.ModuleList([
             nn.Linear(in_features=projection_dimensions[layer_idx],
                       out_features=projection_dimensions[layer_idx + 1])
-            for layer_idx in range(nr_dim_reduction_layers)]
+            for layer_idx in range(nr_dim_reduction_layers)])
         self.dropout_layer = nn.Dropout(dropout_p)
 
     def forward(self, expressions_encodings: torch.Tensor,
