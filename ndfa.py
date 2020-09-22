@@ -157,8 +157,8 @@ def main():
                 datafold=DataFold.Validation,
                 pp_data_path=exec_params.pp_data_dir_path)
             eval_loader = DataLoader(
-                eval_dataset, batch_size=exec_params.batch_size * 2,
-                collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
+                eval_dataset, batch_size=exec_params.batch_size,
+                collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
@@ -192,8 +192,8 @@ def main():
             datafold=DataFold.Validation,
             pp_data_path=exec_params.pp_data_dir_path)
         eval_loader = DataLoader(
-            eval_dataset, batch_size=exec_params.batch_size * 2,
-            collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
+            eval_dataset, batch_size=exec_params.batch_size,
+            collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
         val_loss, metrics_results = evaluate(
             model=model,
@@ -240,7 +240,7 @@ def main():
             #     datafold=None,
             #     pp_data_path=exec_params.pp_data_dir_path)
             # data_loader = DataLoader(
-            #     pp_data, batch_size=exec_params.batch_size * 2,
+            #     pp_data, batch_size=exec_params.batch_size,
             #     collate_fn=task.collate_examples, **dataloader_cuda_kwargs)
             # predictions = task.predict(
             #     model=model,
