@@ -56,13 +56,13 @@ class MethodCodeEncoderParams:
         default=1,
         description="The max number of .")
     max_nr_control_flow_paths: int = confparam(
-        default=400,
+        default=200,
         description="The max number of .")
     min_control_flow_path_len: int = confparam(
         default=3,
         description="The max number of .")
     max_control_flow_path_len: int = confparam(
-        default=200,
+        default=80,
         description="The max number of .")
 
     # logging call task params:
