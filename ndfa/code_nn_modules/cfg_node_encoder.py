@@ -31,12 +31,13 @@ class CFGNodeEncoder(nn.Module):
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(self, combined_cfg_expressions_encodings: torch.Tensor, pdg: PDGInputTensors):
+        assert combined_cfg_expressions_encodings.size(-1) == self.cfg_combined_expression_dim
         assert pdg.cfg_nodes_control_kind.tensor.ndim == 1  # (nr_cfg_nodes_in_batch,)
         nr_cfg_nodes_in_batch = pdg.cfg_nodes_control_kind.tensor.size(0)
         # nr_cfg_expressions_in_batch = pdg.cfg_nodes_tokenized_expressions.token_type.sequences.size(0)
         embedded_cfg_nodes_control_kind = self.pdg_node_control_kinds_embeddings(pdg.cfg_nodes_control_kind.tensor)
         cfg_nodes_expressions_encodings = combined_cfg_expressions_encodings.new_zeros(
-            size=(nr_cfg_nodes_in_batch, combined_cfg_expressions_encodings.size(-1)))
+            size=(nr_cfg_nodes_in_batch, self.cfg_combined_expression_dim))
         cfg_nodes_expressions_encodings.masked_scatter_(
             mask=pdg.cfg_nodes_has_expression_mask.tensor.unsqueeze(-1).expand(cfg_nodes_expressions_encodings.size()),
             source=combined_cfg_expressions_encodings)
