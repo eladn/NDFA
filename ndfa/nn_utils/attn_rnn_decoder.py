@@ -58,7 +58,7 @@ class AttnRNNDecoder(nn.Module):
             input_size=self.decoder_hidden_dim, hidden_size=self.decoder_hidden_dim, num_layers=self.nr_rnn_layers)
 
         self.attn_and_input_combine_linear_layer = nn.Linear(
-            self.decoder_hidden_dim + self.decoder_output_dim, self.decoder_hidden_dim)
+            self.encoder_output_dim + self.decoder_output_dim, self.decoder_hidden_dim)
         self.output_common_embedding_dropout_layer = None if embedding_dropout_p is None else nn.Dropout(embedding_dropout_p)
         self.out_linear_layer = nn.Linear(self.decoder_hidden_dim, self.decoder_output_dim)
         self.attention_over_encoder_outputs = Attention(
@@ -75,7 +75,8 @@ class AttnRNNDecoder(nn.Module):
                 dyn_vocab_scattered_encodings: Optional[ScatteredEncodings] = None,
                 groundtruth_target_idxs: Optional[torch.LongTensor] = None):
         assert encoder_outputs.ndim == 3  # (batch_size, encoder_output_len, encoder_output_dim)
-        batch_size, encoder_output_len, encoder_output_dim = encoder_outputs.size()
+        batch_size, encoder_output_len = encoder_outputs.size()[:2]
+        assert self.encoder_output_dim == encoder_outputs.size(2)
         assert output_vocab_example_based_encodings is None or \
                output_vocab_example_based_encodings.ndim == 3 and \
                output_vocab_example_based_encodings.size(0) == batch_size and \
@@ -93,7 +94,6 @@ class AttnRNNDecoder(nn.Module):
         nr_all_possible_output_words_encodings = nr_output_batched_words_per_example + self.nr_output_common_embeddings
         assert output_vocab_example_based_encodings_mask is None or output_vocab_example_based_encodings_mask.size() == \
                (batch_size, nr_output_batched_words_per_example)
-        assert encoder_output_dim == self.encoder_output_dim
         assert encoder_outputs_mask is None or encoder_outputs_mask.size() == (batch_size, encoder_output_len)
         # encoder_outputs_mask = None if encoder_outputs_mask is None else encoder_outputs_mask[:, :encoder_output_len]
 
