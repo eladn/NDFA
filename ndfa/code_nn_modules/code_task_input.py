@@ -1,6 +1,6 @@
 import torch
 import dataclasses
-from typing import Optional
+from typing import Optional, Dict
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
@@ -8,7 +8,8 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
 
 __all__ = ['MethodCodeInputPaddedTensors',
            'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
-           'SymbolsInputTensors', 'CFGPathsInputTensors', 'PDGInputTensors']
+           'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
+           'PDGInputTensors']
 
 
 # TODO: this is an old impl - REMOVE!
@@ -52,6 +53,12 @@ class CFGPathsInputTensors(TensorsDataClass):
 
 
 @dataclasses.dataclass
+class CFGPathsNGramsInputTensors(TensorsDataClass):
+    nodes_indices: BatchedFlattenedIndicesFlattenedSeq
+    edges_types: BatchFlattenedSeq
+
+
+@dataclasses.dataclass
 class PDGInputTensors(TensorsDataClass):
     cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
     cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
@@ -63,6 +70,7 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_edges_attrs: Optional[torch.LongTensor] = None
 
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
+    cfg_control_flow_paths_ngrams: Optional[Dict[int, CFGPathsNGramsInputTensors]] = None
 
 
 @dataclasses.dataclass

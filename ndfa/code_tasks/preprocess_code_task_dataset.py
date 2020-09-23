@@ -20,9 +20,11 @@ from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expressio
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, MethodCodeInputTensors, \
-    CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors
+    CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors, \
+    CFGPathsNGramsInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
+from ndfa.misc.example_formatter import format_example, RawExtractedExample
 
 
 __all__ = [
@@ -235,6 +237,9 @@ def preprocess_code_task_example(
                 object_name='#control_flow_paths', value=float('inf'),
                 max_val=model_hps.method_code_encoder.max_nr_control_flow_paths)])
     assert control_flow_paths is not None
+    control_flow_paths = [
+        tuple((node_idx, None if edge is None else edge.type.value) for node_idx, edge in path)
+        for path in control_flow_paths]
 
     limitations = []
     limitations.append(PreprocessLimitation(
@@ -250,6 +255,23 @@ def preprocess_code_task_example(
         object_name='|longest_control_flow_path|', value=longest_control_flow_path,
         max_val=model_hps.method_code_encoder.max_control_flow_path_len))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
+
+    control_flow_paths_ngrams = {}
+    for ngrams_n in range(2, 6 + 1):  # TODO: make these HPs
+        control_flow_paths_ngrams[ngrams_n] = set()
+        for control_flow_path in control_flow_paths:
+            for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
+                ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
+                control_flow_paths_ngrams[ngrams_n].add(ngram)
+
+    # FOR DEBUG:
+    # print(format_example(example=RawExtractedExample(method=method, method_ast=method_ast, method_pdg=method_pdg)))
+    # control_flow_paths_node_idxs = [[node_idx for node_idx, _ in path] for path in control_flow_paths]
+    # control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths_node_idxs for node_idx in path}
+    # node_idxs_not_in_path = set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set
+    # print(f'node_idxs not in path: {sorted(list(node_idxs_not_in_path))}')
+    # print()
+    # print()
 
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
@@ -269,9 +291,21 @@ def preprocess_code_task_example(
             edges_types=BatchFlattenedSeq(
                 sequences=[torch.LongTensor(
                     [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(
-                        '<PAD>' if edge is None else edge.type.value)
-                     for _, edge in path])
-                    for path in control_flow_paths])))
+                        '<PAD>' if edge_type is None else edge_type)
+                     for _, edge_type in path])
+                    for path in control_flow_paths])),
+        cfg_control_flow_paths_ngrams={
+            key: CFGPathsNGramsInputTensors(
+                nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
+                    sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
+                    tgt_indexing_group='cfg_nodes'),
+                edges_types=BatchFlattenedSeq(
+                    sequences=[torch.LongTensor(
+                        [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(
+                            '<PAD>' if edge_type is None else edge_type)
+                            for _, edge_type in ngram])
+                        for ngram in ngrams]))
+            for key, ngrams in control_flow_paths_ngrams.items()})
 
     return MethodCodeInputTensors(
         method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts,
