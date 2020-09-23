@@ -1,3 +1,4 @@
+from . import misc
 from . import apply_batched_embeddings
 from . import attention
 from . import attn_rnn_decoder
@@ -11,6 +12,7 @@ from . import unflatten_batch
 from . import window_average
 
 __all__ = \
+    misc.__all__ + \
     apply_batched_embeddings.__all__ + \
     attention.__all__ + \
     attn_rnn_decoder.__all__ + \

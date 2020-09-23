@@ -10,8 +10,8 @@ from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 
 class SymbolsDecoder(nn.Module):
     def __init__(self, symbols_special_words_embedding: nn.Embedding, symbols_special_words_vocab: Vocabulary,
-                 max_nr_taget_symbols: int, encoder_output_dim: int = 256,
-                 symbols_encoding_dim: int = 256, symbols_emb_dropout_p: float = 0.3,
+                 max_nr_taget_symbols: int, encoder_output_dim: int = 256, symbols_encoding_dim: int = 256,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu',
                  use_batch_flattened_target_symbols_vocab: bool = False):
         super(SymbolsDecoder, self).__init__()
         self.use_batch_flattened_target_symbols_vocab = use_batch_flattened_target_symbols_vocab
@@ -19,9 +19,9 @@ class SymbolsDecoder(nn.Module):
         self.attn_rnn_decoder = AttnRNNDecoder(
             encoder_output_dim=encoder_output_dim,
             max_target_seq_len=max_nr_taget_symbols, decoder_hidden_dim=max(symbols_encoding_dim * 4, encoder_output_dim),
-            decoder_output_dim=symbols_encoding_dim, embedding_dropout_p=symbols_emb_dropout_p,
-            rnn_type='lstm', nr_rnn_layers=2, output_common_embedding=symbols_special_words_embedding,
-            output_common_vocab=symbols_special_words_vocab)
+            decoder_output_dim=symbols_encoding_dim, embedding_dropout_rate=dropout_rate,
+            activation_fn=activation_fn, rnn_type='lstm', nr_rnn_layers=2,
+            output_common_embedding=symbols_special_words_embedding, output_common_vocab=symbols_special_words_vocab)
 
     def forward(self, encoder_outputs: torch.Tensor,
                 encoder_outputs_mask: typing.Optional[torch.BoolTensor],

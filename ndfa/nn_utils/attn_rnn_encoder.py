@@ -11,11 +11,12 @@ __all__ = ['AttnRNNEncoder']
 
 class AttnRNNEncoder(RNNEncoder):
     def __init__(self, input_dim: int, hidden_dim: Optional[int] = None, rnn_type: str = 'lstm',
-                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True):
+                 nr_rnn_layers: int = 2, rnn_bi_direction: bool = True, activation_fn: str = 'relu'):
         super(AttnRNNEncoder, self).__init__(
             input_dim=input_dim, hidden_dim=hidden_dim, rnn_type=rnn_type,
             nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=rnn_bi_direction)
-        self.attn_layer = Attention(nr_features=self.hidden_dim, project_key=True)
+        self.attn_layer = Attention(
+            nr_features=self.hidden_dim, project_key=True, activation_fn=activation_fn)
 
     def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,
                 lengths: Optional[torch.Tensor] = None, batch_first: bool = False):

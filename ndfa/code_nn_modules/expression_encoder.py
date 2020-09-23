@@ -1,11 +1,10 @@
-import dataclasses
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
 
+from ndfa.nn_utils.misc import get_activation
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
 from ndfa.nn_utils.rnn_encoder import RNNEncoder
@@ -23,10 +22,11 @@ class ExpressionEncoder(nn.Module):
                  expressions_special_words_vocab: Vocabulary, identifiers_special_words_vocab: Vocabulary,
                  kos_token_embedding_dim: int, identifier_embedding_dim: int, expression_encoding_dim: int,
                  token_kind_embedding_dim: int = 8, method: str = 'bi-lstm', nr_rnn_layers: int = 2,
-                 nr_out_linear_layers: int = 2, dropout_rate: float = 0.3):
+                 nr_out_linear_layers: int = 2, dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert method in {'bi-lstm', 'transformer_encoder'}
         assert nr_out_linear_layers >= 1
         super(ExpressionEncoder, self).__init__()
+        self.activation_fn = get_activation(activation_fn)
         self.kos_tokens_vocab = kos_tokens_vocab
         self.tokens_kinds_vocab = tokens_kinds_vocab
         self.expressions_special_words_vocab = expressions_special_words_vocab
@@ -102,10 +102,10 @@ class ExpressionEncoder(nn.Module):
         assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
 
         final_token_seqs_encodings = self.dropout_layer(final_token_seqs_encodings)
-        final_token_seqs_encodings_projected = self.dropout_layer(F.relu(
+        final_token_seqs_encodings_projected = self.dropout_layer(self.activation_fn(
             self.projection_linear_layer(final_token_seqs_encodings)))
         for linear_layer in self.additional_linear_layers:
-            final_token_seqs_encodings_projected = self.dropout_layer(F.relu(linear_layer(
+            final_token_seqs_encodings_projected = self.dropout_layer(self.activation_fn(linear_layer(
                 final_token_seqs_encodings_projected)))
 
         if self.method == 'transformer_encoder':

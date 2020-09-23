@@ -5,6 +5,7 @@ from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEnc
 from torch.nn.modules.normalization import LayerNorm
 from typing import Optional
 
+from ndfa.nn_utils.misc import get_activation
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
@@ -12,10 +13,11 @@ from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary, method: str = 'bi-lstm', embedding_dim: int = 256,
-                 nr_rnn_layers: int = 2, dropout_rate: float = 0.3):
+                 nr_rnn_layers: int = 2, dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert method in {'bi-lstm', 'transformer_encoder'}
-        self.method = method
         super(IdentifierEncoder, self).__init__()
+        self.method = method
+        self.activation_fn = get_activation(activation_fn)
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.embedding_dim = embedding_dim
         self.sub_identifiers_embedding_layer = nn.Embedding(
@@ -31,7 +33,7 @@ class IdentifierEncoder(nn.Module):
         elif method == 'bi-lstm':
             self.attn_rnn_encoder = AttnRNNEncoder(
                 input_dim=self.embedding_dim, hidden_dim=self.embedding_dim, rnn_type='lstm',
-                nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
+                nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         nr_hashing_features = 256  # TODO: plug-in HP
         self.identifier_sub_parts_hashing_linear = nn.Linear(nr_hashing_features, nr_hashing_features, bias=False)
@@ -61,9 +63,9 @@ class IdentifierEncoder(nn.Module):
             identifiers_sub_parts_hashings_projected = self.dropout_layer(identifiers_sub_parts_hashings_projected)
             identifiers_sub_parts_vocab_embeddings_and_hashings_combined = self.vocab_and_hashing_combiner(
                 torch.cat([identifiers_sub_parts_vocab_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
-            identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(
+            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_fn(
                 identifiers_sub_parts_vocab_embeddings_and_hashings_combined))
-            identifiers_sub_parts_embeddings = self.dropout_layer(F.relu(self.final_linear_layer(
+            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_fn(self.final_linear_layer(
                 identifiers_sub_parts_embeddings)))
         else:
             identifiers_sub_parts_embeddings = identifiers_sub_parts_vocab_embeddings

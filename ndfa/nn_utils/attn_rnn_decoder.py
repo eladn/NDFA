@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Union
 
+from ndfa.nn_utils.misc import get_activation
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
 from ndfa.nn_utils.attention import Attention
@@ -34,12 +35,14 @@ def apply_embeddings(
 
 class AttnRNNDecoder(nn.Module):
     def __init__(self, encoder_output_dim: int, decoder_hidden_dim: int,
-                 decoder_output_dim: int, max_target_seq_len: int,  embedding_dropout_p: Optional[float] = 0.3,
+                 decoder_output_dim: int, max_target_seq_len: int,
+                 embedding_dropout_rate: Optional[float] = 0.3, activation_fn: str = 'relu',
                  rnn_type: str = 'lstm', nr_rnn_layers: int = 1,
                  output_common_embedding: Optional[Union[torch.Tensor, nn.Embedding]] = None,
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
+        self.activation_fn = get_activation(activation_fn)
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim
@@ -59,11 +62,11 @@ class AttnRNNDecoder(nn.Module):
 
         self.attn_and_input_combine_linear_layer = nn.Linear(
             self.encoder_output_dim + self.decoder_output_dim, self.decoder_hidden_dim)
-        self.output_common_embedding_dropout_layer = None if embedding_dropout_p is None else nn.Dropout(embedding_dropout_p)
+        self.output_common_embedding_dropout_layer = None if embedding_dropout_rate is None else nn.Dropout(embedding_dropout_rate)
         self.out_linear_layer = nn.Linear(self.decoder_hidden_dim, self.decoder_output_dim)
         self.attention_over_encoder_outputs = Attention(
             nr_features=self.encoder_output_dim, project_key=True, project_query=True,
-            key_in_features=self.decoder_hidden_dim + self.decoder_output_dim)
+            key_in_features=self.decoder_hidden_dim + self.decoder_output_dim, activation_fn=activation_fn)
         self.dyn_vocab_linear_projection = nn.Linear(1028, 256)  # TODO: plug-in HPs
         self.dyn_vocab_strategy = 'after_softmax'  # in {'before_softmax', 'after_softmax'}
 
@@ -146,7 +149,7 @@ class AttnRNNDecoder(nn.Module):
             attn_applied_and_input_combine = torch.cat((prev_cell_encoding, attn_applied), dim=1)  # (batch_size, decoder_output_dim + encoder_output_dim)
             attn_applied_and_input_combine = self.attn_and_input_combine_linear_layer(attn_applied_and_input_combine)  # (batch_size, decoder_hidden_dim)
 
-            rnn_cell_input = F.relu(attn_applied_and_input_combine).unsqueeze(0)  # (1, batch_size, decoder_hidden_dim)
+            rnn_cell_input = self.activation_fn(attn_applied_and_input_combine).unsqueeze(0)  # (1, batch_size, decoder_hidden_dim)
             rnn_cell_output, (rnn_hidden, rnn_state) = self.decoding_rnn_layer(rnn_cell_input, (rnn_hidden, rnn_state))
             assert rnn_cell_output.size() == (1, batch_size, self.decoder_hidden_dim)
             assert rnn_hidden.size() == hidden_shape and rnn_state.size() == hidden_shape
