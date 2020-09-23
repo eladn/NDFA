@@ -5,7 +5,7 @@ from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEnc
 from torch.nn.modules.normalization import LayerNorm
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
@@ -17,7 +17,7 @@ class IdentifierEncoder(nn.Module):
         assert method in {'bi-lstm', 'transformer_encoder'}
         super(IdentifierEncoder, self).__init__()
         self.method = method
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.embedding_dim = embedding_dim
         self.sub_identifiers_embedding_layer = nn.Embedding(

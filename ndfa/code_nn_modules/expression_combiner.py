@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.nn_utils.attention import Attention
 
 
@@ -15,7 +15,7 @@ class ExpressionCombiner(nn.Module):
                  nr_attn_heads: int = 1, nr_dim_reduction_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ExpressionCombiner, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.expression_encoding_dim = expression_encoding_dim
         self.combined_expression_dim = combined_expression_dim
         self.nr_attn_heads = nr_attn_heads

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 
 
 __all__ = ['SeqContextAdder']
@@ -11,7 +11,7 @@ __all__ = ['SeqContextAdder']
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int, dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SeqContextAdder, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.main_dim = main_dim
         self.ctx_dim = ctx_dim
         self.first_projection_layer = nn.Linear(

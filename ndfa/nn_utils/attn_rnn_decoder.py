@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Union
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
 from ndfa.nn_utils.attention import Attention
@@ -42,7 +42,7 @@ class AttnRNNDecoder(nn.Module):
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim

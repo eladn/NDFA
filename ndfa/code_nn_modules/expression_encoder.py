@@ -4,7 +4,7 @@ from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
 from ndfa.nn_utils.rnn_encoder import RNNEncoder
@@ -26,7 +26,7 @@ class ExpressionEncoder(nn.Module):
         assert method in {'bi-lstm', 'transformer_encoder'}
         assert nr_out_linear_layers >= 1
         super(ExpressionEncoder, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.kos_tokens_vocab = kos_tokens_vocab
         self.tokens_kinds_vocab = tokens_kinds_vocab
         self.expressions_special_words_vocab = expressions_special_words_vocab

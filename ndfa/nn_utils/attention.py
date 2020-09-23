@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 
 
 __all__ = ['Attention']
@@ -13,7 +13,7 @@ class Attention(nn.Module):
     def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
                  key_in_features: Optional[int] = None, activation_fn: str = 'relu'):
         super(Attention, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.nr_features = nr_features
         self.key_in_features = nr_features if key_in_features is None else key_in_features
         self.key_linear_projection_layer = \

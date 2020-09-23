@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch_scatter import scatter_mean
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 
@@ -15,7 +15,7 @@ class SymbolsEncoder(nn.Module):
                  dropout_rate: float = 0.3,
                  activation_fn: str = 'relu'):
         super(SymbolsEncoder, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.symbols_special_words_vocab = symbols_special_words_vocab
         self.symbol_embedding_dim = symbol_embedding_dim
         # FIXME: might be problematic because 2 different modules hold `symbols_special_words_embedding` (both SymbolsEncoder and SymbolsDecoder).

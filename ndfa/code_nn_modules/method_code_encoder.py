@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from typing import NamedTuple, Optional
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
@@ -35,7 +35,7 @@ class MethodCodeEncoder(nn.Module):
                  method_code_encoding_technique: str = 'cfg_paths'):
         super(MethodCodeEncoder, self).__init__()
         assert method_code_encoding_technique in method_code_encoding_techniques
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.identifier_embedding_dim = identifier_embedding_dim
         self.symbol_embedding_dim = symbol_embedding_dim
         self.expression_encoding_dim = expression_encoding_dim

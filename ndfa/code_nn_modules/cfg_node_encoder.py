@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ndfa.nn_utils.misc import get_activation
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors
 
@@ -12,7 +12,7 @@ class CFGNodeEncoder(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_cfg_nodes_encoding_linear_layers >= 1
         super(CFGNodeEncoder, self).__init__()
-        self.activation_fn = get_activation(activation_fn)
+        self.activation_fn = get_activation_layer(activation_fn)()
         self.pdg_node_control_kinds_vocab_size = len(pdg_node_control_kinds_vocab)
         self.pdg_node_control_kinds_embedding_dim = pdg_node_control_kinds_embedding_dim
         self.pdg_node_control_kinds_embeddings = nn.Embedding(
