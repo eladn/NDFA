@@ -75,7 +75,7 @@ class MethodCodeEncoderParams:
         description="The max number of .")
 
     max_sub_identifier_vocab_size: int = confparam(
-        default=500,
+        default=1000,
         description="The max size of the sub-identifiers vocabulary.")
 
     identifier_embedding_size: int = confparam(
