@@ -23,17 +23,21 @@ class EncodedMethodCode(NamedTuple):
 
 
 class MethodCodeEncoder(nn.Module):
-    def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int = 256, cfg_node_dim: int = 1024,
-                 expr_encoding_dim: int = 1028, nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3,
+    def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
+                 symbol_embedding_dim: int, cfg_node_dim: int,
+                 expr_encoding_dim: int, cfg_combined_expression_dim: int,
+                 nr_encoder_decoder_bridge_layers: int = 0, dropout_p: float = 0.3,
                  use_symbols_occurrences_for_symbols_encodings: bool = True):
         super(MethodCodeEncoder, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
+        self.symbol_embedding_dim = symbol_embedding_dim
         self.expr_encoding_dim = expr_encoding_dim
         self.identifier_encoder = IdentifierEncoder(
             sub_identifiers_vocab=code_task_vocabs.sub_identifiers, embedding_dim=self.identifier_embedding_dim)
         self.method_cfg_encoder = MethodCFGEncoder(
             code_task_vocabs=code_task_vocabs, identifier_embedding_dim=identifier_embedding_dim,
-            expression_encoding_dim=expr_encoding_dim, cfg_combined_expression_dim=1024, cfg_node_dim=cfg_node_dim,
+            symbol_embedding_dim=symbol_embedding_dim, expression_encoding_dim=expr_encoding_dim,
+            cfg_combined_expression_dim=cfg_combined_expression_dim, cfg_node_dim=cfg_node_dim,
             use_symbols_occurrences_for_symbols_encodings=use_symbols_occurrences_for_symbols_encodings)
 
         # TODO: remove!

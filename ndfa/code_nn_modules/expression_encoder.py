@@ -21,7 +21,7 @@ from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInp
 class ExpressionEncoder(nn.Module):
     def __init__(self, kos_tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary,
                  expressions_special_words_vocab: Vocabulary, identifiers_special_words_vocab: Vocabulary,
-                 kos_token_embedding_dim: int = 256, identifiers_dim: int = 256, expression_encoding_dim: int = 1024,
+                 kos_token_embedding_dim: int, identifier_embedding_dim: int, expression_encoding_dim: int,
                  token_kind_embedding_dim: int = 8, method: str = 'bi-lstm', nr_rnn_layers: int = 2,
                  nr_out_linear_layers: int = 2, dropout_rate: float = 0.3):
         assert method in {'bi-lstm', 'transformer_encoder'}
@@ -32,7 +32,7 @@ class ExpressionEncoder(nn.Module):
         self.expressions_special_words_vocab = expressions_special_words_vocab
         self.identifiers_special_words_vocab = identifiers_special_words_vocab
         self.kos_token_embedding_dim = kos_token_embedding_dim
-        self.identifier_embedding_dim = identifiers_dim
+        self.identifier_embedding_dim = identifier_embedding_dim
         self.expression_encoding_dim = expression_encoding_dim
         self.method = method
         self.kos_tokens_embedding_layer = nn.Embedding(
@@ -74,6 +74,7 @@ class ExpressionEncoder(nn.Module):
         identifiers_embeddings = encoded_identifiers[expressions.identifier_index.indices]
         is_identifier_token = \
             expressions.token_type.sequences == self.tokens_kinds_vocab.get_word_idx(SerTokenKind.IDENTIFIER.value)
+
         is_identifier_token_mask = is_identifier_token.unsqueeze(-1).expand(
             is_identifier_token.size() + (self.identifier_embedding_dim,))
         token_kinds_for_kos_tokens_vocab = (

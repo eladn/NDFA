@@ -22,7 +22,7 @@ class ExpressionCombiner(nn.Module):
         self.attn_layers = nn.ModuleList([
             Attention(nr_features=self.expression_encoding_dim, project_key=True)
             for _ in range(nr_attn_heads)])
-        assert expression_encoding_dim * nr_attn_heads > combined_expression_dim
+        assert expression_encoding_dim * nr_attn_heads >= combined_expression_dim
         attn_cat_dim = expression_encoding_dim * nr_attn_heads
         projection_dimensions = np.linspace(
             start=attn_cat_dim, stop=combined_expression_dim, num=nr_dim_reduction_layers + 1, dtype=int)
