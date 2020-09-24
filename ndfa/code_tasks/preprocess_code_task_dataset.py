@@ -240,6 +240,7 @@ def preprocess_code_task_example(
     control_flow_paths = [
         tuple((node_idx, None if edge is None else edge.type.value) for node_idx, edge in path)
         for path in control_flow_paths]
+    control_flow_paths.sort()  # for determinism
 
     limitations = []
     limitations.append(PreprocessLimitation(
@@ -263,6 +264,8 @@ def preprocess_code_task_example(
             for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
                 ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
                 control_flow_paths_ngrams[ngrams_n].add(ngram)
+    # sort for determinism
+    control_flow_paths_ngrams = {key: sorted(list(ngrams)) for key, ngrams in control_flow_paths_ngrams.items()}
 
     # FOR DEBUG:
     # print(format_example(example=RawExtractedExample(method=method, method_ast=method_ast, method_pdg=method_pdg)))
