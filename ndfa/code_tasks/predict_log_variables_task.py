@@ -174,10 +174,11 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.code_task_encoder.method_cfg_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
-            max_nr_taget_symbols=model_hps.method_code_encoder.max_nr_target_symbols + 2,
+            max_nr_taget_symbols=model_hps.target_symbols_decoder.max_nr_target_symbols + 2,
             encoder_output_dim=self.cfg_node_dim,
             symbols_encoding_dim=self.symbol_embedding_dim,
-            use_batch_flattened_target_symbols_vocab=self.model_hps.use_batch_flattened_target_symbols_vocab,
+            use_batch_flattened_target_symbols_vocab=
+            self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(
@@ -185,7 +186,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             target_symbols_idxs: Optional[LogVarTargetSymbolsIndices] = None):
         self.dbg_log_new_fwd()
         use_batch_flattened_target_symbols_vocab = \
-            self.model_hps.use_batch_flattened_target_symbols_vocab and self.training
+            self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab and self.training
         if target_symbols_idxs is not None:
             target_symbols_idxs = \
                 target_symbols_idxs.batch_flattened_symbol_indices.indices \
@@ -238,7 +239,7 @@ class PredictLogVarsModelLoss(nn.Module):
                 target_symbols_idxs: LogVarTargetSymbolsIndices):
         target_symbols_idxs = \
             target_symbols_idxs.batch_flattened_symbol_indices.indices \
-            if self.model_hps.use_batch_flattened_target_symbols_vocab and self.training else \
+            if self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab and self.training else \
             target_symbols_idxs.example_based_symbol_indices
 
         assert model_output.decoder_outputs.ndim == 3  # (bsz, nr_target_symbols-1, max_nr_possible_symbols)
@@ -280,8 +281,8 @@ def preprocess_logging_call_example(
 
     limitations = [PreprocessLimitation(
         object_name='#target_symbols', value=nr_target_symbols,
-        min_val=model_hps.method_code_encoder.min_nr_target_symbols,
-        max_val=model_hps.method_code_encoder.max_nr_target_symbols)]
+        min_val=model_hps.target_symbols_decoder.min_nr_target_symbols,
+        max_val=model_hps.target_symbols_decoder.max_nr_target_symbols)]
     exceeding_limitations = [limitation for limitation in limitations if limitation.exceeds]
     for exceeding_limitation in exceeding_limitations:
         if exceeding_limitation.warn:
@@ -297,7 +298,7 @@ def preprocess_logging_call_example(
              for symbol_idx_wo_specials in symbols_idxs_used_in_logging_call] +
             [code_task_vocabs.symbols_special_words.get_word_idx('<EOS>')] +
             [code_task_vocabs.symbols_special_words.get_word_idx('<PAD>')] *
-            (model_hps.method_code_encoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call)))
+            (model_hps.target_symbols_decoder.max_nr_target_symbols - len(symbols_idxs_used_in_logging_call)))
         # Used for batched target vocab decoder
         # (using encodings of symbols of all examples in the batch as tgt vocab)
         target_batch_flattened_symbol_indices = BatchedFlattenedIndicesTensor(

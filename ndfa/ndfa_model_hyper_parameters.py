@@ -2,26 +2,109 @@ from confclass import confclass, confparam
 from typing import Optional
 
 
-__all__ = ['MethodCodeEncoderParams', 'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
+__all__ = [
+    'ASTEncoderParams', 'CodeExpressionEncoderParams', 'MethodCFGEncoderParams',
+    'MethodCodeEncoderParams', 'TargetSymbolsDecoderParams',
+    'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
+
+
+@confclass
+class ASTEncoderParams:
+    encoder_type: str = confparam(
+        default='set-of-paths',
+        choices=('set-of-paths', 'tree'),
+        description="Representation type of the AST (specific architecture of the AST code encoder).")
+
+
+@confclass
+class CodeExpressionEncoderParams:
+    encoder_type: str = confparam(
+        default='linear-seq',
+        choices=('linear-seq', 'ast'),
+        description="Representation type of the expression "
+                    "(part of the architecture of the code-encoder).")
+
+    # relevant only if `encoder_type == 'ast'`
+    ast_encoder: ASTEncoderParams = confparam(
+        default_factory=ASTEncoderParams,
+        description="Representation type of the AST of the expression "
+                    "(part of the architecture of the code-encoder).",
+        arg_prefix='ast_encoder')
+
+    token_type_embedding_dim: int = confparam(
+        default=8,
+        description="Embedding size for code token type (operator, identifier, etc).")
+
+    token_encoding_dim: int = confparam(
+        default=256,
+        # default_factory_with_self_access=lambda _self:
+        # _self.identifier_embedding_size + _self.code_token_type_embedding_size,
+        # default_description="identifier_embedding_size + code_token_type_embedding_size",
+        description="Size of encoded code token vector.")
+
+    combined_expression_encoding_dim: int = confparam(
+        # default_as_other_field='code_token_encoding_size',
+        default=512,
+        description="Size of encoded combined code expression.")
+
+
+@confclass
+class MethodCFGEncoderParams:
+    encoder_type: str = confparam(
+        default='control-flow-paths-folded-to-nodes',
+        choices=('set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
+                 'control-flow-paths-ngrams', 'set-of-nodes', 'all-nodes-single-seq'),
+        description="Representation type of the method-CFG (specific architecture of the method-CFG-code-encoder).")
+
+    cfg_node_expression_encoder: CodeExpressionEncoderParams = confparam(
+        default_factory=CodeExpressionEncoderParams,
+        description="Representation type of the expression of a CFG node "
+                    "(part of the architecture of the code-encoder).",
+        arg_prefix='cfg_node_expression_encoder')
+
+    cfg_node_type_embedding_dim: int = confparam(
+        default=4,
+        description="Embedding size for the CFG node type.")
+
+    cfg_node_encoding_dim: int = confparam(
+        default=512,
+        # default_factory_with_self_access=lambda _self:
+        # _self.cfg_node_type_embedding_size + _self.code_expression_encoding_size,
+        # default_description="cfg_node_type_embedding_size + code_expression_encoding_size",
+        description="Size of encoded CFG node vector.")
 
 
 @confclass
 class MethodCodeEncoderParams:
-    encoder_type: str = confparam(
-        default='cfg-paths',
-        choices=('linear-seq', 'ast-paths', 'ast', 'cfg-paths', 'cfg'),
-        description="Representation type of the code (architecture of the code-encoder).")
-    pdg_expression_encoder_type: str = confparam(
-        default='method-linear-seq',
-        choices=('linear-seq', 'method-linear-seq', 'ast-paths', 'ast'),
-        description="Representation type of the expression of a PDG node "
-                    "(part of the architecture of the code-encoder).")
+    method_encoder_type: str = confparam(
+        default='method-cfg',
+        choices=('method-linear-seq', 'method-ast', 'method-cfg'),
+        description="Representation type of the code "
+                    "(main architecture of the method-code-encoder).")
+    # relevant only if `method_encoder_type == 'method-cfg'`
+    method_cfg_encoder: MethodCFGEncoderParams = confparam(
+        default_factory=MethodCFGEncoderParams,
+        description="Representation type of the method-CFG "
+                    "(specific architecture of the method-CFG-code-encoder).",
+        arg_prefix='method_cfg_encoder')
+    # relevant only if `method_encoder_type == 'method-ast'`
+    method_ast_encoder: ASTEncoderParams = confparam(
+        default_factory=ASTEncoderParams,
+        description="Representation type of the method-AST "
+                    "(specific architecture of the method-AST-code-encoder).",
+        arg_prefix='method_ast_encoder')
+    # relevant only if `method_encoder_type == 'method-linear-seq'`
+    method_linear_seq_expression_encoder_type: CodeExpressionEncoderParams = confparam(
+        default_factory=CodeExpressionEncoderParams,
+        description="Representation type of the whole method code as linear sequence "
+                    "(part of the architecture of the code-encoder).",
+        arg_prefix='method_linear_seq_encoder')
 
     # preprocess params
     # TODO: put the preprocess params in a dedicated nested confclass.
     max_nr_identifiers: int = confparam(
         default=110,
-        description="The max number of sub-identifiers in an identifier.")
+        description="The max number of identifiers.")
     min_nr_symbols: int = confparam(
         default=5,
         description="The max number of .")
@@ -65,6 +148,21 @@ class MethodCodeEncoderParams:
         default=80,
         description="The max number of .")
 
+    max_sub_identifier_vocab_size: int = confparam(
+        default=1000,
+        description="The max size of the sub-identifiers vocabulary.")
+
+    identifier_embedding_dim: int = confparam(
+        default=256,
+        description="Embedding size for an identifier.")
+
+    symbol_embedding_dim: int = confparam(
+        default=256,
+        description="Embedding size for a symbol.")
+
+
+@confclass
+class TargetSymbolsDecoderParams:
     # logging call task params:
     # TODO: move to logging-call task specific params
     min_nr_target_symbols: int = confparam(
@@ -73,38 +171,8 @@ class MethodCodeEncoderParams:
     max_nr_target_symbols: int = confparam(
         default=4,
         description="The max number of .")
-
-    max_sub_identifier_vocab_size: int = confparam(
-        default=1000,
-        description="The max size of the sub-identifiers vocabulary.")
-
-    identifier_embedding_size: int = confparam(
-        default=128,
-        description="Embedding size for an identifier.")
-
-    code_token_type_embedding_size: int = confparam(
-        default=8,
-        description="Embedding size for code token type (operator, identifier, etc).")
-
-    code_token_encoding_size: int = confparam(
-        default_factory_with_self_access=lambda _self:
-        _self.identifier_embedding_size + _self.code_token_type_embedding_size,
-        default_description="identifier_embedding_size + code_token_type_embedding_size",
-        description="Size of encoded code token vector.")
-
-    code_expression_encoding_size: int = confparam(
-        default_as_other_field='code_token_encoding_size',
-        description="Size of encoded code expression vector.")
-
-    cfg_node_type_embedding_size: int = confparam(
-        default=4,
-        description="Embedding size for the CFG node type.")
-
-    cfg_node_encoding_size: int = confparam(
-        default_factory_with_self_access=lambda _self:
-        _self.cfg_node_type_embedding_size + _self.code_expression_encoding_size,
-        default_description="cfg_node_type_embedding_size + code_expression_encoding_size",
-        description="Size of encoded CFG node vector.")
+    use_batch_flattened_target_symbols_vocab: bool = confparam(
+        default=False)
 
 
 @confclass
@@ -112,9 +180,10 @@ class NDFAModelHyperParams:
     method_code_encoder: MethodCodeEncoderParams = confparam(
         default_factory=MethodCodeEncoderParams,
         arg_prefix='code-encoder')
-
-    use_batch_flattened_target_symbols_vocab: bool = confparam(
-        default=False)
+    target_symbols_decoder: TargetSymbolsDecoderParams = confparam(
+        default_factory=TargetSymbolsDecoderParams,
+        description='...',
+        arg_prefix='tgt-symbols-decoder')
 
 
 @confclass
