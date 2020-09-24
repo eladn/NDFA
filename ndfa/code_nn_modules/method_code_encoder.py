@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 from typing import NamedTuple, Optional
 
+from ndfa.ndfa_model_hyper_parameters import MethodCodeEncoderParams
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
@@ -27,43 +28,40 @@ method_code_encoding_techniques = ('linear_seq', 'cfg_paths', 'cfg_arbitrary_pat
 
 
 class MethodCodeEncoder(nn.Module):
-    def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
-                 symbol_embedding_dim: int, cfg_node_dim: int,
-                 expression_encoding_dim: int, cfg_combined_expression_dim: int,
+    def __init__(self, code_task_vocabs: CodeTaskVocabs, encoder_params: MethodCodeEncoderParams,
                  nr_encoder_decoder_bridge_layers: int = 0, dropout_rate: float = 0.3,
-                 activation_fn: str = 'relu', use_symbols_occurrences_for_symbols_encodings: bool = True,
-                 method_code_encoding_technique: str = 'cfg_paths'):
+                 activation_fn: str = 'relu', method_code_encoding_technique: str = 'cfg_paths'):
         super(MethodCodeEncoder, self).__init__()
         assert method_code_encoding_technique in method_code_encoding_techniques
-        self.activation_fn = get_activation_layer(activation_fn)()
-        self.identifier_embedding_dim = identifier_embedding_dim
-        self.symbol_embedding_dim = symbol_embedding_dim
-        self.expression_encoding_dim = expression_encoding_dim
+        self.encoder_params = encoder_params
+        self.activation_layer = get_activation_layer(activation_fn)()
 
         self.identifier_encoder = IdentifierEncoder(
             sub_identifiers_vocab=code_task_vocabs.sub_identifiers,
-            embedding_dim=self.identifier_embedding_dim,
+            embedding_dim=self.encoder_params.identifier_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        # TODO: use `method_code_encoding_technique` in forward()!
-        self.method_code_encoding_technique = method_code_encoding_technique
-        if self.method_code_encoding_technique in ('cfg_paths', 'cfg_arbitrary_path', 'cfg_nodes'):
+        # TODO: use `encoder_params.method_encoder_type` in forward()!
+        if self.encoder_params.method_encoder_type == 'method-cfg':
             self.method_cfg_encoder = MethodCFGEncoder(
-                code_task_vocabs=code_task_vocabs, identifier_embedding_dim=identifier_embedding_dim,
-                symbol_embedding_dim=symbol_embedding_dim, expression_encoding_dim=expression_encoding_dim,
-                cfg_combined_expression_dim=cfg_combined_expression_dim, cfg_node_dim=cfg_node_dim,
-                use_symbols_occurrences_for_symbols_encodings=use_symbols_occurrences_for_symbols_encodings,
+                code_task_vocabs=code_task_vocabs,
+                encoder_params=self.encoder_params.method_cfg_encoder,
+                identifier_embedding_dim=self.encoder_params.identifier_embedding_dim,
+                symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
+                use_symbols_occurrences_for_symbols_encodings=
+                self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.method_code_encoding_technique == 'linear_seq':
+        elif self.encoder_params.method_encoder_type == 'method-linear-seq':
             self.linear_seq_method_code_encoder = ExpressionEncoder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
                 expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
                 identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
-                kos_token_embedding_dim=self.identifier_embedding_dim,
-                identifier_embedding_dim=self.identifier_embedding_dim,
-                expression_encoding_dim=self.expression_encoding_dim,
+                encoder_params=self.encoder_params.method_linear_seq_expression_encoder_type,
+                identifier_embedding_dim=self.encoder_params.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+        else:
+            raise ValueError(f'Unexpected method code encoder type `{self.encoder_params.method_encoder_type}`.')
 
         # TODO: remove!
         # expression_encoder = ExpressionEncoder(
@@ -79,12 +77,10 @@ class MethodCodeEncoder(nn.Module):
         #     expression_encoding_dim=self.expr_encoding_dim)  # it might change...
 
         self.encoder_decoder_bridge_dense_layers = nn.ModuleList([
-            nn.Linear(in_features=cfg_node_dim, out_features=cfg_node_dim)
+            nn.Linear(in_features=self.encoder_params.method_cfg_encoder.cfg_node_encoding_dim,
+                      out_features=self.encoder_params.method_cfg_encoder.cfg_node_encoding_dim)  # TODO: make it abstract `encoder.output_dim` to support additional encoders
             for _ in range(nr_encoder_decoder_bridge_layers)])
         self.dropout_layer = nn.Dropout(dropout_rate)
-
-        self.use_symbols_occurrences_for_symbols_encodings = \
-            use_symbols_occurrences_for_symbols_encodings
 
     def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCode:
         # (nr_identifiers_in_batch, identifier_encoding_dim)
@@ -101,7 +97,7 @@ class MethodCodeEncoder(nn.Module):
         encoded_cfg_nodes_after_bridge = unflattened_cfg_nodes_encodings
         if len(self.encoder_decoder_bridge_dense_layers) > 0:
             encoded_cfg_nodes_after_bridge = functools.reduce(
-                lambda last_res, cur_layer: self.dropout_layer(self.activation_fn(cur_layer(last_res))),
+                lambda last_res, cur_layer: self.dropout_layer(self.activation_layer(cur_layer(last_res))),
                 self.encoder_decoder_bridge_dense_layers,
                 encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
                 .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))

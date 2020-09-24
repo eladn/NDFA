@@ -15,7 +15,7 @@ class ExpressionCombiner(nn.Module):
                  nr_attn_heads: int = 1, nr_dim_reduction_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ExpressionCombiner, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.expression_encoding_dim = expression_encoding_dim
         self.combined_expression_dim = combined_expression_dim
         self.nr_attn_heads = nr_attn_heads
@@ -48,6 +48,6 @@ class ExpressionCombiner(nn.Module):
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
         for dim_reduction_projection_layer in self.dim_reduction_projection_layers:
-            projected = self.dropout_layer(self.activation_fn(dim_reduction_projection_layer(projected)))
+            projected = self.dropout_layer(self.activation_layer(dim_reduction_projection_layer(projected)))
         assert projected.size(-1) == self.combined_expression_dim
         return projected

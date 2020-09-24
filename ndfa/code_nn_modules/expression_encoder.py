@@ -4,6 +4,7 @@ from functools import reduce
 from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
 from torch.nn.modules.normalization import LayerNorm
 
+from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
@@ -11,61 +12,60 @@ from ndfa.nn_utils.rnn_encoder import RNNEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
-# @dataclasses.dataclass
-# class EncodedExpression:
-#     expr_encoded_merge: torch.Tensor  # (nr_expressions_in_batch, expr_encoding_dim)
-#     full_expr_encoded: torch.Tensor  # (nr_expressions_in_batch, max_nr_tokens_in_expr, expr_encoding_dim)
-
-
 class ExpressionEncoder(nn.Module):
     def __init__(self, kos_tokens_vocab: Vocabulary, tokens_kinds_vocab: Vocabulary,
                  expressions_special_words_vocab: Vocabulary, identifiers_special_words_vocab: Vocabulary,
-                 kos_token_embedding_dim: int, identifier_embedding_dim: int, expression_encoding_dim: int,
-                 token_kind_embedding_dim: int = 8, method: str = 'bi-lstm', nr_rnn_layers: int = 2,
+                 encoder_params: CodeExpressionEncoderParams,
+                 identifier_embedding_dim: int, method: str = 'bi-lstm', nr_rnn_layers: int = 2,
                  nr_out_linear_layers: int = 2, dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert method in {'bi-lstm', 'transformer_encoder'}
         assert nr_out_linear_layers >= 1
         super(ExpressionEncoder, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.encoder_params = encoder_params
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.kos_tokens_vocab = kos_tokens_vocab
         self.tokens_kinds_vocab = tokens_kinds_vocab
         self.expressions_special_words_vocab = expressions_special_words_vocab
         self.identifiers_special_words_vocab = identifiers_special_words_vocab
-        self.kos_token_embedding_dim = kos_token_embedding_dim
         self.identifier_embedding_dim = identifier_embedding_dim
-        self.expression_encoding_dim = expression_encoding_dim
         self.method = method
         self.kos_tokens_embedding_layer = nn.Embedding(
-            num_embeddings=len(kos_tokens_vocab), embedding_dim=self.kos_token_embedding_dim,
+            num_embeddings=len(kos_tokens_vocab),
+            embedding_dim=self.encoder_params.kos_token_embedding_dim,
             padding_idx=kos_tokens_vocab.get_word_idx('<PAD>'))
-        self.token_kind_embedding_dim = token_kind_embedding_dim
         self.tokens_kinds_embedding_layer = nn.Embedding(
-            num_embeddings=len(tokens_kinds_vocab), embedding_dim=self.token_kind_embedding_dim,
+            num_embeddings=len(tokens_kinds_vocab),
+            embedding_dim=self.encoder_params.token_type_embedding_dim,
             padding_idx=tokens_kinds_vocab.get_word_idx('<PAD>'))
         self.expressions_special_words_embedding_layer = nn.Embedding(
-            num_embeddings=len(self.expressions_special_words_vocab), embedding_dim=self.expression_encoding_dim)
+            num_embeddings=len(self.expressions_special_words_vocab),
+            embedding_dim=self.encoder_params.token_encoding_dim)
         self.identifiers_special_words_embedding_layer = nn.Embedding(
-            num_embeddings=len(self.identifiers_special_words_vocab), embedding_dim=self.identifier_embedding_dim)
+            num_embeddings=len(self.identifiers_special_words_vocab),
+            embedding_dim=self.identifier_embedding_dim)
 
-        assert self.kos_token_embedding_dim == self.identifier_embedding_dim
-        self.kos_or_identifier_token_embedding_dim = self.kos_token_embedding_dim
+        assert self.encoder_params.kos_token_embedding_dim == self.identifier_embedding_dim
+        self.kos_or_identifier_token_embedding_dim = self.encoder_params.kos_token_embedding_dim
         self.projection_linear_layer = nn.Linear(
-            self.token_kind_embedding_dim + self.kos_or_identifier_token_embedding_dim, self.expression_encoding_dim)
+            in_features=self.encoder_params.token_type_embedding_dim + self.kos_or_identifier_token_embedding_dim,
+            out_features=self.encoder_params.token_encoding_dim)
         self.additional_linear_layers = nn.ModuleList(
-            [nn.Linear(self.expression_encoding_dim, self.expression_encoding_dim) for _ in range(nr_out_linear_layers - 1)])
+            [nn.Linear(self.encoder_params.token_encoding_dim, self.encoder_params.token_encoding_dim)
+             for _ in range(nr_out_linear_layers - 1)])
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
         if method == 'transformer_encoder':
             transformer_encoder_layer = TransformerEncoderLayer(
-                d_model=self.expression_encoding_dim, nhead=1)
-            encoder_norm = LayerNorm(self.expression_encoding_dim)
+                d_model=self.encoder_params.token_encoding_dim, nhead=1)
+            encoder_norm = LayerNorm(self.encoder_params.token_encoding_dim)
             self.transformer_encoder = TransformerEncoder(
                 encoder_layer=transformer_encoder_layer, num_layers=3, norm=encoder_norm)
         elif method == 'bi-lstm':
             self.rnn_encoder = RNNEncoder(
-                input_dim=self.expression_encoding_dim, hidden_dim=self.expression_encoding_dim, rnn_type='lstm',
-                nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
+                input_dim=self.encoder_params.token_encoding_dim,
+                hidden_dim=self.encoder_params.token_encoding_dim,
+                rnn_type='lstm', nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True)
 
     def forward(self, expressions: CodeExpressionTokensSequenceInputTensors,
                 encoded_identifiers: torch.Tensor):
@@ -85,7 +85,7 @@ class ExpressionEncoder(nn.Module):
             torch.Tensor.logical_or,
             ((expressions.token_type.sequences == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
         is_kos_token_mask = is_kos_token.unsqueeze(-1).expand(
-            is_kos_token.size() + (self.kos_token_embedding_dim,))
+            is_kos_token.size() + (self.encoder_params.kos_token_embedding_dim,))
 
         # Note: we could consider concatenate kos & identifier embeddings: <kos|None> or <None|identifier>.
         kos_or_identifier_token_encoding = torch.zeros(
@@ -102,10 +102,10 @@ class ExpressionEncoder(nn.Module):
         assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
 
         final_token_seqs_encodings = self.dropout_layer(final_token_seqs_encodings)
-        final_token_seqs_encodings_projected = self.dropout_layer(self.activation_fn(
+        final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(
             self.projection_linear_layer(final_token_seqs_encodings)))
         for linear_layer in self.additional_linear_layers:
-            final_token_seqs_encodings_projected = self.dropout_layer(self.activation_fn(linear_layer(
+            final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_token_seqs_encodings_projected)))
 
         if self.method == 'transformer_encoder':
@@ -126,6 +126,3 @@ class ExpressionEncoder(nn.Module):
             assert False
 
         return expressions_encodings
-        # return EncodedExpression(
-        #     expr_encoded_merge=expr_encoded_merge,
-        #     full_expr_encoded=full_expr_encoded)

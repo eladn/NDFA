@@ -11,7 +11,7 @@ __all__ = ['SeqContextAdder']
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int, dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SeqContextAdder, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.main_dim = main_dim
         self.ctx_dim = ctx_dim
         self.first_projection_layer = nn.Linear(
@@ -29,8 +29,8 @@ class SeqContextAdder(nn.Module):
         assert (batch_size, self.ctx_dim) == context.size()
         ctx_expanded = context.unsqueeze(1).expand(batch_size, seq_len, self.ctx_dim)
         sequence_with_ctx = torch.cat([sequence, ctx_expanded], dim=-1)
-        projected = self.dropout_layer(self.activation_fn(self.first_projection_layer(sequence_with_ctx)))
-        final = self.dropout_layer(self.activation_fn(self.second_linear_layer(projected)))
+        projected = self.dropout_layer(self.activation_layer(self.first_projection_layer(sequence_with_ctx)))
+        final = self.dropout_layer(self.activation_layer(self.second_linear_layer(projected)))
         if sequence_mask is not None:
             final = torch.zeros_like(final).masked_scatter(sequence_mask.unsqueeze(-1).expand(final.size()), final)
         return final

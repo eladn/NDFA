@@ -1,10 +1,10 @@
 import itertools
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from typing import NamedTuple
 from torch_scatter import scatter_mean
 
+from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
@@ -27,26 +27,23 @@ class EncodedMethodCFG(NamedTuple):
 
 class MethodCFGEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
-                 symbol_embedding_dim: int, expression_encoding_dim: int,
-                 cfg_combined_expression_dim: int, cfg_node_dim: int,
+                 symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
+                 use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu', nr_layers: int = 1,
-                 nr_rnn_layers: int = 2, use_symbols_occurrences_for_symbols_encodings: bool = True):
+                 nr_rnn_layers: int = 2):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.identifier_embedding_dim = identifier_embedding_dim
         self.symbol_embedding_dim = symbol_embedding_dim
-        self.expression_encoding_dim = expression_encoding_dim
-        self.cfg_combined_expression_dim = cfg_combined_expression_dim
-        self.cfg_node_dim = cfg_node_dim
+        self.encoder_params = encoder_params
         self.nr_rnn_layers = nr_rnn_layers
         self.first_expression_encoder = ExpressionEncoder(
             kos_tokens_vocab=code_task_vocabs.kos_tokens,
             tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
             expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
             identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
-            kos_token_embedding_dim=self.identifier_embedding_dim,
+            encoder_params=self.encoder_params.cfg_node_expression_encoder,
             identifier_embedding_dim=self.identifier_embedding_dim,
-            expression_encoding_dim=self.expression_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.expression_encoders = nn.ModuleList([
             RNNEncoder(
@@ -55,13 +52,13 @@ class MethodCFGEncoder(nn.Module):
                 nr_rnn_layers=self.nr_rnn_layers)
             for _ in range(nr_layers - 1)])
         self.expression_combiner = ExpressionCombiner(
-            expression_encoding_dim=self.expression_encoding_dim,
-            combined_expression_dim=self.cfg_combined_expression_dim,
+            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
             nr_attn_heads=4, nr_dim_reduction_layers=3,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.first_cfg_node_encoder = CFGNodeEncoder(
-            cfg_node_dim=cfg_node_dim,
-            cfg_combined_expression_dim=self.cfg_combined_expression_dim,
+            cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+            cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
             pdg_node_control_kinds_vocab=code_task_vocabs.pdg_node_control_kinds,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.cfg_node_encoders = nn.ModuleList([
@@ -71,16 +68,17 @@ class MethodCFGEncoder(nn.Module):
                 dropout_rate=dropout_rate)
             for _ in range(nr_layers - 1)])
         self.cfg_path_encoders = nn.ModuleList([
-            CFGPathEncoder(cfg_node_dim=self.cfg_node_dim)
+            CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
             for _ in range(nr_layers)])
         self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings()
         self.expression_context_adder = SeqContextAdder(
-            main_dim=self.expression_encoding_dim, ctx_dim=self.cfg_node_dim,
+            main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            ctx_dim=self.encoder_params.cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.symbols_encoder = SymbolsEncoder(
             symbols_special_words_vocab=code_task_vocabs.symbols_special_words,
             symbol_embedding_dim=self.symbol_embedding_dim,
-            expression_encoding_dim=self.expression_encoding_dim,
+            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.use_symbols_occurrences_for_symbols_encodings = \
@@ -152,7 +150,7 @@ class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
                 cfg_combined_expressions_encodings: torch.Tensor,
                 cfg_nodes_has_expression_mask: torch.BoolTensor):
         # TODO: consider adding another layer
-        new_cfg_node_embeddings_for_nodes_with_expressions = self.dropout_layer(self.activation_fn(self.projection_layer(torch.cat([
+        new_cfg_node_embeddings_for_nodes_with_expressions = self.dropout_layer(self.activation_layer(self.projection_layer(torch.cat([
             previous_cfg_nodes_encodings[cfg_nodes_has_expression_mask], cfg_combined_expressions_encodings], dim=-1))))
         return previous_cfg_nodes_encodings.masked_scatter(
             cfg_nodes_has_expression_mask.unsqueeze(-1).expand(previous_cfg_nodes_encodings.size()),

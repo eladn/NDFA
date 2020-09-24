@@ -13,7 +13,7 @@ class Attention(nn.Module):
     def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
                  key_in_features: Optional[int] = None, activation_fn: str = 'relu'):
         super(Attention, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.nr_features = nr_features
         self.key_in_features = nr_features if key_in_features is None else key_in_features
         self.key_linear_projection_layer = \
@@ -40,9 +40,9 @@ class Attention(nn.Module):
             mask = (batched_ranges <= lengths.unsqueeze(-1).expand(batch_size, seq_len))
 
         if attn_key_from is not None:
-            attn_key_vector = self.activation_fn(self.key_linear_projection_layer(attn_key_from)) \
+            attn_key_vector = self.activation_layer(self.key_linear_projection_layer(attn_key_from)) \
                 if self.key_linear_projection_layer else attn_key_from  # (bsz, nr_features)
-            seq_queries = self.activation_fn(self.query_linear_projection_layer(sequences.flatten(0, 1))) \
+            seq_queries = self.activation_layer(self.query_linear_projection_layer(sequences.flatten(0, 1))) \
                 if self.query_linear_projection_layer else sequences.flatten(0, 1)  # (bsz * seq_len, nr_features)
             assert seq_queries.size() == (batch_size * seq_len, nr_features)
             attn_weights = torch.bmm(

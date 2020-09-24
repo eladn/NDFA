@@ -17,7 +17,7 @@ class IdentifierEncoder(nn.Module):
         assert method in {'bi-lstm', 'transformer_encoder'}
         super(IdentifierEncoder, self).__init__()
         self.method = method
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.embedding_dim = embedding_dim
         self.sub_identifiers_embedding_layer = nn.Embedding(
@@ -63,9 +63,9 @@ class IdentifierEncoder(nn.Module):
             identifiers_sub_parts_hashings_projected = self.dropout_layer(identifiers_sub_parts_hashings_projected)
             identifiers_sub_parts_vocab_embeddings_and_hashings_combined = self.vocab_and_hashing_combiner(
                 torch.cat([identifiers_sub_parts_vocab_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
-            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_fn(
+            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_layer(
                 identifiers_sub_parts_vocab_embeddings_and_hashings_combined))
-            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_fn(self.final_linear_layer(
+            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_layer(self.final_linear_layer(
                 identifiers_sub_parts_embeddings)))
         else:
             identifiers_sub_parts_embeddings = identifiers_sub_parts_vocab_embeddings

@@ -15,7 +15,7 @@ class SymbolsEncoder(nn.Module):
                  dropout_rate: float = 0.3,
                  activation_fn: str = 'relu'):
         super(SymbolsEncoder, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.symbols_special_words_vocab = symbols_special_words_vocab
         self.symbol_embedding_dim = symbol_embedding_dim
         # FIXME: might be problematic because 2 different modules hold `symbols_special_words_embedding` (both SymbolsEncoder and SymbolsDecoder).
@@ -55,7 +55,7 @@ class SymbolsEncoder(nn.Module):
                 [encoded_symbols_wo_commons, symbols_occurrences_encodings], dim=-1)
             combined_symbols_encoding = \
                 self.symbols_token_occurrences_and_identifiers_embeddings_combiner(combined_symbols_encoding)
-            combined_symbols_encoding = self.dropout_layer(self.activation_fn(combined_symbols_encoding))
+            combined_symbols_encoding = self.dropout_layer(self.activation_layer(combined_symbols_encoding))
         else:
             combined_symbols_encoding = encoded_symbols_wo_commons
         return combined_symbols_encoding

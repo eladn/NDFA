@@ -35,6 +35,10 @@ class CodeExpressionEncoderParams:
         default=8,
         description="Embedding size for code token type (operator, identifier, etc).")
 
+    kos_token_embedding_dim: int = confparam(
+        default=256,
+        description="Embedding size for code keyword/operator/separator token.")
+
     token_encoding_dim: int = confparam(
         default=256,
         # default_factory_with_self_access=lambda _self:
@@ -160,6 +164,9 @@ class MethodCodeEncoderParams:
         default=256,
         description="Embedding size for a symbol.")
 
+    use_symbols_occurrences_for_symbols_encodings: bool = confparam(
+        default=True)
+
 
 @confclass
 class TargetSymbolsDecoderParams:
@@ -177,6 +184,10 @@ class TargetSymbolsDecoderParams:
 
 @confclass
 class NDFAModelHyperParams:
+    activation_fn: str = confparam(
+        default='relu',
+        choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh'),
+        description='Activation function type to use for non-linearities all over the model.')
     method_code_encoder: MethodCodeEncoderParams = confparam(
         default_factory=MethodCodeEncoderParams,
         arg_prefix='code-encoder')

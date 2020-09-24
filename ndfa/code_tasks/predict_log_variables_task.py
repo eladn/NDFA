@@ -153,33 +153,21 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
         ModuleWithDbgTestGrads.__init__(self)
         self.model_hps = model_hps
         self.code_task_vocabs = code_task_vocabs
-        self.identifier_embedding_dim = 256  # TODO: plug-in model hps
-        self.symbol_embedding_dim = 256  # TODO: plug-in model hps
-        self.expression_encoding_dim = 256  # TODO: plug-in model hps
-        self.cfg_combined_expression_dim = 512  # TODO: plug-in model hps
-        self.cfg_node_dim = 512  # TODO: plug-in model hps
-        self.use_symbols_occurrences_for_symbols_encodings = True  # TODO: plug-in model hps
-        activation_fn = 'relu'  # TODO: plug-in model hps
 
         self.code_task_encoder = MethodCodeEncoder(
+            encoder_params=self.model_hps.method_code_encoder,
             code_task_vocabs=code_task_vocabs,
-            identifier_embedding_dim=self.identifier_embedding_dim,
-            symbol_embedding_dim=self.symbol_embedding_dim,
-            cfg_node_dim=self.cfg_node_dim,
-            expression_encoding_dim=self.expression_encoding_dim,
-            cfg_combined_expression_dim=self.cfg_combined_expression_dim,
-            use_symbols_occurrences_for_symbols_encodings=self.use_symbols_occurrences_for_symbols_encodings,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+            dropout_rate=dropout_rate, activation_fn=self.model_hps.activation_fn)
 
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.code_task_encoder.method_cfg_encoder.symbols_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.target_symbols_decoder.max_nr_target_symbols + 2,
-            encoder_output_dim=self.cfg_node_dim,
-            symbols_encoding_dim=self.symbol_embedding_dim,
+            encoder_output_dim=self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
+            symbols_encoding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
             use_batch_flattened_target_symbols_vocab=
             self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+            dropout_rate=dropout_rate, activation_fn=self.model_hps.activation_fn)
 
     def forward(
             self, code_task_input: MethodCodeInputTensors,

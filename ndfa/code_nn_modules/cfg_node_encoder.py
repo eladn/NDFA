@@ -12,7 +12,7 @@ class CFGNodeEncoder(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_cfg_nodes_encoding_linear_layers >= 1
         super(CFGNodeEncoder, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.pdg_node_control_kinds_vocab_size = len(pdg_node_control_kinds_vocab)
         self.pdg_node_control_kinds_embedding_dim = pdg_node_control_kinds_embedding_dim
         self.pdg_node_control_kinds_embeddings = nn.Embedding(
@@ -45,10 +45,10 @@ class CFGNodeEncoder(nn.Module):
             [cfg_nodes_expressions_encodings, embedded_cfg_nodes_control_kind], dim=-1)  # (nr_cfg_nodes_in_batch, expr_embed_dim + control_kind_embedding)
 
         cfg_nodes_encodings = self.dropout_layer(cfg_nodes_encodings)
-        final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_fn(
+        final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_layer(
             self.cfg_node_projection_linear_layer(cfg_nodes_encodings)))
         for linear_layer in self.cfg_node_additional_linear_layers:
-            final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_fn(linear_layer(
+            final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_cfg_nodes_encodings_projected)))
         assert final_cfg_nodes_encodings_projected.size() == (nr_cfg_nodes_in_batch, self.cfg_node_dim)
         return final_cfg_nodes_encodings_projected

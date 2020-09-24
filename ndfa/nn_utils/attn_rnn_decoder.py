@@ -42,7 +42,7 @@ class AttnRNNDecoder(nn.Module):
                  output_common_vocab: Optional[Vocabulary] = None):
         assert rnn_type in {'lstm', 'gru'}
         super(AttnRNNDecoder, self).__init__()
-        self.activation_fn = get_activation_layer(activation_fn)()
+        self.activation_layer = get_activation_layer(activation_fn)()
         self.encoder_output_dim = encoder_output_dim
         self.decoder_hidden_dim = decoder_hidden_dim
         self.decoder_output_dim = decoder_output_dim
@@ -149,7 +149,7 @@ class AttnRNNDecoder(nn.Module):
             attn_applied_and_input_combine = torch.cat((prev_cell_encoding, attn_applied), dim=1)  # (batch_size, decoder_output_dim + encoder_output_dim)
             attn_applied_and_input_combine = self.attn_and_input_combine_linear_layer(attn_applied_and_input_combine)  # (batch_size, decoder_hidden_dim)
 
-            rnn_cell_input = self.activation_fn(attn_applied_and_input_combine).unsqueeze(0)  # (1, batch_size, decoder_hidden_dim)
+            rnn_cell_input = self.activation_layer(attn_applied_and_input_combine).unsqueeze(0)  # (1, batch_size, decoder_hidden_dim)
             rnn_cell_output, (rnn_hidden, rnn_state) = self.decoding_rnn_layer(rnn_cell_input, (rnn_hidden, rnn_state))
             assert rnn_cell_output.size() == (1, batch_size, self.decoder_hidden_dim)
             assert rnn_hidden.size() == hidden_shape and rnn_state.size() == hidden_shape
