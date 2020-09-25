@@ -24,21 +24,17 @@ class EncodedMethodCode(NamedTuple):
     encoded_symbols_occurrences: Optional[ScatteredEncodings] = None
 
 
-method_code_encoding_techniques = ('linear_seq', 'cfg_paths', 'cfg_arbitrary_path', 'cfg_nodes')
-
-
 class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, encoder_params: MethodCodeEncoderParams,
-                 nr_encoder_decoder_bridge_layers: int = 0, dropout_rate: float = 0.3,
-                 activation_fn: str = 'relu', method_code_encoding_technique: str = 'cfg_paths'):
+                 nr_encoder_decoder_bridge_layers: int = 0,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCodeEncoder, self).__init__()
-        assert method_code_encoding_technique in method_code_encoding_techniques
         self.encoder_params = encoder_params
         self.activation_layer = get_activation_layer(activation_fn)()
 
         self.identifier_encoder = IdentifierEncoder(
             sub_identifiers_vocab=code_task_vocabs.sub_identifiers,
-            embedding_dim=self.encoder_params.identifier_embedding_dim,
+            encoder_params=self.encoder_params.identifier_encoder,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         # TODO: use `encoder_params.method_encoder_type` in forward()!
@@ -46,7 +42,7 @@ class MethodCodeEncoder(nn.Module):
             self.method_cfg_encoder = MethodCFGEncoder(
                 code_task_vocabs=code_task_vocabs,
                 encoder_params=self.encoder_params.method_cfg_encoder,
-                identifier_embedding_dim=self.encoder_params.identifier_embedding_dim,
+                identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 use_symbols_occurrences_for_symbols_encodings=
                 self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
@@ -58,7 +54,7 @@ class MethodCodeEncoder(nn.Module):
                 expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
                 identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
                 encoder_params=self.encoder_params.method_linear_seq_expression_encoder_type,
-                identifier_embedding_dim=self.encoder_params.identifier_embedding_dim,
+                identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unexpected method code encoder type `{self.encoder_params.method_encoder_type}`.')

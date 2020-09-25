@@ -3,9 +3,17 @@ from typing import Optional
 
 
 __all__ = [
-    'ASTEncoderParams', 'CodeExpressionEncoderParams', 'MethodCFGEncoderParams',
+    'IdentifierEncoderParams', 'ASTEncoderParams',
+    'CodeExpressionEncoderParams', 'MethodCFGEncoderParams',
     'MethodCodeEncoderParams', 'TargetSymbolsDecoderParams',
     'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
+
+
+@confclass
+class IdentifierEncoderParams:
+    identifier_embedding_dim: int = confparam(
+        default=256,
+        description="Embedding size for an identifier.")
 
 
 @confclass
@@ -156,9 +164,8 @@ class MethodCodeEncoderParams:
         default=1000,
         description="The max size of the sub-identifiers vocabulary.")
 
-    identifier_embedding_dim: int = confparam(
-        default=256,
-        description="Embedding size for an identifier.")
+    identifier_encoder: IdentifierEncoderParams = confparam(
+        default_factory=IdentifierEncoderParams)
 
     symbol_embedding_dim: int = confparam(
         default=256,
