@@ -301,7 +301,7 @@ class TensorsDataClass:
             return values_as_tuple[0].__class__.collate(values_as_tuple, is_most_outer_call=False)
         if isinstance(values_as_tuple[0], dict):
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
-            return {key: cls.collate_values((dct[key] for dct in values_as_tuple if key in dct))
+            return {key: cls.collate_values(tuple(dct[key] for dct in values_as_tuple if key in dct))
                     for key in all_keys}
         if isinstance(values_as_tuple[0], (list, tuple)):
             collection_type = type(values_as_tuple[0])
