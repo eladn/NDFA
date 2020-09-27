@@ -6,7 +6,7 @@ from typing_extensions import Protocol
 from typing import List, Dict, Tuple, Set, Optional, Any, Union
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
-    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge
+    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
@@ -89,15 +89,24 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
     if twice_loop_traversal:
         # TODO: implement the option to traverse loop twice.
         raise NotImplementedError('traverse_pdg(): `twice_loop_traversal` option not implemented yet!')
-    is_in_dfs_stack = np.zeros(len(method_pdg.pdg_nodes), dtype=np.int)
+    occurrences_in_dfs_stack_count = np.zeros(len(method_pdg.pdg_nodes), dtype=np.int)
     already_visited = np.zeros(len(method_pdg.pdg_nodes), dtype=np.bool)
     traversal_control = argparse.Namespace(stop_traversal=False)
     def _dfs(cur_node_idx: int) -> Any:
-        if is_in_dfs_stack[cur_node_idx]:
+        cur_node = method_pdg.pdg_nodes[cur_node_idx]
+        nr_allowed_visits_in_path_for_cur_node = 1
+        loop_update_condition_control_scope_types = {
+            SerControlScopeType.LOOP_CONDITION, SerControlScopeType.LOOP_UPDATE,
+            SerControlScopeType.LOOP_UPDATE_AND_CONDITION}
+        if method_pdg.control_scopes[cur_node.belongs_to_control_scopes_idxs[0]].type in \
+                loop_update_condition_control_scope_types:
+            nr_allowed_visits_in_path_for_cur_node = 2
+        assert occurrences_in_dfs_stack_count[cur_node_idx] <= nr_allowed_visits_in_path_for_cur_node
+        if occurrences_in_dfs_stack_count[cur_node_idx] >= nr_allowed_visits_in_path_for_cur_node:
             return None
         if not revisit_nodes_on_different_branches and already_visited[cur_node_idx]:
             return None
-        is_in_dfs_stack[cur_node_idx] = 1
+        occurrences_in_dfs_stack_count[cur_node_idx] += 1
         successor_results = None
         if cur_node_idx != tgt_node_idx and not traversal_control.stop_traversal:
             pre_visitor_res = None
@@ -106,7 +115,6 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
             if pre_visitor_res is None or not pre_visitor_res.trim_branch_traversal:
                 if propagate_results and post_visitor_fn is not None:
                     successor_results = []
-                cur_node = method_pdg.pdg_nodes[cur_node_idx]
                 edges = []
                 if traverse_control_flow_edges:
                     edges += cur_node.control_flow_in_edges if reverse else cur_node.control_flow_out_edges
@@ -123,8 +131,9 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
             post_visitor_res = post_visitor_fn(cur_node_idx, already_visited[cur_node_idx], successor_results)
         if post_visitor_res is not None and post_visitor_res.stop_traversal:
             traversal_control.stop_traversal = True
-        is_in_dfs_stack[cur_node_idx] = 0
-        already_visited[cur_node_idx] = True
+        occurrences_in_dfs_stack_count[cur_node_idx] -= 1
+        if occurrences_in_dfs_stack_count[cur_node_idx] == 0:
+            already_visited[cur_node_idx] = True
         return None if post_visitor_res is None else post_visitor_res.val
     return _dfs(src_node_idx)
 
