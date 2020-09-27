@@ -265,7 +265,10 @@ def preprocess_code_task_example(
                 ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
                 control_flow_paths_ngrams[ngrams_n].add(ngram)
     # sort for determinism
-    control_flow_paths_ngrams = {key: sorted(list(ngrams)) for key, ngrams in control_flow_paths_ngrams.items()}
+    control_flow_paths_ngrams = {
+        key: sorted(list(ngrams))
+        for key, ngrams in control_flow_paths_ngrams.items()
+        if len(ngrams) > 0}
 
     control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths for node_idx, _ in path}
     node_idxs_not_in_any_cfg_path = (set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set) - {0}
