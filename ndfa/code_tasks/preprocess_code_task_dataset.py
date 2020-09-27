@@ -267,14 +267,19 @@ def preprocess_code_task_example(
     # sort for determinism
     control_flow_paths_ngrams = {key: sorted(list(ngrams)) for key, ngrams in control_flow_paths_ngrams.items()}
 
+    control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths for node_idx, _ in path}
+    node_idxs_not_in_any_cfg_path = (set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set) - {0}
+    # TODO: replace with assert! after we fix the <try..catch..finally> control-flow edges in the JavaExtractor.
+    PreprocessLimitation.enforce_limitations(limitations=[PreprocessLimitation(
+        object_name='#node_idxs_not_in_any_cfg_path', value=len(node_idxs_not_in_any_cfg_path),
+        max_val=0)])
+
     # FOR DEBUG:
-    # print(format_example(example=RawExtractedExample(method=method, method_ast=method_ast, method_pdg=method_pdg)))
-    # control_flow_paths_node_idxs = [[node_idx for node_idx, _ in path] for path in control_flow_paths]
-    # control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths_node_idxs for node_idx in path}
-    # node_idxs_not_in_path = set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set
-    # print(f'node_idxs not in path: {sorted(list(node_idxs_not_in_path))}')
-    # print()
-    # print()
+    # if sorted(list(node_idxs_not_in_any_cfg_path)) != [0]:
+    #     print(format_example(example=RawExtractedExample(method=method, method_ast=method_ast, method_pdg=method_pdg)))
+    #     print(f'node_idxs not in path: {sorted(list(node_idxs_not_in_any_cfg_path))}')
+    #     print()
+    #     print()
 
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
