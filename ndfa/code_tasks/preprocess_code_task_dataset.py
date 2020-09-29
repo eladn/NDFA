@@ -238,7 +238,7 @@ def preprocess_code_task_example(
                 max_val=model_hps.method_code_encoder.max_nr_control_flow_paths)])
     assert control_flow_paths is not None
     control_flow_paths = [
-        tuple((node_idx, None if edge is None else edge.type.value) for node_idx, edge in path)
+        tuple((path_node.node_idx, None if path_node.edge is None else path_node.edge.type.value) for path_node in path)
         for path in control_flow_paths]
     control_flow_paths.sort()  # for determinism
 
@@ -278,11 +278,25 @@ def preprocess_code_task_example(
         max_val=0)])
 
     # FOR DEBUG:
-    # if sorted(list(node_idxs_not_in_any_cfg_path)) != [0]:
+    # node_idxs_not_in_any_cfg_path = sorted(list(node_idxs_not_in_any_cfg_path))
+    # if method.hash == '195c251e':  # 'b6c08e69':
+    # if len(node_idxs_not_in_any_cfg_path) > 0 and node_idxs_not_in_any_cfg_path != [0]:
+    #     print(method.hash)
     #     print(format_example(example=RawExtractedExample(method=method, method_ast=method_ast, method_pdg=method_pdg)))
-    #     print(f'node_idxs not in path: {sorted(list(node_idxs_not_in_any_cfg_path))}')
+    #     print(f'node_idxs not in path: {node_idxs_not_in_any_cfg_path}')
+    #     # print([(pdg_node.idx, edge.pgd_node_idx) for pdg_node in method_pdg.pdg_nodes for edge in
+    #     #        pdg_node.control_flow_out_edges])
+    #     # print('node #5 control type',
+    #     #       method_pdg.control_scopes[method_pdg.pdg_nodes[5].belongs_to_control_scopes_idxs[-1]].type)
+    #     # get_all_pdg_simple_paths(
+    #     #     method_pdg=method_pdg,
+    #     #     src_pdg_node_idx=method_pdg.entry_pdg_node_idx, tgt_pdg_node_idx=method_pdg.exit_pdg_node_idx,
+    #     #     control_flow=True, data_dependency=False,
+    #     #     max_nr_paths=model_hps.method_code_encoder.max_nr_control_flow_paths,
+    #     #     dbg_verbose=True)
     #     print()
     #     print()
+    #     # exit()
 
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
