@@ -4,6 +4,7 @@ import torch.nn as nn
 from typing import NamedTuple
 from torch_scatter import scatter_mean
 
+from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
@@ -29,7 +30,7 @@ class MethodCFGEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool,
-                 dropout_rate: float = 0.3, activation_fn: str = 'relu', nr_layers: int = 1,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu', nr_layers: int = 2,
                  nr_rnn_layers: int = 2):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
@@ -47,8 +48,8 @@ class MethodCFGEncoder(nn.Module):
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.expression_encoders = nn.ModuleList([
             RNNEncoder(
-                input_dim=self.expression_encoding_dim,
-                hidden_dim=self.expression_encoding_dim,
+                input_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                hidden_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                 nr_rnn_layers=self.nr_rnn_layers)
             for _ in range(nr_layers - 1)])
         self.expression_combiner = ExpressionCombiner(
@@ -64,9 +65,9 @@ class MethodCFGEncoder(nn.Module):
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.cfg_node_encoders = nn.ModuleList([
             CFGNodeEncoderExpressionUpdateLayer(
-                cfg_node_dim=self.cfg_node_dim,
-                cfg_combined_expression_dim=self.cfg_combined_expression_dim,
-                dropout_rate=dropout_rate)
+                cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+                cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(nr_layers - 1)])
         self.cfg_path_encoders = nn.ModuleList([
             CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
@@ -161,13 +162,15 @@ class MethodCFGEncoder(nn.Module):
 
 
 class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
-    def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int, dropout_rate: float = 0.3):
+    def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGNodeEncoderExpressionUpdateLayer, self).__init__()
         self.cfg_node_dim = cfg_node_dim
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
         self.projection_layer = nn.Linear(
             in_features=self.cfg_node_dim + self.cfg_combined_expression_dim, out_features=self.cfg_node_dim)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
+        self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, previous_cfg_nodes_encodings: torch.Tensor,
                 cfg_combined_expressions_encodings: torch.Tensor,
