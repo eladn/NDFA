@@ -60,6 +60,7 @@ class MethodCFGEncoder(nn.Module):
             cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
             cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
             pdg_node_control_kinds_vocab=code_task_vocabs.pdg_node_control_kinds,
+            pdg_node_control_kinds_embedding_dim=self.encoder_params.cfg_node_control_kinds_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.cfg_node_encoders = nn.ModuleList([
             CFGNodeEncoderExpressionUpdateLayer(
@@ -110,10 +111,12 @@ class MethodCFGEncoder(nn.Module):
                 encoded_cfg_nodes = self.first_cfg_node_encoder(
                     combined_cfg_expressions_encodings=combined_expressions, pdg=code_task_input.pdg)
             else:
-                encoded_cfg_nodes = cfg_node_encoder(
+                assert encoded_cfg_nodes is not None
+                new_encoded_cfg_nodes = cfg_node_encoder(
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_combined_expressions_encodings=combined_expressions,
                     cfg_nodes_has_expression_mask=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor)
+                encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # TODO: use AddNorm for skip-connections here
 
             if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
                 # TODO: use AddNorm for skip-connections here
