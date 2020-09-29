@@ -3,10 +3,27 @@ from typing import Optional
 
 
 __all__ = [
-    'IdentifierEncoderParams', 'ASTEncoderParams',
+    'SequenceEncoderParams', 'IdentifierEncoderParams', 'ASTEncoderParams',
     'CodeExpressionEncoderParams', 'MethodCFGEncoderParams',
     'MethodCodeEncoderParams', 'TargetSymbolsDecoderParams',
     'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
+
+
+@confclass
+class SequenceEncoderParams:
+    encoder_type: str = confparam(
+        default='rnn',
+        choices=('rnn', 'transformer'),
+        description="...")
+    rnn_type: str = confparam(
+        default='lstm', choices=('lstm', 'gru'))
+    nr_rnn_layers: int = confparam(
+        default=2)
+    bidirectional_rnn: bool = confparam(
+        default=True)
+    sequence_combiner: Optional[str] = confparam(
+        default=None,
+        choices=('attention', 'sum', 'mean'))
 
 
 @confclass
@@ -14,6 +31,8 @@ class IdentifierEncoderParams:
     identifier_embedding_dim: int = confparam(
         default=256,
         description="Embedding size for an identifier.")
+    nr_sub_identifier_hashing_features: int = confparam(
+        default=256)
 
 
 @confclass
@@ -74,9 +93,9 @@ class MethodCFGEncoderParams:
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
 
-    cfg_node_type_embedding_dim: int = confparam(
-        default=4,
-        description="Embedding size for the CFG node type.")
+    cfg_node_control_kinds_embedding_dim: int = confparam(
+        default=8,
+        description="Embedding size for the CFG node control kind.")
 
     cfg_node_encoding_dim: int = confparam(
         default=512,
