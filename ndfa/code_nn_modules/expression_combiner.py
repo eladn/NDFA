@@ -41,9 +41,14 @@ class ExpressionCombiner(nn.Module):
                 batch_first: bool = True):
         assert batch_first
         assert expressions_mask is not None or expressions_lengths is not None
+        # expressions_encodings: (nr_expressions_in_batch, max_expr_len, token_encoding_dim)
+        # expressions_lengths: (nr_expressions_in_batch, )
+        last_token_indices = (expressions_lengths - 1).view(expressions_encodings.size(0), 1, 1).expand(expressions_encodings.size(0), 1, expressions_encodings.size(2))
+        expressions_last_token_encoding = torch.gather(
+            expressions_encodings, dim=1, index=last_token_indices).squeeze(1)
         attn_heads = torch.cat([
             attn_layer(sequences=expressions_encodings,
-                       attn_key_from=expressions_encodings[:, -1, :],
+                       attn_key_from=expressions_last_token_encoding,
                        mask=expressions_mask, lengths=expressions_lengths)
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
