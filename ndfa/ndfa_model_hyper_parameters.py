@@ -212,7 +212,7 @@ class TargetSymbolsDecoderParams:
 class NDFAModelHyperParams:
     activation_fn: str = confparam(
         default='relu',
-        choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh'),
+        choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh', 'none'),
         description='Activation function type to use for non-linearities all over the model.')
     method_code_encoder: MethodCodeEncoderParams = confparam(
         default_factory=MethodCodeEncoderParams,
