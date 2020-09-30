@@ -31,7 +31,7 @@ class MethodCFGEncoder(nn.Module):
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu', nr_layers: int = 2,
-                 nr_rnn_layers: int = 2):
+                 nr_rnn_layers: int = 2, use_skip_connections: bool = True):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -69,10 +69,12 @@ class MethodCFGEncoder(nn.Module):
                 cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(nr_layers - 1)])
-        self.cfg_path_encoders = nn.ModuleList([
-            CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
-            for _ in range(nr_layers)])
-        self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings()
+        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
+            self.cfg_path_encoders = nn.ModuleList([
+                CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
+                for _ in range(nr_layers)])
+        if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
+            self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings()
         self.expression_context_adder = SeqContextAdder(
             main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             ctx_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -85,10 +87,10 @@ class MethodCFGEncoder(nn.Module):
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
+        self.use_skip_connections = use_skip_connections  # TODO: move to HPs
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
         encoded_expressions_with_context = None
-        # TODO: add skip-connections [AddNorm]
         for expression_encoder, cfg_node_encoder, cfg_path_encoder \
                 in zip(itertools.chain((None,), self.expression_encoders),
                        itertools.chain((None,), self.cfg_node_encoders),
@@ -103,8 +105,9 @@ class MethodCFGEncoder(nn.Module):
                     sequence_input=encoded_expressions_with_context,
                     lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths,
                     batch_first=True)
-                # TODO: use AddNorm for skip-connections here
-                encoded_expressions = encoded_expressions + new_encoded_expressions
+                if self.use_skip_connections:
+                    # TODO: use AddNorm for skip-connections here
+                    encoded_expressions = encoded_expressions + new_encoded_expressions  # skip-connection
             combined_expressions = self.expression_combiner(
                 expressions_encodings=encoded_expressions,
                 expressions_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
@@ -117,20 +120,24 @@ class MethodCFGEncoder(nn.Module):
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_combined_expressions_encodings=combined_expressions,
                     cfg_nodes_has_expression_mask=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor)
-                encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # TODO: use AddNorm for skip-connections here
+                if self.use_skip_connections:
+                    # TODO: use AddNorm for skip-connections here
+                    encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
 
-            if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
-                # TODO: use AddNorm for skip-connections here
+            if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
                 encoded_cfg_paths = self.dropout_layer(cfg_path_encoder(
                     cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
                     cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths))
-                # TODO: use AddNorm for skip-connections here
-                encoded_cfg_nodes = encoded_cfg_nodes + self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
+            if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
+                new_encoded_cfg_nodes = encoded_cfg_nodes + self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
                     encoded_cfg_paths=encoded_cfg_paths,
                     cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
                     cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
                     nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
+                if self.use_skip_connections:
+                    # TODO: use AddNorm for skip-connections here
+                    encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
             elif self.encoder_params.encoder_type == 'all-nodes-single-seq':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
@@ -140,10 +147,13 @@ class MethodCFGEncoder(nn.Module):
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'set-of-nodes':
-                raise NotImplementedError  # TODO: impl
+                pass  # We actually do not need to do anything in this case.
             else:
                 raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
+            # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
+            # FIXME: notice there is a skip-connection built-in here that is not conditioned
+            #  by the flag `self.use_skip_connections`.
             encoded_expressions_with_context = self.expression_context_adder(
                 sequence=encoded_expressions,
                 sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
