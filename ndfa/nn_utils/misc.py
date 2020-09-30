@@ -8,7 +8,7 @@ __all__ = ['get_activation_layer', 'get_activation_fn']
 
 def get_activation_layer(activation_str: str):
     activation_layers = {
-        'relu': nn.ReLU, 'prelu': nn.PReLU, 'leaky-relu': nn.LeakyReLU,
+        'relu': nn.ReLU, 'prelu': nn.PReLU, 'leaky_relu': nn.LeakyReLU,
         'sigmoid': nn.Sigmoid, 'tanh': nn.Tanh, 'none': nn.Identity}
     if activation_str not in activation_layers:
         raise ValueError(
@@ -18,7 +18,7 @@ def get_activation_layer(activation_str: str):
 
 def get_activation_fn(activation_str: str):
     activation_fns = {
-        'relu': torch.relu, 'prelu': torch.prelu, 'leaky-relu': F.leaky_relu,
+        'relu': torch.relu, 'prelu': torch.prelu, 'leaky_relu': F.leaky_relu,
         'sigmoid': torch.sigmoid, 'tanh': torch.tanh, 'none': lambda x: x}
     if activation_str not in activation_fns:
         raise ValueError(

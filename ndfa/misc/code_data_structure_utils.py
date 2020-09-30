@@ -162,7 +162,6 @@ def get_all_pdg_simple_paths(
     traverse_ctrl = argparse.Namespace(max_nr_paths_found=0)
     simple_paths_from_node_to_tgt: Dict[int, Set[Tuple[_PathNode, ...]]] = {}
 
-
     def pre_visitor(pdg_node_idx: int, already_visited_before: bool) -> PDGTraversePreVisitFnRes:
         return PDGTraversePreVisitFnRes(trim_branch_traversal=pdg_node_idx in simple_paths_from_node_to_tgt)
 
