@@ -33,6 +33,6 @@ class SeqContextAdder(nn.Module):
         final = self.dropout_layer(self.activation_layer(self.second_linear_layer(projected)))
         if sequence_mask is not None:
             final = torch.zeros_like(final).masked_scatter(sequence_mask.unsqueeze(-1).expand(final.size()), final)
-        # skip connection
-        final = final + sequence  # TODO: use AddNorm for this skip-connection
+        # TODO: use AddNorm for this skip-connection
+        # final = final + sequence  # skip connection
         return final
