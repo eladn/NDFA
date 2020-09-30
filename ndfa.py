@@ -7,6 +7,7 @@ from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader
 from typing import Optional, Tuple
 import itertools
+from warnings import warn
 
 from ndfa.execution_parameters import ModelExecutionParams
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
@@ -139,7 +140,12 @@ def main():
                     len(saved_ckpts) > exec_params.max_latest_checkpoints_to_keep:
                 for _ in range(len(saved_ckpts) - exec_params.max_latest_checkpoints_to_keep):
                     _, ckpt_filepath = saved_ckpts.pop(0)
-                    os.remove(ckpt_filepath)
+                    try:
+                        os.remove(ckpt_filepath)
+                    except RuntimeError as err:
+                        warn(f'Error while trying to remove the checkpoint at `{ckpt_filepath}` '
+                             f'(because `max_latest_checkpoints_to_keep` '
+                             f'[{exec_params.max_latest_checkpoints_to_keep}] is reached): {err}')
 
         train_dataset = task.create_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
