@@ -15,6 +15,7 @@ from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 from ndfa.nn_utils.rnn_encoder import RNNEncoder
 from ndfa.nn_utils.seq_context_adder import SeqContextAdder
+from ndfa.nn_utils.scatter_attention import ScatterAttention
 
 
 __all__ = ['MethodCFGEncoder', 'EncodedMethodCFG']
@@ -74,7 +75,8 @@ class MethodCFGEncoder(nn.Module):
                 CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
                 for _ in range(nr_layers)])
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
-            self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings()
+            self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
         self.expression_context_adder = SeqContextAdder(
             main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             ctx_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -130,10 +132,11 @@ class MethodCFGEncoder(nn.Module):
                     cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
                     cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths))
             if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
-                new_encoded_cfg_nodes = encoded_cfg_nodes + self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
+                new_encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
                     encoded_cfg_paths=encoded_cfg_paths,
                     cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
                     cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
+                    previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
@@ -194,19 +197,34 @@ class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
 
 
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
-    def __init__(self):
+    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn'):
         super(ScatterCFGEncodedPathsToCFGNodeEncodings, self).__init__()
+        assert combining_method in {'mean', 'attn'}
+        self.combining_method = combining_method
+        if self.combining_method == 'attn':
+            self.scatter_attn_layer = ScatterAttention(values_dim=cfg_node_encoding_dim)
 
     def forward(self, encoded_cfg_paths: torch.tensor,
                 cfg_paths_mask: torch.BoolTensor,
                 cfg_paths_node_indices: torch.LongTensor,
+                previous_cfg_nodes_encodings: torch.Tensor,
                 nr_cfg_nodes: int):
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
         # The mask also helps to ignore paddings.
         # TODO: ignore edges (take only nodes)! after we actually add the edges..
-        cfg_nodes_encodings = scatter_mean(
-            src=encoded_cfg_paths[cfg_paths_mask],
-            index=cfg_paths_node_indices[cfg_paths_mask],
-            dim=0, dim_size=nr_cfg_nodes)
+        if self.combining_method == 'mean':
+            cfg_nodes_encodings = scatter_mean(
+                src=encoded_cfg_paths[cfg_paths_mask],
+                index=cfg_paths_node_indices[cfg_paths_mask],
+                dim=0, dim_size=nr_cfg_nodes)
+        elif self.combining_method == 'attn':
+            assert previous_cfg_nodes_encodings is not None
+            assert previous_cfg_nodes_encodings.size(0) == nr_cfg_nodes
+            _, cfg_nodes_encodings = self.scatter_attn_layer(
+                scattered_values=encoded_cfg_paths[cfg_paths_mask],
+                indices=cfg_paths_node_indices[cfg_paths_mask],
+                attn_keys=previous_cfg_nodes_encodings)
+        else:
+            raise ValueError(f'Unsupported combining method `{self.combining_method}`.')
         assert cfg_nodes_encodings.size() == (nr_cfg_nodes, encoded_cfg_paths.size(2))
         return cfg_nodes_encodings
