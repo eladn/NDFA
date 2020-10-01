@@ -10,7 +10,7 @@ __all__ = ['SeqContextAdder']
 
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int,
-                 method: str = 'parallel', ctx_dim_reduction_rate: float = 0.25,
+                 method: str = 'parallel', ctx_dim_reduction_rate: float = 0.5,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SeqContextAdder, self).__init__()
         self.main_dim = main_dim
