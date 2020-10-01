@@ -51,6 +51,7 @@ class SeqContextAdder(nn.Module):
             sequence_with_ctx = torch.cat([sequence, ctx_parallely_expanded], dim=-1)
             projected = self.dropout_layer(self.activation_layer(self.first_common_projection_layer(sequence_with_ctx)))
             final = self.second_common_linear_layer(projected)
+            assert final.size() == sequence.size()
             if sequence_mask is None and sequence_lengths is not None:
                 raise NotImplementedError  # TODO: calc sequence_mask from sequence_lengths
             if sequence_mask is not None:
