@@ -10,14 +10,14 @@ __all__ = ['SeqContextAdder']
 
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int,
-                 method: str = 'parallel', ctx_dim_reduction_rate: float = 0.5,
+                 method: str = 'parallel-add', ctx_dim_reduction_rate: float = 0.5,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SeqContextAdder, self).__init__()
         self.main_dim = main_dim
         self.ctx_dim = ctx_dim
-        assert method in {'parallel', 'series'}
+        assert method in {'parallel-cat', 'parallel-add', 'series'}
         self.method = method
-        if self.method == 'parallel':
+        if self.method == 'parallel-cat':
             self.ctx_reductioned_dim = min(self.ctx_dim, int(self.main_dim * ctx_dim_reduction_rate))
             self.ctx_dim_reduction_layer = nn.Linear(
                 in_features=self.ctx_dim, out_features=self.ctx_reductioned_dim)
@@ -26,6 +26,8 @@ class SeqContextAdder(nn.Module):
                 in_features=self.main_dim + self.ctx_reductioned_dim, out_features=projections_inbetween_dim)
             self.second_common_linear_layer = nn.Linear(
                 in_features=projections_inbetween_dim, out_features=self.main_dim)
+        elif self.method == 'parallel-add':
+            self.ctx_projection = nn.Linear(in_features=self.ctx_dim, out_features=self.main_dim)
         elif self.method == 'series':
             self.ctx_to_seq_token_projection_layer = nn.Linear(
                 in_features=self.ctx_dim, out_features=self.main_dim)
@@ -44,7 +46,7 @@ class SeqContextAdder(nn.Module):
         batch_size = sequence.size(0)
         seq_len = sequence.size(1)
         assert (batch_size, self.ctx_dim) == context.size()
-        if self.method == 'parallel':
+        if self.method == 'parallel-cat':
             context_reductioned = self.ctx_dim_reduction_layer(context)
             ctx_parallely_expanded = context_reductioned.unsqueeze(1).expand(
                 batch_size, seq_len, self.ctx_reductioned_dim)
@@ -59,6 +61,13 @@ class SeqContextAdder(nn.Module):
             # TODO: use AddNorm for this skip-connection
             final = final + sequence  # skip connection
             return final
+        elif self.method == 'parallel-add':
+            context_projected = self.dropout_layer(self.ctx_projection(context))
+            ctx_parallely_expanded = context_projected.unsqueeze(1).expand(
+                batch_size, seq_len, self.main_dim)
+            if sequence_mask is not None:
+                ctx_parallely_expanded = torch.zeros_like(ctx_parallely_expanded).masked_scatter(sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
+            return sequence + ctx_parallely_expanded
         elif self.method == 'series':
             raise NotImplementedError  # TODO: impl
         else:
