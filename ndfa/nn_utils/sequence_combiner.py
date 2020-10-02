@@ -5,6 +5,7 @@ from typing import Optional
 
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.nn_utils.attention import Attention
+from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
 
 
 __all__ = ['SequenceCombiner']
@@ -12,27 +13,29 @@ __all__ = ['SequenceCombiner']
 
 class SequenceCombiner(nn.Module):
     def __init__(self, encoding_dim: int, combined_dim: int,
-                 nr_attn_heads: int = 1, nr_dim_reduction_layers: int = 1,
+                 combiner_params: SequenceCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SequenceCombiner, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
         self.encoding_dim = encoding_dim
         self.combined_dim = combined_dim
-        self.nr_attn_heads = nr_attn_heads
-        self.nr_dim_reduction_layers = nr_dim_reduction_layers
-        assert nr_dim_reduction_layers >= 1
+        self.combiner_params = combiner_params
+        if self.combiner_params.method != 'attn':
+            raise NotImplementedError  # TODO: impl!
+        assert self.combiner_params.nr_dim_reduction_layers >= 1
         self.attn_layers = nn.ModuleList([
             Attention(nr_features=self.encoding_dim,
                       project_key=True, activation_fn=activation_fn)
-            for _ in range(nr_attn_heads)])
-        assert encoding_dim * nr_attn_heads >= combined_dim
-        attn_cat_dim = encoding_dim * nr_attn_heads
+            for _ in range(self.combiner_params.nr_attn_heads)])
+        assert encoding_dim * self.combiner_params.nr_attn_heads >= combined_dim
+        attn_cat_dim = encoding_dim * self.combiner_params.nr_attn_heads
         projection_dimensions = np.linspace(
-            start=attn_cat_dim, stop=combined_dim, num=nr_dim_reduction_layers + 1, dtype=int)
+            start=attn_cat_dim, stop=combined_dim,
+            num=self.combiner_params.nr_dim_reduction_layers + 1, dtype=int)
         self.dim_reduction_projection_layers = nn.ModuleList([
             nn.Linear(in_features=projection_dimensions[layer_idx],
                       out_features=projection_dimensions[layer_idx + 1])
-            for layer_idx in range(nr_dim_reduction_layers)])
+            for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
         self.dropout_layer = nn.Dropout(dropout_rate)
 
     def forward(self, sequence_encodings: torch.Tensor,

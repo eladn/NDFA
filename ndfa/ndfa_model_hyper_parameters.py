@@ -3,10 +3,23 @@ from typing import Optional
 
 
 __all__ = [
-    'SequenceEncoderParams', 'IdentifierEncoderParams', 'ASTEncoderParams',
+    'SequenceCombinerParams', 'SequenceEncoderParams',
+    'IdentifierEncoderParams', 'ASTEncoderParams',
     'CodeExpressionEncoderParams', 'MethodCFGEncoderParams',
     'MethodCodeEncoderParams', 'TargetSymbolsDecoderParams',
     'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
+
+
+@confclass
+class SequenceCombinerParams:
+    method: str = confparam(
+        default='attn',
+        choices=('attn', 'sum', 'mean'),
+        description="...")
+    nr_attn_heads: int = confparam(
+        default=4)
+    nr_dim_reduction_layers: int = confparam(
+        default=3)
 
 
 @confclass
@@ -21,9 +34,8 @@ class SequenceEncoderParams:
         default=2)
     bidirectional_rnn: bool = confparam(
         default=True)
-    sequence_combiner: Optional[str] = confparam(
-        default=None,
-        choices=('attention', 'sum', 'mean'))
+    sequence_combiner: Optional[SequenceCombinerParams] = confparam(
+        default=None)
 
 
 @confclass
@@ -92,6 +104,11 @@ class MethodCFGEncoderParams:
         description="Representation type of the expression of a CFG node "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
+
+    cfg_node_expression_combiner: SequenceCombinerParams = confparam(
+        default_factory=lambda: SequenceCombinerParams(
+            method='attn', nr_attn_heads=4, nr_dim_reduction_layers=3),
+        arg_prefix='cfg_node_expression_combiner')
 
     cfg_node_control_kinds_embedding_dim: int = confparam(
         default=8,

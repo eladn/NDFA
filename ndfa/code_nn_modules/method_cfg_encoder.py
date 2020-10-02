@@ -56,7 +56,7 @@ class MethodCFGEncoder(nn.Module):
         self.expression_combiner = SequenceCombiner(
             encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
-            nr_attn_heads=4, nr_dim_reduction_layers=3,
+            combiner_params=self.encoder_params.cfg_node_expression_combiner,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.first_cfg_node_encoder = CFGNodeEncoder(
             cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
