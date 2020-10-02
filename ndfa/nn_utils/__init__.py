@@ -9,6 +9,7 @@ from . import rnn_encoder
 from . import scatter_attention
 from . import scattered_encodings
 from . import seq_context_adder
+from . import sequence_combiner
 from . import train_callback
 from . import train_loop
 from . import unflatten_batch
@@ -26,6 +27,7 @@ __all__ = \
     scatter_attention.__all__ + \
     scattered_encodings.__all__ + \
     seq_context_adder.__all__ + \
+    sequence_combiner.__all__ + \
     train_callback.__all__ + \
     train_loop.__all__ + \
     unflatten_batch.__all__ + \

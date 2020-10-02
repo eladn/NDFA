@@ -9,7 +9,7 @@ from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
-from ndfa.code_nn_modules.expression_combiner import ExpressionCombiner
+from ndfa.nn_utils.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
@@ -53,9 +53,9 @@ class MethodCFGEncoder(nn.Module):
                 hidden_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                 nr_rnn_layers=self.nr_rnn_layers)
             for _ in range(nr_layers - 1)])
-        self.expression_combiner = ExpressionCombiner(
-            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-            combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
+        self.expression_combiner = SequenceCombiner(
+            encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
             nr_attn_heads=4, nr_dim_reduction_layers=3,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.first_cfg_node_encoder = CFGNodeEncoder(
@@ -111,8 +111,8 @@ class MethodCFGEncoder(nn.Module):
                     # TODO: use AddNorm for skip-connections here
                     encoded_expressions = encoded_expressions + new_encoded_expressions  # skip-connection
             combined_expressions = self.expression_combiner(
-                expressions_encodings=encoded_expressions,
-                expressions_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
+                sequence_encodings=encoded_expressions,
+                sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
             if cfg_node_encoder is None:
                 encoded_cfg_nodes = self.first_cfg_node_encoder(
                     combined_cfg_expressions_encodings=combined_expressions, pdg=code_task_input.pdg)
