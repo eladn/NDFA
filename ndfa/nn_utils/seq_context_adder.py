@@ -15,7 +15,7 @@ class SeqContextAdder(nn.Module):
         super(SeqContextAdder, self).__init__()
         self.main_dim = main_dim
         self.ctx_dim = ctx_dim
-        assert method in {'parallel-cat', 'parallel-add', 'series'}
+        assert method in {'parallel-cat', 'parallel-add', 'series-inject-at-ends', 'series-modify-ends'}
         self.method = method
         if self.method == 'parallel-cat':
             self.ctx_reductioned_dim = min(self.ctx_dim, int(self.main_dim * ctx_dim_reduction_rate))
@@ -28,7 +28,7 @@ class SeqContextAdder(nn.Module):
                 in_features=projections_inbetween_dim, out_features=self.main_dim)
         elif self.method == 'parallel-add':
             self.ctx_projection = nn.Linear(in_features=self.ctx_dim, out_features=self.main_dim)
-        elif self.method == 'series':
+        elif self.method in {'series-inject-at-ends', 'series-modify-ends'}:
             self.ctx_to_seq_token_projection_layer = nn.Linear(
                 in_features=self.ctx_dim, out_features=self.main_dim)
         else:
@@ -65,10 +65,18 @@ class SeqContextAdder(nn.Module):
             context_projected = self.dropout_layer(self.ctx_projection(context))
             ctx_parallely_expanded = context_projected.unsqueeze(1).expand(
                 batch_size, seq_len, self.main_dim)
+            if sequence_mask is None and sequence_lengths is not None:
+                raise NotImplementedError  # TODO: calc sequence_mask from sequence_lengths
             if sequence_mask is not None:
                 ctx_parallely_expanded = torch.zeros_like(ctx_parallely_expanded).masked_scatter(sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
             return sequence + ctx_parallely_expanded
-        elif self.method == 'series':
+        elif self.method == 'series-inject-at-ends':
+            if sequence_lengths is None and sequence_mask is not None:
+                raise NotImplementedError  # TODO: calc sequence_lengths from sequence_mask
+            raise NotImplementedError  # TODO: impl
+        elif self.method == 'series-modify-ends':
+            if sequence_lengths is None and sequence_mask is not None:
+                raise NotImplementedError  # TODO: calc sequence_lengths from sequence_mask
             raise NotImplementedError  # TODO: impl
         else:
             assert False
