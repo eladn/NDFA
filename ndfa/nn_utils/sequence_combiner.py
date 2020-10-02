@@ -42,6 +42,8 @@ class SequenceCombiner(nn.Module):
                 sequence_mask: Optional[torch.BoolTensor] = None,
                 sequence_lengths: Optional[torch.LongTensor] = None,
                 batch_first: bool = True):
+        if self.combiner_params.method != 'attn':
+            raise NotImplementedError  # TODO: impl!
         if not batch_first:
             raise NotImplementedError
         assert sequence_mask is not None or sequence_lengths is not None
@@ -52,9 +54,11 @@ class SequenceCombiner(nn.Module):
         last_word_indices = (sequence_lengths - 1).view(sequence_encodings.size(0), 1, 1).expand(sequence_encodings.size(0), 1, sequence_encodings.size(2))
         last_word_encoding = torch.gather(
             sequence_encodings, dim=1, index=last_word_indices).squeeze(1)
+        first_word_encoding = sequence_encodings[:, 0, :]
+        attn_key_from = first_word_encoding + last_word_encoding
         attn_heads = torch.cat([
             attn_layer(sequences=sequence_encodings,
-                       attn_key_from=last_word_encoding,
+                       attn_key_from=attn_key_from,
                        mask=sequence_mask, lengths=sequence_lengths)
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
