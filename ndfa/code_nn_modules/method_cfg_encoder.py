@@ -32,7 +32,7 @@ class MethodCFGEncoder(nn.Module):
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu', nr_layers: int = 2,
-                 nr_rnn_layers: int = 2, use_skip_connections: bool = True):
+                 nr_rnn_layers: int = 1, use_skip_connections: bool = True):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -71,10 +71,13 @@ class MethodCFGEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(nr_layers - 1)])
         if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
+            # TODO: Currently each `CFGPathEncoder` instance create control-flow-edges-type embedding layer.
+            #       We would like to consider having only one of such.
             self.cfg_path_encoders = nn.ModuleList([
                 CFGPathEncoder(
                     cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                     cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                    control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
                 for _ in range(nr_layers)])
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
@@ -133,6 +136,7 @@ class MethodCFGEncoder(nn.Module):
                 encoded_cfg_paths = self.dropout_layer(cfg_path_encoder(
                     cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
+                    cfg_paths_edge_types=code_task_input.pdg.cfg_control_flow_paths.edges_types.sequences,
                     cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths))
             if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
                 new_encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
