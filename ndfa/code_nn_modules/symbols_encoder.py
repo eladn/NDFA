@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch_scatter import scatter_mean
+from torch_scatter import scatter_add
 from typing import Optional
 
 from ndfa.nn_utils.misc import get_activation_layer
@@ -40,7 +40,7 @@ class SymbolsEncoder(nn.Module):
             cfg_expr_tokens_encodings_of_symbols_occurrences = \
                 encoded_cfg_expressions.flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
             nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
-            symbols_occurrences_encodings = scatter_mean(
+            symbols_occurrences_encodings = scatter_add(
                 src=cfg_expr_tokens_encodings_of_symbols_occurrences,
                 index=symbols.symbols_appearances_symbol_idx.indices,
                 dim=0, dim_size=nr_symbols)
