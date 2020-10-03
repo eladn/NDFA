@@ -11,6 +11,7 @@ from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 
 
+# TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,
                  encoder_params: IdentifierEncoderParams,
@@ -38,13 +39,16 @@ class IdentifierEncoder(nn.Module):
                 hidden_dim=self.encoder_params.identifier_embedding_dim, rnn_type='lstm',
                 nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
-        nr_hashing_features = 256  # TODO: plug-in HP
-        self.identifier_sub_parts_hashing_linear = nn.Linear(nr_hashing_features, nr_hashing_features, bias=False)
+        self.identifier_sub_parts_hashing_linear = nn.Linear(
+            in_features=self.encoder_params.nr_sub_identifier_hashing_features,
+            out_features=self.encoder_params.nr_sub_identifier_hashing_features, bias=False)
         self.vocab_and_hashing_combiner = nn.Linear(
-            in_features=self.encoder_params.identifier_embedding_dim + nr_hashing_features,
+            in_features=self.encoder_params.identifier_embedding_dim +
+                        self.encoder_params.nr_sub_identifier_hashing_features,
             out_features=self.encoder_params.identifier_embedding_dim)
         self.final_linear_layer = nn.Linear(
-            self.encoder_params.identifier_embedding_dim, self.encoder_params.identifier_embedding_dim)
+            in_features=self.encoder_params.identifier_embedding_dim,
+            out_features=self.encoder_params.identifier_embedding_dim)
 
     def forward(self, identifiers_sub_parts: BatchFlattenedSeq,
                 identifiers_sub_parts_hashings: Optional[BatchFlattenedSeq] = None):
