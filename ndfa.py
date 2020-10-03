@@ -142,7 +142,7 @@ def main():
                     _, ckpt_filepath = saved_ckpts.pop(0)
                     try:
                         os.remove(ckpt_filepath)
-                    except RuntimeError as err:
+                    except OSError as err:  # Note: we could also use `FileNotFoundError` here.
                         warn(f'Error while trying to remove the checkpoint at `{ckpt_filepath}` '
                              f'(because `max_latest_checkpoints_to_keep` '
                              f'[{exec_params.max_latest_checkpoints_to_keep}] is reached): {err}')
