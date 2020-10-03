@@ -31,7 +31,7 @@ class SequenceEncoderParams:
     rnn_type: str = confparam(
         default='lstm', choices=('lstm', 'gru'))
     nr_rnn_layers: int = confparam(
-        default=2)
+        default=1)
     bidirectional_rnn: bool = confparam(
         default=True)
     sequence_combiner: Optional[SequenceCombinerParams] = confparam(
@@ -124,6 +124,10 @@ class MethodCFGEncoderParams:
         # _self.cfg_node_type_embedding_size + _self.code_expression_encoding_size,
         # default_description="cfg_node_type_embedding_size + code_expression_encoding_size",
         description="Size of encoded CFG node vector.")
+
+    cfg_paths_sequence_encoder: SequenceEncoderParams = confparam(
+        default_factory=SequenceEncoderParams,
+        arg_prefix='sequence-encoder')
 
 
 @confclass

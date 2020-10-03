@@ -72,7 +72,10 @@ class MethodCFGEncoder(nn.Module):
             for _ in range(nr_layers - 1)])
         if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
             self.cfg_path_encoders = nn.ModuleList([
-                CFGPathEncoder(cfg_node_dim=self.encoder_params.cfg_node_encoding_dim)
+                CFGPathEncoder(
+                    cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+                    cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                    dropout_rate=dropout_rate, activation_fn=activation_fn)
                 for _ in range(nr_layers)])
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
