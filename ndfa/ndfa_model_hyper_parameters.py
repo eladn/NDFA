@@ -71,7 +71,7 @@ class CodeExpressionEncoderParams:
         arg_prefix='ast_encoder')
 
     token_type_embedding_dim: int = confparam(
-        default=8,
+        default=64,
         description="Embedding size for code token type (operator, identifier, etc).")
 
     kos_token_embedding_dim: int = confparam(
@@ -115,7 +115,7 @@ class MethodCFGEncoderParams:
         arg_prefix='cfg_node_expression_combiner')
 
     cfg_node_control_kinds_embedding_dim: int = confparam(
-        default=8,
+        default=64,
         description="Embedding size for the CFG node control kind.")
 
     cfg_node_encoding_dim: int = confparam(
