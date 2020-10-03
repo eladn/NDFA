@@ -41,8 +41,14 @@ class CFGPathEncoder(nn.Module):
 
         # weave nodes & edge-types in each path
         cfg_paths_interwoven_nodes_and_edge_types_embeddings = \
-            torch.stack([cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)\
-                .permute((0, 2, 1, 3)).flatten(1, 2)
+            torch.stack([cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=2).view(
+                cfg_paths_nodes_embeddings.size(0),
+                2 * cfg_paths_nodes_embeddings.size(1),
+                cfg_paths_nodes_embeddings.size(2))
+        # Alternative way to do it:
+        # cfg_paths_interwoven_nodes_and_edge_types_embeddings = \
+        #     torch.stack([cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)\
+        #         .permute((0, 2, 1, 3)).flatten(1, 2)
         assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
             (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
 
