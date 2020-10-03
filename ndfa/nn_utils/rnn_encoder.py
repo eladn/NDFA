@@ -21,8 +21,10 @@ class RNNEncoder(nn.Module):
             input_size=self.input_dim, hidden_size=self.hidden_dim,
             bidirectional=rnn_bi_direction, num_layers=self.nr_rnn_layers)
 
-    def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,
-                lengths: Optional[torch.Tensor] = None, batch_first: bool = False):
+    def forward(self, sequence_input: torch.Tensor,
+                mask: Optional[torch.Tensor] = None,
+                lengths: Optional[torch.Tensor] = None,
+                batch_first: bool = False, sorted_by_length: bool = False):
         assert sequence_input.ndim == 3 and sequence_input.size(2) == self.input_dim
         if batch_first:
             # TODO: instead of permute in input / output, pass `batch_first` to `pack_padded_sequence()` &
@@ -37,7 +39,8 @@ class RNNEncoder(nn.Module):
             lengths = torch.where(lengths <= torch.zeros(1, dtype=torch.long, device=lengths.device),
                                   torch.ones(1, dtype=torch.long, device=lengths.device), lengths)
 
-        packed_input = pack_padded_sequence(sequence_input, lengths=lengths, enforce_sorted=False)
+        packed_input = pack_padded_sequence(
+            sequence_input, lengths=lengths, enforce_sorted=sorted_by_length)
         rnn_outputs, (last_hidden_out, _) = self.rnn_layer(packed_input)
         assert last_hidden_out.size() == \
                (self.nr_rnn_layers * self.nr_rnn_directions, batch_size, self.hidden_dim)

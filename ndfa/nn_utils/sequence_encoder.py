@@ -57,7 +57,8 @@ class SequenceEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.BoolTensor] = None,
-                lengths: Optional[torch.LongTensor] = None, batch_first: bool = True) -> EncodedSequence:
+                lengths: Optional[torch.LongTensor] = None, batch_first: bool = True,
+                sorted_by_length: bool = False) -> EncodedSequence:
         if not batch_first:
             raise NotImplementedError
         sequence_output, last_seq_element_output, combined_sequence_outputs = None, None, None
@@ -67,7 +68,8 @@ class SequenceEncoder(nn.Module):
             # combined_sequence_outputs, sequence_output = self.attn_rnn_encoder(
             #     sequence_input=sequence_input, mask=mask, lengths=lengths, batch_first=batch_first)
             last_seq_element_output, sequence_output = self.rnn_encoder(
-                sequence_input=sequence_input, mask=mask, lengths=lengths, batch_first=batch_first)
+                sequence_input=sequence_input, mask=mask, lengths=lengths,
+                batch_first=batch_first, sorted_by_length=sorted_by_length)
         elif self.encoder_params.encoder_type == 'transformer':
             raise NotImplementedError
             # FROM EXPRESSION ENCODER:
