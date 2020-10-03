@@ -90,6 +90,10 @@ class CodeExpressionEncoderParams:
         default=512,
         description="Size of encoded combined code expression.")
 
+    sequence_encoder: SequenceEncoderParams = confparam(
+        default_factory=SequenceEncoderParams,
+        arg_prefix='sequence-encoder')
+
 
 @confclass
 class MethodCFGEncoderParams:
