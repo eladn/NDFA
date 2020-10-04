@@ -7,6 +7,7 @@ from . import misc
 from . import notify_train_callback
 from . import rnn_encoder
 from . import scatter_attention
+from . import scatter_combiner
 from . import scattered_encodings
 from . import seq_context_adder
 from . import sequence_combiner
@@ -26,6 +27,7 @@ __all__ = \
     notify_train_callback.__all__ + \
     rnn_encoder.__all__ + \
     scatter_attention.__all__ + \
+    scatter_combiner.__all__ + \
     scattered_encodings.__all__ + \
     seq_context_adder.__all__ + \
     sequence_combiner.__all__ + \
