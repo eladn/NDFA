@@ -22,7 +22,7 @@ def weave_tensors(
 
 def unweave_tensor(
         woven_tensor: torch.Tensor, dim: int = 0,
-        nr_target_tensors: int = 2) -> Tuple[torch.Tensor]:
+        nr_target_tensors: int = 2) -> Tuple[torch.Tensor, ...]:
     woven_shape = woven_tensor.shape
     unweaving_shape = \
         woven_shape[:dim] + \
