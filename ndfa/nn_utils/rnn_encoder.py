@@ -45,7 +45,7 @@ class RNNEncoder(nn.Module):
         assert last_hidden_out.size() == \
                (self.nr_rnn_layers * self.nr_rnn_directions, batch_size, self.hidden_dim)
         last_hidden_out = last_hidden_out\
-            .view(self.nr_rnn_layers, self.nr_rnn_directions, batch_size, self.hidden_dim)[-1, :, :, :].squeeze(0)
+            .view(self.nr_rnn_layers, self.nr_rnn_directions, batch_size, self.hidden_dim)[-1, :, :, :]
         last_hidden_out = last_hidden_out.sum(dim=0) if self.nr_rnn_directions > 1 else last_hidden_out.squeeze(0)
         assert last_hidden_out.size() == (batch_size, self.hidden_dim)
 
