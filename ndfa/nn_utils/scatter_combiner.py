@@ -30,6 +30,8 @@ class ScatterCombiner(nn.Module):
                 src=scattered_input, index=indices,
                 dim=0, dim_size=dim_size)
         elif self.combining_method == 'attn':
+            assert attn_keys is not None
+            assert dim_size is None or attn_keys.size(0) == dim_size
             _, combined = self.scatter_attn_layer(
                 scattered_values=scattered_input, indices=indices,
                 attn_keys=attn_keys)
@@ -37,5 +39,5 @@ class ScatterCombiner(nn.Module):
             raise ValueError(f'Unsupported combining method `{self.combining_method}`.')
         assert combined.ndim == 2
         assert dim_size is None or combined.size(0) == dim_size
-        assert combined.size(1) == scattered_input.size(2)
+        assert combined.size(1) == scattered_input.size(1)
         return combined
