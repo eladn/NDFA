@@ -33,7 +33,7 @@ class MethodCFGEncoder(nn.Module):
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu',
-                 nr_layers: int = 3, use_skip_connections: bool = True):
+                 nr_layers: int = 2, use_skip_connections: bool = False):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -119,6 +119,8 @@ class MethodCFGEncoder(nn.Module):
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
                     encoded_expressions = encoded_expressions + new_encoded_expressions  # skip-connection
+                else:
+                    encoded_expressions = new_encoded_expressions
             combined_expressions = self.expression_combiner(
                 sequence_encodings=encoded_expressions,
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
@@ -134,6 +136,8 @@ class MethodCFGEncoder(nn.Module):
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
+                else:
+                    encoded_cfg_nodes = new_encoded_cfg_nodes
 
             if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
                 if cfg_path_updater is None:
@@ -158,6 +162,8 @@ class MethodCFGEncoder(nn.Module):
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
+                else:
+                    encoded_cfg_nodes = new_encoded_cfg_nodes
             elif self.encoder_params.encoder_type == 'all-nodes-single-seq':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
@@ -241,6 +247,7 @@ class CFGPathsUpdater(nn.Module):
         assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
                (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
 
+        print(cfg_paths_interwoven_nodes_and_edge_types_embeddings.size(0))
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
             lengths=cfg_paths_lengths * 2, batch_first=True).sequence
