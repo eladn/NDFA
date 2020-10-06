@@ -247,7 +247,6 @@ class CFGPathsUpdater(nn.Module):
         assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
                (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
 
-        print(cfg_paths_interwoven_nodes_and_edge_types_embeddings.size(0))
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
             lengths=cfg_paths_lengths * 2, batch_first=True).sequence
