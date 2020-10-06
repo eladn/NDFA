@@ -1,9 +1,11 @@
 import os
 import io
 import torch
+import hashlib
 import itertools
 import functools
 import dataclasses
+import numpy as np
 import multiprocessing as mp
 import torch.nn as nn
 import torch.nn.functional as F
@@ -298,6 +300,7 @@ def preprocess_code_task_example(
     #     print()
     #     # exit()
 
+    method_random_seed = int(hashlib.sha256(method.hash.encode('ascii')).hexdigest(), 16) % (2 ** 32)
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.pdg_node_control_kinds.get_word_idx(
@@ -309,6 +312,10 @@ def preprocess_code_task_example(
             [pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
              for pdg_node in method_pdg.pdg_nodes])),
         cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions,
+        cfg_nodes_random_permutation=BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[torch.LongTensor(
+                np.random.RandomState(method_random_seed).permutation(len(method_pdg.pdg_nodes)))],
+            tgt_indexing_group='cfg_nodes'),
         cfg_control_flow_paths=CFGPathsInputTensors(
             nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[torch.LongTensor([node_idx for node_idx, _ in path]) for path in control_flow_paths],

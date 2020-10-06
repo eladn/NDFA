@@ -69,6 +69,7 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
     # cfg_edges_attrs: Optional[torch.LongTensor] = None
 
+    cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesFlattenedSeq] = None
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
     cfg_control_flow_paths_ngrams: Optional[Dict[int, CFGPathsNGramsInputTensors]] = None
 
