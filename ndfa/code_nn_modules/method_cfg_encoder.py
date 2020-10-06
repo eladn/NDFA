@@ -5,7 +5,7 @@ from typing import NamedTuple
 
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors
 from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.nn_utils.sequence_combiner import SequenceCombiner
@@ -87,6 +87,17 @@ class MethodCFGEncoder(nn.Module):
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
                 cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
+        elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
+                                                  'all-nodes-single-random-permutation-seq'}:
+            cfg_single_path_sequence_type = \
+                'linear' \
+                    if self.encoder_params.encoder_type == 'all-nodes-single-unstructured-linear-seq' else \
+                    'random-permutation'
+            self.cfg_single_path_encoder = CFGSinglePathEncoder(
+                cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+                sequence_type=cfg_single_path_sequence_type,
+                cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.expression_context_adder = SeqContextAdder(
             main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             ctx_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -172,8 +183,11 @@ class MethodCFGEncoder(nn.Module):
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
                 else:
                     encoded_cfg_nodes = new_encoded_cfg_nodes
-            elif self.encoder_params.encoder_type == 'all-nodes-single-seq':
-                raise NotImplementedError  # TODO: impl
+            elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
+                                                      'all-nodes-single-random-permutation-seq'}:
+                encoded_cfg_nodes = self.cfg_single_path_encoder(
+                    pdg_input=code_task_input.pdg,
+                    cfg_nodes_encodings=encoded_cfg_nodes)
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'gnn':
@@ -203,6 +217,38 @@ class MethodCFGEncoder(nn.Module):
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes,
             encoded_symbols=encoded_symbols)
+
+
+class CFGSinglePathEncoder(nn.Module):
+    def __init__(self, cfg_node_dim: int, sequence_type: str,
+                 cfg_paths_sequence_encoder_params: SequenceEncoderParams,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+        super(CFGSinglePathEncoder, self).__init__()
+        self.cfg_node_dim = cfg_node_dim
+        assert sequence_type in {'linear', 'random-permutation'}
+        self.sequence_type = sequence_type
+        self.sequence_encoder_layer = SequenceEncoder(
+            encoder_params=cfg_paths_sequence_encoder_params,
+            input_dim=self.cfg_node_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+
+    def forward(self, pdg_input: PDGInputTensors,
+                cfg_nodes_encodings: torch.Tensor):
+        if self.sequence_type == 'linear':
+            unflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.unflatten(cfg_nodes_encodings)
+        elif self.sequence_type == 'random-permutation':
+            # pdg_input.cfg_nodes_random_permutation.unflatten(pdg_input.cfg_nodes_random_permutation.sequences)
+            raise NotImplementedError  # TODO: implement!
+        else:
+            assert False
+        path_encodings = self.sequence_encoder_layer(
+            sequence_input=unflattened_nodes_encodings,
+            lengths=pdg_input.cfg_nodes_control_kind.nr_items_per_example,
+            batch_first=True).sequence
+        assert path_encodings.shape == unflattened_nodes_encodings.shape
+        reflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.flatten(unflattened_nodes_encodings)
+        assert reflattened_nodes_encodings.shape == cfg_nodes_encodings.shape
+        return reflattened_nodes_encodings
 
 
 class AddSymbolsEncodingsToExpressions(nn.Module):
