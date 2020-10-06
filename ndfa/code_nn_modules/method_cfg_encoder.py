@@ -16,6 +16,7 @@ from ndfa.nn_utils.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.seq_context_adder import SeqContextAdder
 from ndfa.nn_utils.scatter_combiner import ScatterCombiner
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
+from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.weave_tensors import weave_tensors, unweave_tensor
 
 
@@ -95,6 +96,7 @@ class MethodCFGEncoder(nn.Module):
             symbol_embedding_dim=self.symbol_embedding_dim,
             expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions()
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
@@ -112,6 +114,12 @@ class MethodCFGEncoder(nn.Module):
                     expressions=code_task_input.pdg.cfg_nodes_tokenized_expressions,
                     encoded_identifiers=encoded_identifiers)
             else:
+                assert encoded_symbols is not None
+                encoded_expressions_with_context = self.add_symbols_encodings_to_expressions(
+                    expressions_encodings=encoded_expressions_with_context,
+                    symbols_encodings=encoded_symbols,
+                    symbols=code_task_input.symbols)
+
                 new_encoded_expressions = expression_updater(
                     sequence_input=encoded_expressions_with_context,
                     lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths,
@@ -185,16 +193,36 @@ class MethodCFGEncoder(nn.Module):
                 sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
                 context=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor])
 
-        encoded_symbols = self.symbols_encoder(
-            encoded_identifiers=encoded_identifiers,
-            symbols=code_task_input.symbols,
-            encoded_cfg_expressions=encoded_expressions_with_context
-            if self.use_symbols_occurrences_for_symbols_encodings else None)
+            encoded_symbols = self.symbols_encoder(
+                encoded_identifiers=encoded_identifiers,
+                symbols=code_task_input.symbols,
+                encoded_cfg_expressions=encoded_expressions_with_context
+                if self.use_symbols_occurrences_for_symbols_encodings else None)
 
         return EncodedMethodCFG(
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes,
             encoded_symbols=encoded_symbols)
+
+
+class AddSymbolsEncodingsToExpressions(nn.Module):
+    def __init__(self):
+        super(AddSymbolsEncodingsToExpressions, self).__init__()
+
+    def forward(self, expressions_encodings: torch.Tensor,
+                symbols_encodings: torch.Tensor,
+                symbols: SymbolsInputTensors) -> torch.Tensor:
+        orig_expressions_encodings_shape = expressions_encodings.shape
+        max_nr_tokens_per_expression = expressions_encodings.size(1)
+        cfg_expr_tokens_indices_of_symbols_occurrences = \
+            max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
+            symbols.symbols_appearances_expression_token_idx.tensor
+        expressions_encodings = expressions_encodings.flatten(0, 1)
+        expressions_encodings.index_add(
+            dim=0,
+            index=cfg_expr_tokens_indices_of_symbols_occurrences,
+            source=symbols_encodings[symbols.symbols_appearances_symbol_idx.indices])
+        return expressions_encodings.view(orig_expressions_encodings_shape)
 
 
 class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
@@ -250,6 +278,7 @@ class CFGPathsUpdater(nn.Module):
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
             lengths=cfg_paths_lengths * 2, batch_first=True).sequence
+        assert paths_encodings.shape == cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape
 
         # separate nodes encodings and edge types embeddings from paths
         nodes_occurrences_encodings, edges_occurrences_encodings = unweave_tensor(
