@@ -10,14 +10,15 @@ __all__ = ['SeqContextAdder']
 
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int,
-                 method: str = 'parallel-add', ctx_dim_reduction_rate: float = 0.5,
+                 method: str = 'parallel-gated', ctx_dim_reduction_rate: float = 0.5,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SeqContextAdder, self).__init__()
         self.main_dim = main_dim
         self.ctx_dim = ctx_dim
-        assert method in {'parallel-cat', 'parallel-add', 'series-inject-at-ends', 'series-modify-ends'}
+        assert method in {'parallel-cat-project', 'parallel-gated', 'parallel-add',
+                          'series-inject-at-ends', 'series-modify-ends'}
         self.method = method
-        if self.method == 'parallel-cat':
+        if self.method == 'parallel-cat-project':
             self.ctx_reductioned_dim = min(self.ctx_dim, int(self.main_dim * ctx_dim_reduction_rate))
             self.ctx_dim_reduction_layer = nn.Linear(
                 in_features=self.ctx_dim, out_features=self.ctx_reductioned_dim)
@@ -26,6 +27,16 @@ class SeqContextAdder(nn.Module):
                 in_features=self.main_dim + self.ctx_reductioned_dim, out_features=projections_inbetween_dim)
             self.second_common_linear_layer = nn.Linear(
                 in_features=projections_inbetween_dim, out_features=self.main_dim)
+        elif self.method == 'parallel-gated':
+            self.forget_gate = nn.Linear(
+                in_features=self.main_dim + self.ctx_dim,
+                out_features=self.main_dim)
+            self.add_gate = nn.Linear(
+                in_features=self.main_dim + self.ctx_dim,
+                out_features=self.main_dim)
+            self.add_linear_project = nn.Linear(
+                in_features=self.main_dim + self.ctx_dim,
+                out_features=self.main_dim)
         elif self.method == 'parallel-add':
             self.ctx_projection = nn.Linear(in_features=self.ctx_dim, out_features=self.main_dim)
         elif self.method in {'series-inject-at-ends', 'series-modify-ends'}:
@@ -46,7 +57,7 @@ class SeqContextAdder(nn.Module):
         batch_size = sequence.size(0)
         seq_len = sequence.size(1)
         assert (batch_size, self.ctx_dim) == context.size()
-        if self.method == 'parallel-cat':
+        if self.method == 'parallel-cat-project':
             context_reductioned = self.ctx_dim_reduction_layer(context)
             ctx_parallely_expanded = context_reductioned.unsqueeze(1).expand(
                 batch_size, seq_len, self.ctx_reductioned_dim)
@@ -60,6 +71,17 @@ class SeqContextAdder(nn.Module):
                 final = torch.zeros_like(final).masked_scatter(sequence_mask.unsqueeze(-1).expand(final.size()), final)
             # TODO: use AddNorm for this skip-connection
             final = final + sequence  # skip connection
+            return final
+        elif self.method == 'parallel-gated':
+            ctx_parallely_expanded = context.unsqueeze(1).expand(
+                batch_size, seq_len, self.ctx_dim)
+            sequence_with_ctx = torch.cat([sequence, ctx_parallely_expanded], dim=-1)
+            forget_gate = torch.sigmoid(self.forget_gate(sequence_with_ctx))
+            add_gate = torch.sigmoid(self.add_gate(sequence_with_ctx))
+            add_data = self.activation_layer(self.add_linear_project(sequence_with_ctx))
+            assert sequence.shape == forget_gate.shape == add_gate.shape == add_data.shape
+            final = (sequence * forget_gate) + (add_data * add_gate)
+            assert final.shape == sequence.shape
             return final
         elif self.method == 'parallel-add':
             context_projected = self.dropout_layer(self.ctx_projection(context))
