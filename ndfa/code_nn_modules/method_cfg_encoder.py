@@ -107,7 +107,10 @@ class MethodCFGEncoder(nn.Module):
             symbol_embedding_dim=self.symbol_embedding_dim,
             expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions()
+        self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
+            expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            symbol_encoding_dim=self.symbol_embedding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
@@ -252,23 +255,54 @@ class CFGSinglePathEncoder(nn.Module):
 
 
 class AddSymbolsEncodingsToExpressions(nn.Module):
-    def __init__(self):
+    def __init__(self, expression_token_encoding_dim: int, symbol_encoding_dim: int,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(AddSymbolsEncodingsToExpressions, self).__init__()
+        self.expression_token_encoding_dim = expression_token_encoding_dim
+        self.symbol_encoding_dim = symbol_encoding_dim
+        self.forget_gate = nn.Linear(
+            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
+            out_features=self.expression_token_encoding_dim)
+        self.add_gate = nn.Linear(
+            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
+            out_features=self.expression_token_encoding_dim)
+        self.add_linear_project = nn.Linear(
+            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
+            out_features=self.expression_token_encoding_dim)
+        self.dropout_layer = nn.Dropout(p=dropout_rate)
+        self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, expressions_encodings: torch.Tensor,
                 symbols_encodings: torch.Tensor,
                 symbols: SymbolsInputTensors) -> torch.Tensor:
+        assert expressions_encodings.ndim == 3
         orig_expressions_encodings_shape = expressions_encodings.shape
         max_nr_tokens_per_expression = expressions_encodings.size(1)
         cfg_expr_tokens_indices_of_symbols_occurrences = \
             max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
             symbols.symbols_appearances_expression_token_idx.tensor
         expressions_encodings = expressions_encodings.flatten(0, 1)
-        expressions_encodings.index_add(
+        symbols_occurrences = expressions_encodings.index_select(
             dim=0,
-            index=cfg_expr_tokens_indices_of_symbols_occurrences,
-            source=symbols_encodings[symbols.symbols_appearances_symbol_idx.indices])
-        return expressions_encodings.view(orig_expressions_encodings_shape)
+            index=cfg_expr_tokens_indices_of_symbols_occurrences)
+        symbols_encodings_for_occurrences = symbols_encodings[symbols.symbols_appearances_symbol_idx.indices]
+        assert symbols_occurrences.ndim == 2 and symbols_encodings_for_occurrences.ndim == 2
+        assert symbols_occurrences.size(0) == symbols_encodings_for_occurrences.size(0)
+
+        symbols_occurrences_with_encodings = torch.cat(
+            [symbols_occurrences, symbols_encodings_for_occurrences], dim=-1)
+        forget_gate = torch.sigmoid(self.forget_gate(symbols_occurrences_with_encodings))
+        add_gate = torch.sigmoid(self.add_gate(symbols_occurrences_with_encodings))
+        add_data = self.activation_layer(self.add_linear_project(symbols_occurrences_with_encodings))
+        assert symbols_occurrences.shape == forget_gate.shape == add_gate.shape == add_data.shape
+        updated_occurrences = (symbols_occurrences * forget_gate) + (add_data * add_gate)
+        assert updated_occurrences.shape == symbols_occurrences.shape
+
+        updated_expressions_encodings = expressions_encodings.scatter(
+            dim=0,
+            index=cfg_expr_tokens_indices_of_symbols_occurrences.unsqueeze(-1).expand(updated_occurrences.shape),
+            src=updated_occurrences)
+        return updated_expressions_encodings.view(orig_expressions_encodings_shape)
 
 
 class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
