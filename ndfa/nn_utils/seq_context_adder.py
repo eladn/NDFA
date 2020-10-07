@@ -62,8 +62,8 @@ class SeqContextAdder(nn.Module):
             if sequence_mask is None and sequence_lengths is not None:
                 raise NotImplementedError  # TODO: calc sequence_mask from sequence_lengths
             if sequence_mask is not None:
-                final = torch.zeros_like(final).masked_scatter(
-                    sequence_mask.unsqueeze(-1).expand(final.size()), final)
+                final = final.masked_fill(
+                    ~sequence_mask.unsqueeze(-1).expand(final.size()), 0)
             # TODO: use AddNorm for this skip-connection
             final = final + sequence  # skip connection
             return final
@@ -77,8 +77,8 @@ class SeqContextAdder(nn.Module):
             #         sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
             final = self.gate(previous_state=sequence, state_update=ctx_parallely_expanded)
             if sequence_mask is not None:
-                final = torch.zeros_like(final).masked_scatter(
-                    sequence_mask.unsqueeze(-1).expand(final.size()), final)
+                final = final.masked_fill(
+                    ~sequence_mask.unsqueeze(-1).expand(final.size()), 0)
             return final
         elif self.method == 'parallel-add':
             context_projected = self.dropout_layer(self.ctx_projection(context))
@@ -87,7 +87,8 @@ class SeqContextAdder(nn.Module):
             if sequence_mask is None and sequence_lengths is not None:
                 raise NotImplementedError  # TODO: calc sequence_mask from sequence_lengths
             if sequence_mask is not None:
-                ctx_parallely_expanded = torch.zeros_like(ctx_parallely_expanded).masked_scatter(sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
+                ctx_parallely_expanded = ctx_parallely_expanded.masked_fill(
+                    ~sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), 0)
             return sequence + ctx_parallely_expanded
         elif self.method == 'series-inject-at-ends':
             if sequence_lengths is None and sequence_mask is not None:
