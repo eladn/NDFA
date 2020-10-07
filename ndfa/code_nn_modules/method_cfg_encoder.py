@@ -116,10 +116,14 @@ class MethodCFGEncoder(nn.Module):
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
         self.use_skip_connections = use_skip_connections  # TODO: move to HPs
-        self.update_cfg_nodes_encoding_gate = Gate(
-            state_dim=self.encoder_params.cfg_node_encoding_dim,
-            update_dim=self.encoder_params.cfg_node_encoding_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        # self.update_cfg_nodes_within_encoding_gate = Gate(
+        #     state_dim=self.encoder_params.cfg_node_encoding_dim,
+        #     update_dim=self.encoder_params.cfg_node_encoding_dim,
+        #     dropout_rate=dropout_rate, activation_fn=activation_fn)
+        # self.update_cfg_nodes_cross_encoding_gate = Gate(
+        #     state_dim=self.encoder_params.cfg_node_encoding_dim,
+        #     update_dim=self.encoder_params.cfg_node_encoding_dim,
+        #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         # self.update_cfg_nodes_encoding_gates = nn.ModuleList([
         #     Gate(state_dim=self.encoder_params.cfg_node_encoding_dim,
         #          update_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -174,11 +178,11 @@ class MethodCFGEncoder(nn.Module):
                     # TODO: use AddNorm for skip-connections here
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
                 else:
-                    encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
-                        previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
+                    # encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
+                    #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                     # encoded_cfg_nodes = self.update_cfg_nodes_encoding_gates[layer_idx - 1](
                     #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
-                    # encoded_cfg_nodes = new_encoded_cfg_nodes
+                    encoded_cfg_nodes = new_encoded_cfg_nodes
 
             if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
                 if cfg_path_updater is None:
@@ -205,21 +209,21 @@ class MethodCFGEncoder(nn.Module):
                     # TODO: use AddNorm for skip-connections here
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
                 else:
-                    encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
-                        previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
+                    # encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
+                    #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                     # encoded_cfg_nodes = self.update_cfg_nodes_encoding_from_cf_paths_gates[layer_idx](
                     #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
-                    # encoded_cfg_nodes = new_encoded_cfg_nodes
+                    encoded_cfg_nodes = new_encoded_cfg_nodes
             elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                       'all-nodes-single-random-permutation-seq'}:
                 new_encoded_cfg_nodes = self.cfg_single_path_encoder(
                     pdg_input=code_task_input.pdg,
                     cfg_nodes_encodings=encoded_cfg_nodes)
-                encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
-                    previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
+                # encoded_cfg_nodes = self.update_cfg_nodes_encoding_gate(
+                #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                 # encoded_cfg_nodes = self.update_cfg_nodes_encoding_from_cf_paths_gates[layer_idx](
                 #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
-                # encoded_cfg_nodes = new_encoded_cfg_nodes
+                encoded_cfg_nodes = new_encoded_cfg_nodes
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'gnn':
@@ -337,6 +341,7 @@ class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
                 cfg_combined_expressions_encodings: torch.Tensor,
                 cfg_nodes_has_expression_mask: torch.BoolTensor):
         # TODO: consider adding another layer
+        # TODO: try to use gating-mechanism here!!! (it's a classic state-update use-case here)
         new_cfg_node_embeddings_for_nodes_with_expressions = self.projection_layer(torch.cat([
             previous_cfg_nodes_encodings[cfg_nodes_has_expression_mask], cfg_combined_expressions_encodings], dim=-1))
         new_cfg_node_embeddings_for_nodes_with_expressions = self.dropout_layer(self.activation_layer(
@@ -421,6 +426,7 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
                 cfg_paths_node_indices: torch.LongTensor,
                 previous_cfg_nodes_encodings: torch.Tensor,
                 nr_cfg_nodes: int):
+        # TODO: try to use gating-mechanism here!
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
         # The mask also helps to ignore paddings.
         if self.combining_method == 'attn':
