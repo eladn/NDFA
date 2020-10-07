@@ -73,8 +73,8 @@ class SeqContextAdder(nn.Module):
             # if sequence_mask is not None:
             #     # Note: Maybe this masking here is redundant, as the output sequence
             #     #       is anyway masked later right after applying the gate.
-            #     ctx_parallely_expanded = torch.zeros_like(ctx_parallely_expanded).masked_scatter(
-            #         sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
+            #     ctx_parallely_expanded = ctx_parallely_expanded.masked_fill(
+            #         ~sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), 0)
             final = self.gate(previous_state=sequence, state_update=ctx_parallely_expanded)
             if sequence_mask is not None:
                 final = final.masked_fill(

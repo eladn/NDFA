@@ -334,21 +334,29 @@ class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
         self.projection_layer = nn.Linear(
             in_features=self.cfg_node_dim + self.cfg_combined_expression_dim, out_features=self.cfg_node_dim)
+        # self.gate = Gate(state_dim=self.cfg_node_dim, update_dim=self.cfg_combined_expression_dim,
+        #                  dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, previous_cfg_nodes_encodings: torch.Tensor,
                 cfg_combined_expressions_encodings: torch.Tensor,
                 cfg_nodes_has_expression_mask: torch.BoolTensor):
-        # TODO: consider adding another layer
         # TODO: try to use gating-mechanism here!!! (it's a classic state-update use-case here)
-        new_cfg_node_embeddings_for_nodes_with_expressions = self.projection_layer(torch.cat([
+        # previous_encodings_of_cfg_nodes_with_expressions = previous_cfg_nodes_encodings[cfg_nodes_has_expression_mask]
+        # new_cfg_node_encodings_for_nodes_with_expressions = self.gate(
+        #     previous_state=previous_encodings_of_cfg_nodes_with_expressions,
+        #     update_state=cfg_combined_expressions_encodings)
+
+        # TODO: consider adding another layer
+        new_cfg_node_encodings_for_nodes_with_expressions = self.projection_layer(torch.cat([
             previous_cfg_nodes_encodings[cfg_nodes_has_expression_mask], cfg_combined_expressions_encodings], dim=-1))
-        new_cfg_node_embeddings_for_nodes_with_expressions = self.dropout_layer(self.activation_layer(
-            new_cfg_node_embeddings_for_nodes_with_expressions))
+        new_cfg_node_encodings_for_nodes_with_expressions = self.dropout_layer(self.activation_layer(
+            new_cfg_node_encodings_for_nodes_with_expressions))
+
         return previous_cfg_nodes_encodings.masked_scatter(
             cfg_nodes_has_expression_mask.unsqueeze(-1).expand(previous_cfg_nodes_encodings.size()),
-            new_cfg_node_embeddings_for_nodes_with_expressions)
+            new_cfg_node_encodings_for_nodes_with_expressions)
 
 
 class CFGPathsUpdater(nn.Module):
@@ -380,9 +388,8 @@ class CFGPathsUpdater(nn.Module):
         updated_cfg_paths_nodes_encodings = self.nodes_occurrences_encodings_gate(
             previous_state=previous_cfg_paths_encodings.nodes_occurrences,
             state_update=updated_cfg_nodes_encodings_per_node_occurrence_in_path)
-        updated_cfg_paths_nodes_encodings = torch.zeros_like(updated_cfg_paths_nodes_encodings).masked_scatter(
-            cfg_paths_mask.unsqueeze(-1).expand(updated_cfg_paths_nodes_encodings.size()),
-            updated_cfg_paths_nodes_encodings)
+        updated_cfg_paths_nodes_encodings = updated_cfg_paths_nodes_encodings.masked_fill(
+            ~cfg_paths_mask.unsqueeze(-1).expand(updated_cfg_paths_nodes_encodings.size()), 0)
 
         # OLD simple way to update encodings of cfg nodes occurrences in paths:
         # cfg_paths_nodes_embeddings = \
