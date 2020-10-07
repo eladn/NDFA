@@ -18,6 +18,7 @@ from ndfa.nn_utils.scatter_combiner import ScatterCombiner
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.weave_tensors import weave_tensors, unweave_tensor
+from ndfa.nn_utils.gate import Gate
 
 
 __all__ = ['MethodCFGEncoder', 'EncodedMethodCFG']
@@ -261,15 +262,8 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
         super(AddSymbolsEncodingsToExpressions, self).__init__()
         self.expression_token_encoding_dim = expression_token_encoding_dim
         self.symbol_encoding_dim = symbol_encoding_dim
-        self.forget_gate = nn.Linear(
-            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
-            out_features=self.expression_token_encoding_dim)
-        self.add_gate = nn.Linear(
-            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
-            out_features=self.expression_token_encoding_dim)
-        self.add_linear_project = nn.Linear(
-            in_features=self.expression_token_encoding_dim + self.symbol_encoding_dim,
-            out_features=self.expression_token_encoding_dim)
+        self.gate = Gate(state_dim=expression_token_encoding_dim, update_dim=symbol_encoding_dim,
+                         dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
@@ -290,13 +284,8 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
         assert symbols_occurrences.ndim == 2 and symbols_encodings_for_occurrences.ndim == 2
         assert symbols_occurrences.size(0) == symbols_encodings_for_occurrences.size(0)
 
-        symbols_occurrences_with_encodings = torch.cat(
-            [symbols_occurrences, symbols_encodings_for_occurrences], dim=-1)
-        forget_gate = torch.sigmoid(self.forget_gate(symbols_occurrences_with_encodings))
-        add_gate = torch.sigmoid(self.add_gate(symbols_occurrences_with_encodings))
-        add_data = self.activation_layer(self.add_linear_project(symbols_occurrences_with_encodings))
-        assert symbols_occurrences.shape == forget_gate.shape == add_gate.shape == add_data.shape
-        updated_occurrences = (symbols_occurrences * forget_gate) + (add_data * add_gate)
+        updated_occurrences = self.gate(
+            previous_state=symbols_occurrences, state_update=symbols_encodings_for_occurrences)
         assert updated_occurrences.shape == symbols_occurrences.shape
 
         updated_expressions_encodings = expressions_encodings.scatter(
@@ -341,18 +330,9 @@ class CFGPathsUpdater(nn.Module):
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        # TODO: export to a dedicated `Gate` module.
-        self.nodes_embedding_update_forget_gate = nn.Linear(
-            in_features=self.cfg_node_dim + self.cfg_node_dim,
-            out_features=self.cfg_node_dim)
-        self.nodes_embedding_update_add_gate = nn.Linear(
-            in_features=self.cfg_node_dim + self.cfg_node_dim,
-            out_features=self.cfg_node_dim)
-        self.nodes_embedding_update_add_linear_project = nn.Linear(
-            in_features=self.cfg_node_dim + self.cfg_node_dim,
-            out_features=self.cfg_node_dim)
-
-        self.activation_layer = get_activation_layer(activation_fn)()
+        self.nodes_occurrences_encodings_gate = Gate(
+            state_dim=self.cfg_node_dim, update_dim=self.cfg_node_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self,
                 previous_cfg_paths_encodings: EncodedCFGPaths,
@@ -364,18 +344,10 @@ class CFGPathsUpdater(nn.Module):
         updated_cfg_nodes_encodings_per_node_occurrence_in_path = updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
         assert updated_cfg_nodes_encodings_per_node_occurrence_in_path.shape == \
                previous_cfg_paths_encodings.nodes_occurrences.shape
-        cfg_nodes_occurrences_in_paths_with_ctx = torch.cat(
-            [updated_cfg_nodes_encodings_per_node_occurrence_in_path,
-             previous_cfg_paths_encodings.nodes_occurrences], dim=-1)
-        forget_gate = torch.sigmoid(self.nodes_embedding_update_forget_gate(cfg_nodes_occurrences_in_paths_with_ctx))
-        add_gate = torch.sigmoid(self.nodes_embedding_update_add_gate(cfg_nodes_occurrences_in_paths_with_ctx))
-        add_data = self.activation_layer(self.nodes_embedding_update_add_linear_project(
-            cfg_nodes_occurrences_in_paths_with_ctx))
-        assert previous_cfg_paths_encodings.nodes_occurrences.shape == \
-               forget_gate.shape == add_gate.shape == add_data.shape
-        updated_cfg_paths_nodes_encodings = \
-            (previous_cfg_paths_encodings.nodes_occurrences * forget_gate) + (add_data * add_gate)
-        assert updated_cfg_paths_nodes_encodings.shape == previous_cfg_paths_encodings.nodes_occurrences.shape
+
+        updated_cfg_paths_nodes_encodings = self.nodes_occurrences_encodings_gate(
+            previous_state=previous_cfg_paths_encodings.nodes_occurrences,
+            state_update=updated_cfg_nodes_encodings_per_node_occurrence_in_path)
         updated_cfg_paths_nodes_encodings = torch.zeros_like(updated_cfg_paths_nodes_encodings).masked_scatter(
             cfg_paths_mask.unsqueeze(-1).expand(updated_cfg_paths_nodes_encodings.size()),
             updated_cfg_paths_nodes_encodings)

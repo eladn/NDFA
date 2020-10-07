@@ -25,11 +25,15 @@ class Gate(nn.Module):
         self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, previous_state: torch.Tensor, state_update: torch.Tensor):
+        assert previous_state.ndim == state_update.ndim
+        assert previous_state.shape[:-1] == state_update.shape[:-1]
+        assert previous_state.size(-1) == self.state_dim
+        assert state_update.size(-1) == self.update_dim
         previous_state_with_update = torch.cat([previous_state, state_update], dim=-1)
         forget_gate = torch.sigmoid(self.forget_gate(previous_state_with_update))
-        add_gate = torch.sigmoid(self.update_gate(previous_state_with_update))
-        add_data = self.activation_layer(self.update_linear_project(previous_state_with_update))
-        assert previous_state.shape == forget_gate.shape == add_gate.shape == add_data.shape
-        new_state = (previous_state * forget_gate) + (add_data * add_gate)
+        update_gate = torch.sigmoid(self.update_gate(previous_state_with_update))
+        update_data = self.activation_layer(self.update_linear_project(previous_state_with_update))
+        assert previous_state.shape == forget_gate.shape == update_gate.shape == update_data.shape
+        new_state = (previous_state * forget_gate) + (update_data * update_gate)
         assert new_state.shape == previous_state.shape
         return new_state

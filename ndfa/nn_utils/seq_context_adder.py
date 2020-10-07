@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
+from ndfa.nn_utils.gate import Gate
 from ndfa.nn_utils.misc import get_activation_layer
 
 
@@ -28,15 +29,8 @@ class SeqContextAdder(nn.Module):
             self.second_common_linear_layer = nn.Linear(
                 in_features=projections_inbetween_dim, out_features=self.main_dim)
         elif self.method == 'parallel-gated':
-            self.forget_gate = nn.Linear(
-                in_features=self.main_dim + self.ctx_dim,
-                out_features=self.main_dim)
-            self.add_gate = nn.Linear(
-                in_features=self.main_dim + self.ctx_dim,
-                out_features=self.main_dim)
-            self.add_linear_project = nn.Linear(
-                in_features=self.main_dim + self.ctx_dim,
-                out_features=self.main_dim)
+            self.gate = Gate(state_dim=self.main_dim, update_dim=self.ctx_dim,
+                             dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.method == 'parallel-add':
             self.ctx_projection = nn.Linear(in_features=self.ctx_dim, out_features=self.main_dim)
         elif self.method in {'series-inject-at-ends', 'series-modify-ends'}:
@@ -68,20 +62,23 @@ class SeqContextAdder(nn.Module):
             if sequence_mask is None and sequence_lengths is not None:
                 raise NotImplementedError  # TODO: calc sequence_mask from sequence_lengths
             if sequence_mask is not None:
-                final = torch.zeros_like(final).masked_scatter(sequence_mask.unsqueeze(-1).expand(final.size()), final)
+                final = torch.zeros_like(final).masked_scatter(
+                    sequence_mask.unsqueeze(-1).expand(final.size()), final)
             # TODO: use AddNorm for this skip-connection
             final = final + sequence  # skip connection
             return final
         elif self.method == 'parallel-gated':
             ctx_parallely_expanded = context.unsqueeze(1).expand(
                 batch_size, seq_len, self.ctx_dim)
-            sequence_with_ctx = torch.cat([sequence, ctx_parallely_expanded], dim=-1)
-            forget_gate = torch.sigmoid(self.forget_gate(sequence_with_ctx))
-            add_gate = torch.sigmoid(self.add_gate(sequence_with_ctx))
-            add_data = self.activation_layer(self.add_linear_project(sequence_with_ctx))
-            assert sequence.shape == forget_gate.shape == add_gate.shape == add_data.shape
-            final = (sequence * forget_gate) + (add_data * add_gate)
-            assert final.shape == sequence.shape
+            # if sequence_mask is not None:
+            #     # Note: Maybe this masking here is redundant, as the output sequence
+            #     #       is anyway masked later right after applying the gate.
+            #     ctx_parallely_expanded = torch.zeros_like(ctx_parallely_expanded).masked_scatter(
+            #         sequence_mask.unsqueeze(-1).expand(ctx_parallely_expanded.size()), ctx_parallely_expanded)
+            final = self.gate(previous_state=sequence, state_update=ctx_parallely_expanded)
+            if sequence_mask is not None:
+                final = torch.zeros_like(final).masked_scatter(
+                    sequence_mask.unsqueeze(-1).expand(final.size()), final)
             return final
         elif self.method == 'parallel-add':
             context_projected = self.dropout_layer(self.ctx_projection(context))
