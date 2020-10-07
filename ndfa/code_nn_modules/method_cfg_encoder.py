@@ -173,6 +173,7 @@ class MethodCFGEncoder(nn.Module):
                         previous_cfg_paths_encodings=encoded_cfg_paths,
                         updated_cfg_nodes_encodings=encoded_cfg_nodes,
                         cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
+                        cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
                         cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths)
             if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
                 new_encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
@@ -340,20 +341,58 @@ class CFGPathsUpdater(nn.Module):
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
+        # TODO: export to a dedicated `Gate` module.
+        self.nodes_embedding_update_forget_gate = nn.Linear(
+            in_features=self.cfg_node_dim + self.cfg_node_dim,
+            out_features=self.cfg_node_dim)
+        self.nodes_embedding_update_add_gate = nn.Linear(
+            in_features=self.cfg_node_dim + self.cfg_node_dim,
+            out_features=self.cfg_node_dim)
+        self.nodes_embedding_update_add_linear_project = nn.Linear(
+            in_features=self.cfg_node_dim + self.cfg_node_dim,
+            out_features=self.cfg_node_dim)
+
+        self.activation_layer = get_activation_layer(activation_fn)()
+
     def forward(self,
                 previous_cfg_paths_encodings: EncodedCFGPaths,
                 updated_cfg_nodes_encodings: torch.Tensor,
                 cfg_paths_nodes_indices: torch.LongTensor,
+                cfg_paths_mask: torch.BoolTensor,
                 cfg_paths_lengths: torch.LongTensor) -> EncodedCFGPaths:
-        cfg_paths_nodes_embeddings = \
-            previous_cfg_paths_encodings.nodes_occurrences + updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
+        # Update encodings of cfg nodes occurrences in paths:
+        updated_cfg_nodes_encodings_per_node_occurrence_in_path = updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
+        assert updated_cfg_nodes_encodings_per_node_occurrence_in_path.shape == \
+               previous_cfg_paths_encodings.nodes_occurrences.shape
+        cfg_nodes_occurrences_in_paths_with_ctx = torch.cat(
+            [updated_cfg_nodes_encodings_per_node_occurrence_in_path,
+             previous_cfg_paths_encodings.nodes_occurrences], dim=-1)
+        forget_gate = torch.sigmoid(self.nodes_embedding_update_forget_gate(cfg_nodes_occurrences_in_paths_with_ctx))
+        add_gate = torch.sigmoid(self.nodes_embedding_update_add_gate(cfg_nodes_occurrences_in_paths_with_ctx))
+        add_data = self.activation_layer(self.nodes_embedding_update_add_linear_project(
+            cfg_nodes_occurrences_in_paths_with_ctx))
+        assert previous_cfg_paths_encodings.nodes_occurrences.shape == \
+               forget_gate.shape == add_gate.shape == add_data.shape
+        updated_cfg_paths_nodes_encodings = \
+            (previous_cfg_paths_encodings.nodes_occurrences * forget_gate) + (add_data * add_gate)
+        assert updated_cfg_paths_nodes_encodings.shape == previous_cfg_paths_encodings.nodes_occurrences.shape
+        updated_cfg_paths_nodes_encodings = torch.zeros_like(updated_cfg_paths_nodes_encodings).masked_scatter(
+            cfg_paths_mask.unsqueeze(-1).expand(updated_cfg_paths_nodes_encodings.size()),
+            updated_cfg_paths_nodes_encodings)
+
+        # OLD simple way to update encodings of cfg nodes occurrences in paths:
+        # cfg_paths_nodes_embeddings = \
+        #     previous_cfg_paths_encodings.nodes_occurrences + updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
+
         cfg_paths_edge_types_embeddings = previous_cfg_paths_encodings.edges_occurrences
 
         # weave nodes & edge-types in each path
         cfg_paths_interwoven_nodes_and_edge_types_embeddings = weave_tensors(
-            tensors=[cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)
+            tensors=[updated_cfg_paths_nodes_encodings, cfg_paths_edge_types_embeddings], dim=1)
         assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
-               (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
+               (updated_cfg_paths_nodes_encodings.size(0),
+                2 * updated_cfg_paths_nodes_encodings.size(1),
+                self.cfg_node_dim)
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
@@ -364,7 +403,7 @@ class CFGPathsUpdater(nn.Module):
         nodes_occurrences_encodings, edges_occurrences_encodings = unweave_tensor(
             woven_tensor=paths_encodings, dim=1, nr_target_tensors=2)
         assert nodes_occurrences_encodings.shape == edges_occurrences_encodings.shape == \
-               cfg_paths_nodes_embeddings.shape
+               updated_cfg_paths_nodes_encodings.shape
 
         return EncodedCFGPaths(
             nodes_occurrences=nodes_occurrences_encodings,
