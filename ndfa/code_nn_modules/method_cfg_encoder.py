@@ -87,7 +87,8 @@ class MethodCFGEncoder(nn.Module):
                 for _ in range(nr_layers - 1)])
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
-                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                   'all-nodes-single-random-permutation-seq'}:
             cfg_single_path_sequence_type = \
@@ -422,27 +423,33 @@ class CFGPathsUpdater(nn.Module):
 
 
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
-    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn'):
+    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn',
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ScatterCFGEncodedPathsToCFGNodeEncodings, self).__init__()
         self.combining_method = combining_method
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
+        self.gate = Gate(
+            state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self, encoded_cfg_node_occurrences_in_paths: torch.tensor,
                 cfg_paths_mask: torch.BoolTensor,
                 cfg_paths_node_indices: torch.LongTensor,
                 previous_cfg_nodes_encodings: torch.Tensor,
                 nr_cfg_nodes: int):
-        # TODO: try to use gating-mechanism here!
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
         # The mask also helps to ignore paddings.
         if self.combining_method == 'attn':
             assert previous_cfg_nodes_encodings is not None
             assert previous_cfg_nodes_encodings.size(0) == nr_cfg_nodes
-        cfg_nodes_encodings = self.scatter_combiner_layer(
+        updated_cfg_nodes_encodings = self.scatter_combiner_layer(
             scattered_input=encoded_cfg_node_occurrences_in_paths[cfg_paths_mask],
             indices=cfg_paths_node_indices[cfg_paths_mask],
             dim_size=nr_cfg_nodes,
             attn_keys=previous_cfg_nodes_encodings)
-        assert cfg_nodes_encodings.size() == (nr_cfg_nodes, encoded_cfg_node_occurrences_in_paths.size(2))
-        return cfg_nodes_encodings
+        assert updated_cfg_nodes_encodings.size() == (nr_cfg_nodes, encoded_cfg_node_occurrences_in_paths.size(2))
+        new_cfg_nodes_encodings = self.gate(
+            previous_state=previous_cfg_nodes_encodings,
+            state_update=updated_cfg_nodes_encodings)
+        return new_cfg_nodes_encodings
