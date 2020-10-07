@@ -3,6 +3,7 @@ from . import attention
 from . import attn_rnn_decoder
 from . import attn_rnn_encoder
 from . import dbg_test_grads
+from . import gate
 from . import misc
 from . import notify_train_callback
 from . import rnn_encoder
@@ -24,6 +25,7 @@ __all__ = \
     attn_rnn_decoder.__all__ + \
     attn_rnn_encoder.__all__ + \
     dbg_test_grads.__all__ + \
+    gate.__all__ + \
     misc.__all__ + \
     notify_train_callback.__all__ + \
     rnn_encoder.__all__ + \
