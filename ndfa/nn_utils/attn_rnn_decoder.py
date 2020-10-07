@@ -196,7 +196,7 @@ class AttnRNNDecoder(nn.Module):
                     # Use this masking if summing occurrences BEFORE applying softmax
                     projection_on_dyn_vocab_scattered_encodings_wo_common = \
                         projection_on_dyn_vocab_scattered_encodings_wo_common.masked_fill(
-                            ~dyn_vocab_scattered_encodings.mask)  # (bsz, max_nr_symbols_occurrences)
+                            ~dyn_vocab_scattered_encodings.mask, 0)  # (bsz, max_nr_symbols_occurrences)
 
             # (batch_size, decoder_output_dim) * (nr_output_common_embeddings, decoder_output_dim).T
             #   -> (batch_size, nr_output_common_embeddings)
