@@ -449,6 +449,13 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
             dim_size=nr_cfg_nodes,
             attn_keys=previous_cfg_nodes_encodings)
         assert updated_cfg_nodes_encodings.size() == (nr_cfg_nodes, encoded_cfg_node_occurrences_in_paths.size(2))
+
+        # Note: This gate here is the last we added so far.
+        #       It actually reduced the results (F1 went down from 0.53 to 0.52).
+        #       But maybe choosing another combination of places (to apply the gating-mechanism)
+        #         which includes this place might yield better results.
+        #       It made the first evaluation result (before training, initial random weights)
+        #         much higher to around F1=0.26.
         new_cfg_nodes_encodings = self.gate(
             previous_state=previous_cfg_nodes_encodings,
             state_update=updated_cfg_nodes_encodings)
