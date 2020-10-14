@@ -5,6 +5,9 @@ import collections
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
+__all__ = ['format_example']
+
+
 def format_example(example: RawExtractedExample) -> str:
     out_stream = io.StringIO()
     oprint = functools.partial(print, file=out_stream)

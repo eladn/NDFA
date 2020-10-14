@@ -11,6 +11,9 @@ from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 
 
+__all__ = ['IdentifierEncoder']
+
+
 # TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,

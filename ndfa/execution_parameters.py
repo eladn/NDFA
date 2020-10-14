@@ -5,6 +5,9 @@ import argparse
 from ndfa.experiment_setting import ExperimentSetting
 
 
+__all__ = ['ModelExecutionParams']
+
+
 @confclass
 class ModelExecutionParams:
     model_save_path: Optional[str] = confparam(

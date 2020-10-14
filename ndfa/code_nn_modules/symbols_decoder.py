@@ -8,6 +8,9 @@ from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 
 
+__all__ = ['SymbolsDecoder']
+
+
 class SymbolsDecoder(nn.Module):
     def __init__(self, symbols_special_words_embedding: nn.Embedding, symbols_special_words_vocab: Vocabulary,
                  max_nr_taget_symbols: int, encoder_output_dim: int = 256, symbols_encoding_dim: int = 256,

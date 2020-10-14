@@ -6,6 +6,9 @@ from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors
 
 
+__all__ = ['CFGNodeEncoder']
+
+
 class CFGNodeEncoder(nn.Module):
     def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int, pdg_node_control_kinds_vocab: Vocabulary,
                  pdg_node_control_kinds_embedding_dim: int = 8, nr_cfg_nodes_encoding_linear_layers: int = 2,

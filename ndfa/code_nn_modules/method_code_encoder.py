@@ -7,7 +7,7 @@ from ndfa.ndfa_model_hyper_parameters import MethodCodeEncoderParams
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
-from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
+from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ndfa.code_nn_modules.method_cfg_encoder import MethodCFGEncoder, EncodedMethodCFG
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder

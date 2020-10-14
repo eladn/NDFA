@@ -8,6 +8,9 @@ from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.vocabulary import Vocabulary
 
 
+__all__ = ['SymbolsEncoder']
+
+
 class SymbolsEncoder(nn.Module):
     def __init__(self, symbols_special_words_vocab: Vocabulary,
                  symbol_embedding_dim: int,

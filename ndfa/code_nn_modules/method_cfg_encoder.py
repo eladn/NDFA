@@ -6,7 +6,7 @@ from typing import NamedTuple
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors
-from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
+from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.nn_utils.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder

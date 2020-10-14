@@ -5,7 +5,7 @@ from torch.utils.data.dataset import Dataset
 from typing import Optional, List, Any, Type, Iterable, Tuple
 import torch.nn as nn
 
-from ndfa.code_nn_modules.code_task_vocabs import CodeTaskVocabs
+from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.dataset_properties import DatasetProperties, DataFold
 from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, PreprocessLimitExceedError

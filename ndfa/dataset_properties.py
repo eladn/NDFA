@@ -3,6 +3,9 @@ from enum import Enum
 from typing import Optional
 
 
+__all__ = ['DataFold', 'DatasetProperties']
+
+
 class DataFold(Enum):
     Train = 'Train'
     Validation = 'Validation'

@@ -10,6 +10,9 @@ from ndfa.nn_utils.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
+__all__ = ['ExpressionEncoder']
+
+
 class ExpressionEncoder(nn.Module):
     def __init__(self, kos_tokens_vocab: Vocabulary,
                  tokens_kinds_vocab: Vocabulary,
