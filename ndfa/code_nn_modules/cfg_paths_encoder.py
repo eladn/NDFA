@@ -4,7 +4,7 @@ import dataclasses
 
 from ndfa.nn_utils.sequence_encoder import SequenceEncoder
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
-from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.nn_utils.weave_tensors import weave_tensors, unweave_tensor
 
 

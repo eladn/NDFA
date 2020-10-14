@@ -5,7 +5,7 @@ from typing import Optional
 
 from ndfa.nn_utils.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
-from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.vocabulary import Vocabulary
 
 
 class SymbolsEncoder(nn.Module):

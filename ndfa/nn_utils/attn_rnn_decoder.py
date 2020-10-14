@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from typing import Optional, Union
 
 from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
 from ndfa.nn_utils.attention import Attention
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings

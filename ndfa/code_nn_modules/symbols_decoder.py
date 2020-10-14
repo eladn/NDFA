@@ -3,7 +3,7 @@ import torch.nn as nn
 import typing
 
 from ndfa.nn_utils.attn_rnn_decoder import AttnRNNDecoder
-from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 

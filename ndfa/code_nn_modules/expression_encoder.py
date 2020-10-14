@@ -4,7 +4,7 @@ from functools import reduce
 
 from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
 from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.code_nn_modules.vocabulary import Vocabulary
+from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
 from ndfa.nn_utils.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
