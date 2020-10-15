@@ -18,10 +18,13 @@ class AttnRNNEncoder(RNNEncoder):
         self.attn_layer = Attention(
             nr_features=self.hidden_dim, project_key=True, activation_fn=activation_fn)
 
-    def forward(self, sequence_input: torch.Tensor, mask: Optional[torch.Tensor] = None,
-                lengths: Optional[torch.Tensor] = None, batch_first: bool = False):
+    def forward(self, sequence_input: torch.Tensor,
+                mask: Optional[torch.Tensor] = None,
+                lengths: Optional[torch.Tensor] = None,
+                batch_first: bool = False, sorted_by_length: bool = False):
         last_hidden_out, rnn_outputs = super(AttnRNNEncoder, self).forward(
-            sequence_input=sequence_input, mask=mask, lengths=lengths, batch_first=batch_first)
+            sequence_input=sequence_input, mask=mask, lengths=lengths,
+            batch_first=batch_first, sorted_by_length=sorted_by_length)
 
         merged_rnn_outputs = self.attn_layer(
             sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask, lengths=lengths)
