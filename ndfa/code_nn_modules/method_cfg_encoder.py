@@ -1,6 +1,7 @@
 import itertools
 import torch
 import torch.nn as nn
+from torch.nn.modules.normalization import LayerNorm
 from typing import NamedTuple
 
 from ndfa.nn_utils.misc import get_activation_layer
@@ -35,7 +36,8 @@ class MethodCFGEncoder(nn.Module):
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu',
-                 nr_layers: int = 2, use_skip_connections: bool = False):
+                 nr_layers: int = 2, use_skip_connections: bool = False,
+                 use_norm: bool = True):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -114,6 +116,19 @@ class MethodCFGEncoder(nn.Module):
             symbol_encoding_dim=self.symbol_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(dropout_rate)
+
+        self.use_norm = use_norm
+        if self.use_norm:
+            self.expressions_layer_norm = nn.ModuleList([
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim)
+                for _ in range(nr_layers)])
+            self.combined_expressions_layer_norm = nn.ModuleList([
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim)
+                for _ in range(nr_layers)])
+            self.cfg_nodes_layer_norm = nn.ModuleList([
+                LayerNorm(self.encoder_params.cfg_node_encoding_dim)
+                for _ in range(nr_layers)])
+
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
         self.use_skip_connections = use_skip_connections  # TODO: move to HPs
@@ -153,6 +168,8 @@ class MethodCFGEncoder(nn.Module):
                     expressions_encodings=encoded_expressions_with_context,
                     symbols_encodings=encoded_symbols,
                     symbols=code_task_input.symbols)
+                if self.use_norm:
+                    encoded_expressions_with_context = self.expressions_layer_norm[layer_idx](encoded_expressions_with_context)
 
                 new_encoded_expressions = expression_updater(
                     sequence_input=encoded_expressions_with_context,
@@ -163,9 +180,13 @@ class MethodCFGEncoder(nn.Module):
                     encoded_expressions = encoded_expressions + new_encoded_expressions  # skip-connection
                 else:
                     encoded_expressions = new_encoded_expressions
+            if self.use_norm:
+                encoded_expressions = self.expressions_layer_norm[layer_idx](encoded_expressions)
             combined_expressions = self.expression_combiner(
                 sequence_encodings=encoded_expressions,
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
+            if self.use_norm:
+                combined_expressions = self.combined_expressions_layer_norm[layer_idx](combined_expressions)
             if cfg_node_updater is None:
                 encoded_cfg_nodes = self.first_cfg_node_encoder(
                     combined_cfg_expressions_encodings=combined_expressions, pdg=code_task_input.pdg)
@@ -184,6 +205,8 @@ class MethodCFGEncoder(nn.Module):
                     # encoded_cfg_nodes = self.update_cfg_nodes_encoding_gates[layer_idx - 1](
                     #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                     encoded_cfg_nodes = new_encoded_cfg_nodes
+            if self.use_norm:
+                encoded_cfg_nodes = self.cfg_nodes_layer_norm[layer_idx](encoded_cfg_nodes)
 
             if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
                 if cfg_path_updater is None:
@@ -215,6 +238,8 @@ class MethodCFGEncoder(nn.Module):
                     # encoded_cfg_nodes = self.update_cfg_nodes_encoding_from_cf_paths_gates[layer_idx](
                     #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                     encoded_cfg_nodes = new_encoded_cfg_nodes
+                if self.use_norm:
+                    encoded_cfg_nodes = self.cfg_nodes_layer_norm[layer_idx](encoded_cfg_nodes)
             elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                       'all-nodes-single-random-permutation-seq'}:
                 new_encoded_cfg_nodes = self.cfg_single_path_encoder(
@@ -225,6 +250,8 @@ class MethodCFGEncoder(nn.Module):
                 # encoded_cfg_nodes = self.update_cfg_nodes_encoding_from_cf_paths_gates[layer_idx](
                 #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                 encoded_cfg_nodes = new_encoded_cfg_nodes
+                if self.use_norm:
+                    encoded_cfg_nodes = self.cfg_nodes_layer_norm[layer_idx](encoded_cfg_nodes)
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'gnn':
@@ -243,6 +270,8 @@ class MethodCFGEncoder(nn.Module):
                 sequence=encoded_expressions,
                 sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
                 context=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor])
+            if self.use_norm:
+                encoded_expressions_with_context = self.expressions_layer_norm[layer_idx](encoded_expressions_with_context)
 
             encoded_symbols = self.symbols_encoder(
                 encoded_identifiers=encoded_identifiers,
