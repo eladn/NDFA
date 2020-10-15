@@ -18,7 +18,7 @@ __all__ = ['IdentifierEncoder']
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,
                  encoder_params: IdentifierEncoderParams,
-                 method: str = 'bi-lstm', nr_rnn_layers: int = 2,
+                 method: str = 'bi-lstm', nr_rnn_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert method in {'bi-lstm', 'transformer_encoder'}
         super(IdentifierEncoder, self).__init__()
