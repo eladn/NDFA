@@ -128,9 +128,6 @@ class MethodCFGEncoder(nn.Module):
             self.cfg_nodes_layer_norm = nn.ModuleList([
                 LayerNorm(self.encoder_params.cfg_node_encoding_dim)
                 for _ in range(nr_layers)])
-            self.symbols_encodings_layer_norm = nn.ModuleList([
-                LayerNorm(self.symbol_embedding_dim)
-                for _ in range(nr_layers)])
 
         self.use_symbols_occurrences_for_symbols_encodings = \
             use_symbols_occurrences_for_symbols_encodings
@@ -281,7 +278,6 @@ class MethodCFGEncoder(nn.Module):
                 symbols=code_task_input.symbols,
                 encoded_cfg_expressions=encoded_expressions_with_context
                 if self.use_symbols_occurrences_for_symbols_encodings else None)
-            encoded_symbols = self.symbols_encodings_layer_norm[layer_idx](encoded_symbols)
 
         return EncodedMethodCFG(
             encoded_identifiers=encoded_identifiers,
