@@ -60,5 +60,4 @@ class RNNEncoder(nn.Module):
             rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (seq_len, batch_size, self.hidden_dim)
             assert rnn_outputs.size() == (batch_size, seq_len, self.hidden_dim)
 
-        assert rnn_outputs.size() == sequence_input.size()
         return last_hidden_out, rnn_outputs
