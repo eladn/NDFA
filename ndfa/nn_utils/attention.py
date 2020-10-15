@@ -60,4 +60,5 @@ class Attention(nn.Module):
         attn_probs = F.softmax(attn_weights, dim=1)  # (bsz, seq_len)
         # (bsz, 1, seq_len) * (bsz, seq_len, nr_features) -> (bsz, 1, nr_features)
         attn_applied = torch.bmm(attn_probs.unsqueeze(1), sequences).squeeze(1)  # (bsz, nr_features)
+        assert attn_applied.size() == (batch_size, nr_features)
         return attn_applied
