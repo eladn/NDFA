@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import dataclasses
 
+from ndfa.nn_utils.misc import seq_lengths_to_mask
 from ndfa.nn_utils.sequence_encoder import SequenceEncoder
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
 from ndfa.nn_utils.vocabulary import Vocabulary
@@ -33,6 +34,7 @@ class CFGPathEncoder(nn.Module):
             encoder_params=cfg_paths_sequence_encoder_params,
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(self, cfg_nodes_encodings: torch.Tensor,
                 cfg_paths_nodes_indices: torch.LongTensor,
@@ -45,6 +47,7 @@ class CFGPathEncoder(nn.Module):
 
         cfg_paths_nodes_embeddings = cfg_nodes_encodings[cfg_paths_nodes_indices]
         cfg_paths_edge_types_embeddings = self.control_flow_edge_types_embeddings(cfg_paths_edge_types)
+        cfg_paths_edge_types_embeddings = self.dropout_layer(cfg_paths_edge_types_embeddings)
         assert cfg_paths_nodes_embeddings.shape == cfg_paths_edge_types_embeddings.shape
 
         # weave nodes & edge-types in each path
@@ -52,6 +55,16 @@ class CFGPathEncoder(nn.Module):
             tensors=[cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)
         assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
             (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
+
+        # mask-out the paths (remove paddings)
+        paths_with_edges_lengths = cfg_paths_lengths * 2
+        paths_with_edges_mask = seq_lengths_to_mask(
+            seq_lengths=paths_with_edges_lengths, max_seq_len=2 * cfg_paths_nodes_embeddings.size(1))
+        paths_with_edges_mask_expanded = \
+            paths_with_edges_mask.unsqueeze(-1).expand(cfg_paths_interwoven_nodes_and_edge_types_embeddings.size())
+        cfg_paths_interwoven_nodes_and_edge_types_embeddings = \
+            cfg_paths_interwoven_nodes_and_edge_types_embeddings.masked_fill(
+                ~paths_with_edges_mask_expanded, 0)
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,

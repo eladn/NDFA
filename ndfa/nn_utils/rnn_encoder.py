@@ -36,8 +36,6 @@ class RNNEncoder(nn.Module):
         assert lengths is None or lengths.size() == (batch_size,) and lengths.dtype == torch.long
         if mask is not None and lengths is None:
             lengths = mask.long().sum(dim=1)
-            lengths = torch.where(lengths <= torch.zeros(1, dtype=torch.long, device=lengths.device),
-                                  torch.ones(1, dtype=torch.long, device=lengths.device), lengths)
 
         packed_input = pack_padded_sequence(
             sequence_input, lengths=lengths, enforce_sorted=sorted_by_length)
@@ -54,12 +52,12 @@ class RNNEncoder(nn.Module):
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \
                 .view(seq_len, batch_size, self.nr_rnn_directions, self.hidden_dim).sum(dim=-2)
-        rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (batch_size, seq_len, hidden_dim)
-        assert rnn_outputs.size() == (batch_size, seq_len, self.hidden_dim)
+        assert rnn_outputs.size() == (seq_len, batch_size, self.hidden_dim)
 
-        if not batch_first:
+        if batch_first:
             # TODO: instead of permute in input / output, pass `batch_first` to `pack_padded_sequence()` &
             #  `pad_packed_sequence()` and fix rest of the code to adapt it.
             rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (seq_len, batch_size, self.hidden_dim)
+            assert rnn_outputs.size() == (batch_size, seq_len, self.hidden_dim)
 
         return last_hidden_out, rnn_outputs

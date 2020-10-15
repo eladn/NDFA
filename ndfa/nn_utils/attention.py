@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation_layer
+from ndfa.nn_utils.misc import get_activation_layer, seq_lengths_to_mask
 
 
 __all__ = ['Attention']
@@ -35,9 +35,7 @@ class Attention(nn.Module):
         assert mask is None or mask.size() == (batch_size, seq_len)
         assert lengths is None or lengths.size() == (batch_size,)
         if lengths is not None and mask is None:
-            batched_ranges = torch.arange(start=1, end=seq_len + 1, dtype=torch.long, device=lengths.device) \
-                .unsqueeze(0).expand(batch_size, seq_len)
-            mask = (batched_ranges <= lengths.unsqueeze(-1).expand(batch_size, seq_len))
+            mask = seq_lengths_to_mask(seq_lengths=lengths, max_seq_len=seq_len)
 
         if attn_key_from is not None:
             attn_key_vector = self.activation_layer(self.key_linear_projection_layer(attn_key_from)) \

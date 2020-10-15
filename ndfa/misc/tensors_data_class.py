@@ -5,6 +5,9 @@ from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 from typing_extensions import Protocol
 
 
+from ndfa.nn_utils.misc import seq_lengths_to_mask
+
+
 __all__ = [
     'TensorsDataClass', 'TensorWithCollateMask',
     'BatchFlattenedTensorsDataClass', 'BatchFlattenedTensor', 'BatchFlattenedSeq',
@@ -483,10 +486,9 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
             ], dim=0)
             for example_idx, inp in enumerate(inputs)], dim=0)
 
-        batched_ranges = torch.arange(start=1, end=flattened.unflattener.size(-1) + 1) \
-            .unsqueeze(0).expand(flattened.unflattener.size())
-        flattened.unflattener_mask = \
-            (batched_ranges <= flattened.nr_items_per_example.unsqueeze(-1).expand(flattened.unflattener.size()))
+        flattened.unflattener_mask = seq_lengths_to_mask(
+            seq_lengths=flattened.nr_items_per_example, max_seq_len=flattened.unflattener.size(1))
+        assert flattened.unflattener_mask.size() == flattened.unflattener.size()
 
         flattened.flattener = torch.cat([
             torch.arange(nr_items, dtype=torch.long) + example_idx * flattened.max_nr_items
@@ -552,12 +554,9 @@ class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSeque
         flattened = super(BatchFlattenedSeq, cls)._collate_first_pass(inputs)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
         flattened.max_sequence_length = max(seq_lengths)
-        batched_ranges = torch.arange(start=1, end=flattened.max_sequence_length + 1,
-                                      dtype=torch.long, device=flattened.sequences.device) \
-            .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
-        sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
-            flattened.batch_size, flattened.max_sequence_length))
-        flattened.sequences_mask = sequences_mask.to(device=flattened.sequences.device)
+        flattened.sequences_mask = seq_lengths_to_mask(
+            seq_lengths=flattened.sequences_lengths, max_seq_len=flattened.max_sequence_length)
+
         return flattened
 
     @classmethod
@@ -665,12 +664,8 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
         flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(inputs)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
         flattened.max_sequence_length = max(seq_lengths)
-        batched_ranges = torch.arange(start=1, end=flattened.max_sequence_length + 1,
-                                      dtype=torch.long, device=flattened.sequences.device) \
-            .unsqueeze(0).expand(flattened.batch_size, flattened.max_sequence_length)
-        sequences_mask = (batched_ranges <= flattened.sequences_lengths.unsqueeze(-1).expand(
-            flattened.batch_size, flattened.max_sequence_length))
-        flattened.sequences_mask = sequences_mask.to(device=flattened.sequences.device)
+        flattened.sequences_mask = seq_lengths_to_mask(
+            seq_lengths=flattened.sequences_lengths, max_seq_len=flattened.max_sequence_length)
         flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
         flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
         return flattened
