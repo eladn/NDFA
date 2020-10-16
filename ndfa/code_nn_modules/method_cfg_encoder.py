@@ -120,25 +120,25 @@ class MethodCFGEncoder(nn.Module):
         self.use_norm = use_norm
         if self.use_norm:
             self.expressions1_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.expressions2_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.expressions3_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.combined_expressions_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.cfg_nodes1_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.cfg_nodes2_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
             self.cfg_nodes3_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim)
+                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
                 for _ in range(nr_layers)])
 
         self.use_symbols_occurrences_for_symbols_encodings = \
