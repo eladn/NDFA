@@ -31,6 +31,30 @@ class EncodedMethodCFG(NamedTuple):
     encoded_symbols: torch.Tensor
 
 
+class NormWrapper(nn.Module):
+    def __init__(self, nr_features: int, affine: bool = True, norm_type: str = 'layer'):
+        super(NormWrapper, self).__init__()
+        assert norm_type in {'layer', 'batch'}
+        self.norm_type = norm_type
+        if norm_type == 'layer':
+            self.layer_norm = LayerNorm(nr_features, elementwise_affine=affine)
+        elif norm_type == 'batch':
+            self.batch_norm = nn.BatchNorm1d(nr_features, affine=affine)
+
+    def forward(self, inp):
+        if self.norm_type == 'layer':
+            return self.layer_norm(inp)
+        elif self.norm_type == 'batch':
+            if inp.ndim == 3:
+                inp = inp.permute(0, 2, 1)
+            ret = self.batch_norm(inp)
+            if inp.ndim == 3:
+                ret = ret.permute(0, 2, 1)
+            return ret
+        else:
+            assert False
+
+
 class MethodCFGEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
@@ -119,26 +143,35 @@ class MethodCFGEncoder(nn.Module):
 
         self.use_norm = use_norm
         if self.use_norm:
+            affine_norm = False
+            norm_type = 'batch'
             self.expressions1_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.expressions2_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.expressions3_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.combined_expressions_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.cfg_nodes1_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.cfg_nodes2_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
             self.cfg_nodes3_layer_norm = nn.ModuleList([
-                LayerNorm(self.encoder_params.cfg_node_encoding_dim, elementwise_affine=False)
+                NormWrapper(self.encoder_params.cfg_node_encoding_dim,
+                            affine=affine_norm, norm_type=norm_type)
                 for _ in range(nr_layers)])
 
         self.use_symbols_occurrences_for_symbols_encodings = \
