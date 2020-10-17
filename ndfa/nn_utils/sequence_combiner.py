@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.modules.normalization import LayerNorm
 import numpy as np
 from typing import Optional
 
@@ -36,6 +37,9 @@ class SequenceCombiner(nn.Module):
             nn.Linear(in_features=projection_dimensions[layer_idx],
                       out_features=projection_dimensions[layer_idx + 1])
             for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
+        self.layer_norms = nn.ModuleList([
+            LayerNorm(projection_dimensions[layer_idx], elementwise_affine=False)
+            for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
         self.dropout_layer = nn.Dropout(dropout_rate)
 
     def forward(self, sequence_encodings: torch.Tensor,
@@ -62,7 +66,8 @@ class SequenceCombiner(nn.Module):
                        mask=sequence_mask, lengths=sequence_lengths)
             for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
-        for dim_reduction_projection_layer in self.dim_reduction_projection_layers:
+        for dim_reduction_projection_layer, layer_norm in zip(self.dim_reduction_projection_layers, self.layer_norms):
+            projected = layer_norm(projected)
             projected = self.dropout_layer(self.activation_layer(dim_reduction_projection_layer(projected)))
         assert projected.size(-1) == self.combined_dim
         return projected
