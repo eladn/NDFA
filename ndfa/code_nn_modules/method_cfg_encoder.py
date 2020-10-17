@@ -146,7 +146,7 @@ class MethodCFGEncoder(nn.Module):
         self.use_norm = use_norm
         if self.use_norm:
             affine_norm = False
-            norm_type = 'batch'
+            norm_type = 'layer'
             self.expressions1_layer_norm = nn.ModuleList([
                 NormWrapper(self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                             affine=affine_norm, norm_type=norm_type)
