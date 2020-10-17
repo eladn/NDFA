@@ -82,11 +82,13 @@ class MethodCFGEncoder(nn.Module):
                 hidden_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(nr_layers - 1)])
-        self.expression_combiner = SequenceCombiner(
-            encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-            combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
-            combiner_params=self.encoder_params.cfg_node_expression_combiner,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.expression_combiners = nn.ModuleList([
+            SequenceCombiner(
+                encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
+                combiner_params=self.encoder_params.cfg_node_expression_combiner,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            for _ in range(nr_layers)])
         self.first_cfg_node_encoder = CFGNodeEncoder(
             cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
             cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
@@ -198,10 +200,11 @@ class MethodCFGEncoder(nn.Module):
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
         encoded_expressions_with_context = None
-        for layer_idx, (expression_updater, cfg_node_updater, cfg_path_updater) \
+        for layer_idx, (expression_updater, cfg_node_updater, cfg_path_updater, expression_combiner) \
                 in enumerate(zip(itertools.chain((None,), self.expression_updaters),
-                       itertools.chain((None,), self.cfg_node_updaters),
-                       itertools.chain((None,), self.cfg_path_updaters))):
+                                 itertools.chain((None,), self.cfg_node_updaters),
+                                 itertools.chain((None,), self.cfg_path_updaters),
+                                 self.expression_combiners)):
             assert not (encoded_expressions_with_context is None) ^ (expression_updater is None)
             if expression_updater is None:
                 encoded_expressions = self.first_expression_encoder(
@@ -227,7 +230,7 @@ class MethodCFGEncoder(nn.Module):
                     encoded_expressions = new_encoded_expressions
             if self.use_norm:
                 encoded_expressions = self.expressions2_layer_norm[layer_idx](encoded_expressions)
-            combined_expressions = self.expression_combiner(
+            combined_expressions = expression_combiner(
                 sequence_encodings=encoded_expressions,
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
             if self.use_norm:
