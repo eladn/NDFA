@@ -5,6 +5,8 @@ from . import attn_rnn_encoder
 from . import dbg_test_grads
 from . import gate
 from . import misc
+from . import module_repeater
+from . import norm_wrapper
 from . import notify_train_callback
 from . import rnn_encoder
 from . import scatter_attention
@@ -28,6 +30,8 @@ __all__ = \
     dbg_test_grads.__all__ + \
     gate.__all__ + \
     misc.__all__ + \
+    module_repeater.__all__ + \
+    norm_wrapper.__all__ + \
     notify_train_callback.__all__ + \
     rnn_encoder.__all__ + \
     scatter_attention.__all__ + \

@@ -3,6 +3,9 @@ import torch.nn as nn
 from torch.nn.modules.normalization import LayerNorm
 
 
+__all__ = ['NormWrapper']
+
+
 class NormWrapper(nn.Module):
     def __init__(self, nr_features: int, affine: bool = True, norm_type: str = 'layer'):
         super(NormWrapper, self).__init__()
