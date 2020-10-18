@@ -27,3 +27,7 @@ class ModuleRepeater(nn.Module):
         module = self.single_inner_module if self.share else self.inner_modules_dict[str(repeat_key)]
         kwargs = {k: v for k, v in kwargs.items() if k != self.repeat_key}
         return module(*args, **kwargs)
+
+    def get_inner_module(self, key):
+        assert key in self.repeats
+        return self.single_inner_module if self.share else self.inner_modules_dict[str(key)]
