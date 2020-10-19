@@ -38,7 +38,8 @@ class MethodCFGEncoder(nn.Module):
                  use_symbols_occurrences_for_symbols_encodings: bool,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu',
                  nr_layers: int = 2, use_skip_connections: bool = False,
-                 use_norm: bool = True, share_weights_between_layers: bool = False):
+                 use_norm: bool = True, share_weights_between_layers: bool = False,
+                 symbols_occurrences_fusion: bool = True):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.nr_layers = nr_layers
@@ -110,12 +111,15 @@ class MethodCFGEncoder(nn.Module):
             main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             ctx_dim=self.encoder_params.cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.symbols_encoder = ModuleRepeater(
-            lambda: SymbolsEncoder(
-                symbol_embedding_dim=self.symbol_embedding_dim,
-                expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-                combining_method='attn', dropout_rate=dropout_rate, activation_fn=activation_fn),
-            repeats=nr_layers - 1, share=share_weights_between_layers, repeat_key='layer_idx')
+
+        self.symbols_occurrences_fusion = symbols_occurrences_fusion
+        if self.symbols_occurrences_fusion:
+            self.symbols_encoder_for_non_last_layers = ModuleRepeater(
+                lambda: SymbolsEncoder(
+                    symbol_embedding_dim=self.symbol_embedding_dim,
+                    expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                    combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn),
+                repeats=nr_layers - 1, share=share_weights_between_layers, repeat_key='layer_idx')
         self.last_symbols_encoder = SymbolsEncoder(
             symbol_embedding_dim=self.symbol_embedding_dim,
             expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
@@ -179,7 +183,8 @@ class MethodCFGEncoder(nn.Module):
         #     for _ in range(nr_layers)])
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
-        encoded_expressions_with_context, encoded_symbols, encoded_cfg_nodes = None, None, None
+        encoded_expressions, encoded_expressions_with_context = None, None
+        encoded_symbols, encoded_cfg_nodes, encoded_cfg_paths = None, None, None
         for layer_idx in range(self.nr_layers):
             assert not (encoded_expressions_with_context is None) ^ (layer_idx == 0)
             if layer_idx == 0:
@@ -187,14 +192,15 @@ class MethodCFGEncoder(nn.Module):
                     expressions=code_task_input.pdg.cfg_nodes_tokenized_expressions,
                     encoded_identifiers=encoded_identifiers)
             else:
-                assert encoded_symbols is not None
-                encoded_expressions_with_context = self.add_symbols_encodings_to_expressions(
-                    expressions_encodings=encoded_expressions_with_context,
-                    symbols_encodings=encoded_symbols,
-                    symbols=code_task_input.symbols)
-                if self.use_norm:
-                    encoded_expressions_with_context = self.expressions_norm(
-                        encoded_expressions_with_context, layer_idx=layer_idx, usage_point=0)
+                if self.symbols_occurrences_fusion:
+                    assert encoded_symbols is not None
+                    encoded_expressions_with_context = self.add_symbols_encodings_to_expressions(
+                        expressions_encodings=encoded_expressions_with_context,
+                        symbols_encodings=encoded_symbols,
+                        symbols=code_task_input.symbols)
+                    if self.use_norm:
+                        encoded_expressions_with_context = self.expressions_norm(
+                            encoded_expressions_with_context, layer_idx=layer_idx, usage_point=0)
 
                 new_encoded_expressions = self.expression_updater(
                     sequence_input=encoded_expressions_with_context,
@@ -309,14 +315,15 @@ class MethodCFGEncoder(nn.Module):
                     symbols=code_task_input.symbols,
                     encoded_cfg_expressions=encoded_expressions_with_context
                     if self.use_symbols_occurrences_for_symbols_encodings else None)
-            else:
-                encoded_symbols = self.symbols_encoder(
+            elif self.symbols_occurrences_fusion:
+                encoded_symbols = self.symbols_encoder_for_non_last_layers(
                     encoded_identifiers=encoded_identifiers,
                     symbols=code_task_input.symbols,
                     encoded_cfg_expressions=encoded_expressions_with_context
                     if self.use_symbols_occurrences_for_symbols_encodings else None,
                     layer_idx=layer_idx)
-                encoded_symbols = self.symbols_norm(encoded_symbols, layer_idx=layer_idx)
+                if self.use_norm:
+                    encoded_symbols = self.symbols_norm(encoded_symbols, layer_idx=layer_idx)
 
         return EncodedMethodCFG(
             encoded_identifiers=encoded_identifiers,
