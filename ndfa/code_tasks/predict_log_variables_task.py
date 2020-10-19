@@ -159,11 +159,17 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
             code_task_vocabs=code_task_vocabs,
             dropout_rate=dropout_rate, activation_fn=self.model_hps.activation_fn)
 
+        # FIXME: might be problematic because 2 different modules hold this (both PredictLogVarsModel and SymbolsDecoder).
+        self.symbols_special_words_embedding = nn.Embedding(
+            num_embeddings=len(self.code_task_vocabs.symbols_special_words),
+            embedding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
+            padding_idx=self.code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))
+
         self.symbols_decoder = SymbolsDecoder(
-            symbols_special_words_embedding=self.code_task_encoder.method_cfg_encoder.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
+            symbols_special_words_embedding=self.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both PredictLogVarsModel and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.target_symbols_decoder.max_nr_target_symbols + 2,
-            encoder_output_dim=self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim,  # FIXME: might be problematic because 2 different modules hold this (both SymbolsEncoder and SymbolsDecoder).
+            encoder_output_dim=self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim,
             symbols_encoding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
             use_batch_flattened_target_symbols_vocab=
             self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab,

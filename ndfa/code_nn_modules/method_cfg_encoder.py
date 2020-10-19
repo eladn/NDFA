@@ -112,12 +112,14 @@ class MethodCFGEncoder(nn.Module):
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.symbols_encoder = ModuleRepeater(
             lambda: SymbolsEncoder(
-                symbols_special_words_vocab=code_task_vocabs.symbols_special_words,
                 symbol_embedding_dim=self.symbol_embedding_dim,
                 expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-                dropout_rate=dropout_rate, activation_fn=activation_fn),
-            repeats=nr_layers, share=share_weights_between_layers, repeat_key='layer_idx')
-        self.symbols_special_words_embedding = self.symbols_encoder.get_inner_module(nr_layers - 1).symbols_special_words_embedding
+                combining_method='attn', dropout_rate=dropout_rate, activation_fn=activation_fn),
+            repeats=nr_layers - 1, share=share_weights_between_layers, repeat_key='layer_idx')
+        self.last_symbols_encoder = SymbolsEncoder(
+            symbol_embedding_dim=self.symbol_embedding_dim,
+            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
             expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
@@ -296,12 +298,19 @@ class MethodCFGEncoder(nn.Module):
                 encoded_expressions_with_context = self.expressions_norm(
                     encoded_expressions_with_context, layer_idx=layer_idx, usage_point=2)
 
-            encoded_symbols = self.symbols_encoder(
-                encoded_identifiers=encoded_identifiers,
-                symbols=code_task_input.symbols,
-                encoded_cfg_expressions=encoded_expressions_with_context
-                if self.use_symbols_occurrences_for_symbols_encodings else None,
-                layer_idx=layer_idx)
+            if layer_idx == self.nr_layers - 1:
+                encoded_symbols = self.last_symbols_encoder(
+                    encoded_identifiers=encoded_identifiers,
+                    symbols=code_task_input.symbols,
+                    encoded_cfg_expressions=encoded_expressions_with_context
+                    if self.use_symbols_occurrences_for_symbols_encodings else None)
+            else:
+                encoded_symbols = self.symbols_encoder(
+                    encoded_identifiers=encoded_identifiers,
+                    symbols=code_task_input.symbols,
+                    encoded_cfg_expressions=encoded_expressions_with_context
+                    if self.use_symbols_occurrences_for_symbols_encodings else None,
+                    layer_idx=layer_idx)
 
         return EncodedMethodCFG(
             encoded_identifiers=encoded_identifiers,
