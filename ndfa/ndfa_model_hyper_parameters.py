@@ -17,9 +17,9 @@ class SequenceCombinerParams:
         choices=('attn', 'sum', 'mean'),
         description="...")
     nr_attn_heads: int = confparam(
-        default=4)
+        default=8)
     nr_dim_reduction_layers: int = confparam(
-        default=3)
+        default=1)
 
 
 @confclass
