@@ -143,6 +143,11 @@ class MethodCFGEncoder(nn.Module):
                     self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
                     affine=affine_norm, norm_type=norm_type),
                 repeats=nr_layers, share=share_weights_between_layers, repeat_key='layer_idx')
+            self.symbols_norm = ModuleRepeater(
+                module_create_fn=lambda: NormWrapper(
+                    self.symbol_embedding_dim,
+                    affine=affine_norm, norm_type=norm_type),
+                repeats=nr_layers - 1, share=share_weights_between_layers, repeat_key='layer_idx')
             self.cfg_nodes_norm = ModuleRepeater(
                 module_create_fn=lambda: ModuleRepeater(
                     module_create_fn=lambda: NormWrapper(
@@ -311,6 +316,7 @@ class MethodCFGEncoder(nn.Module):
                     encoded_cfg_expressions=encoded_expressions_with_context
                     if self.use_symbols_occurrences_for_symbols_encodings else None,
                     layer_idx=layer_idx)
+                encoded_symbols = self.symbols_norm(encoded_symbols, layer_idx=layer_idx)
 
         return EncodedMethodCFG(
             encoded_identifiers=encoded_identifiers,
