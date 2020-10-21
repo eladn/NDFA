@@ -349,8 +349,10 @@ class CFGSinglePathEncoder(nn.Module):
         if self.sequence_type == 'linear':
             unflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.unflatten(cfg_nodes_encodings)
         elif self.sequence_type == 'random-permutation':
-            # pdg_input.cfg_nodes_random_permutation.unflatten(pdg_input.cfg_nodes_random_permutation.sequences)
-            raise NotImplementedError  # TODO: implement!
+            unflattened_nodes_encodings = cfg_nodes_encodings[pdg_input.cfg_nodes_random_permutation.sequences]
+            unflattened_nodes_encodings = unflattened_nodes_encodings.masked_fill(
+                ~pdg_input.cfg_nodes_random_permutation.sequences_mask.unsqueeze(-1)
+                    .expand(unflattened_nodes_encodings.shape), 0)
         else:
             assert False
         path_encodings = self.sequence_encoder_layer(
