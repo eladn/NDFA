@@ -515,7 +515,7 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
             torch.zeros(1, dtype=tensor.dtype, device=tensor.device))
 
     def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError  # TODO: implement! use `self.flattener`
+        return tensor.flatten(0, 1)[self.flattener]
 
 
 @final
