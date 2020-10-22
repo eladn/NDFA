@@ -364,12 +364,19 @@ class CFGSinglePathEncoder(nn.Module):
         if self.sequence_type == 'linear':
             reflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.flatten(path_encodings)
         elif self.sequence_type == 'random-permutation':
-            raise NotImplementedError  # TODO: implement!
-            # reflattened_nodes_encodings = xxxx
-            # unflattened_nodes_encodings = cfg_nodes_encodings[pdg_input.cfg_nodes_random_permutation.sequences]
-            # unflattened_nodes_encodings = unflattened_nodes_encodings.masked_fill(
-            #     ~pdg_input.cfg_nodes_random_permutation.sequences_mask.unsqueeze(-1)
-            #         .expand(unflattened_nodes_encodings.shape), 0)
+            nr_cfg_nodes = cfg_nodes_encodings.size(0)
+            cfg_nodes_permuted_indices = pdg_input.cfg_nodes_random_permutation.sequences
+            cfg_nodes_permuted_indices = cfg_nodes_permuted_indices.masked_fill(
+                ~pdg_input.cfg_nodes_random_permutation.sequences_mask, nr_cfg_nodes)
+            new_cfg_nodes_encodings = \
+                cfg_nodes_encodings.new_zeros(size=(nr_cfg_nodes + 1, cfg_nodes_encodings.size(1)))
+            path_encodings_flattened = path_encodings.flatten(0, 1)
+            cfg_nodes_permuted_indices_flattened = cfg_nodes_permuted_indices.flatten(0, 1)
+            new_cfg_nodes_encodings.scatter_(
+                dim=0,
+                index=cfg_nodes_permuted_indices_flattened.unsqueeze(-1).expand(path_encodings_flattened.shape),
+                src=path_encodings_flattened)
+            reflattened_nodes_encodings = new_cfg_nodes_encodings[:-1]
         else:
             assert False
 
