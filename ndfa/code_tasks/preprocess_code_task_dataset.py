@@ -25,7 +25,8 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, M
     CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors, \
     CFGPathsNGramsInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
+    BatchedFlattenedIndicesPseudoRandomPermutation
 from ndfa.misc.example_formatter import format_example, RawExtractedExample
 
 
@@ -172,6 +173,10 @@ def preprocess_code_task_example(
                 for sub_part in identifier_sub_parts])
             for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
         self_indexing_group='identifiers')
+
+    identifiers_sub_parts_obfuscated = BatchedFlattenedIndicesPseudoRandomPermutation(
+        tgt_indexing_group='identifiers',
+        batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='idntf')
 
     _counter = itertools.count()
     pdg_node_idx_to_expression_idx_mapping = {
@@ -342,6 +347,7 @@ def preprocess_code_task_example(
     return MethodCodeInputTensors(
         method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts,
         identifiers_sub_parts_hashings=identifiers_sub_parts_hashings,
+        identifiers_sub_parts_obfuscated=identifiers_sub_parts_obfuscated,
         symbols=symbols, pdg=pdg)
 
 

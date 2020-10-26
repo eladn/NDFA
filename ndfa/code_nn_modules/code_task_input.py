@@ -3,7 +3,8 @@ import dataclasses
 from typing import Optional, Dict
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq
+    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
+    BatchedFlattenedIndicesPseudoRandomPermutation
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
@@ -80,6 +81,7 @@ class MethodCodeInputTensors(TensorsDataClass):
 
     identifiers_sub_parts: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     identifiers_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
+    identifiers_sub_parts_obfuscated: BatchedFlattenedIndicesPseudoRandomPermutation  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     symbols: SymbolsInputTensors
 
     method_tokenized_code: Optional[CodeExpressionTokensSequenceInputTensors] = None

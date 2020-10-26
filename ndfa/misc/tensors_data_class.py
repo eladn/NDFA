@@ -773,13 +773,14 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(TensorsDataClass, HasTarget
     permutations: torch.LongTensor = dataclasses.field(default=None)
     inverse_permutations: torch.LongTensor = dataclasses.field(default=None)
 
-    def __init__(self, batch_dependent_seed: bool = True,
-                 example_dependent_seed: bool = True,
-                 initial_seed_salt: str = '0'):
-        super(BatchedFlattenedIndicesPseudoRandomPermutation, self).__init__()
-        self.initial_seed_salt = initial_seed_salt
-        self.batch_dependent_seed = batch_dependent_seed
-        self.example_dependent_seed = example_dependent_seed
+    batch_dependent_seed: bool = dataclasses.field(default=True)
+    example_dependent_seed: bool = dataclasses.field(default=True)
+    initial_seed_salt: str = dataclasses.field(default='0')
+
+    @classmethod
+    def get_management_fields(cls) -> Tuple[str, ...]:
+        return super(BatchedFlattenedIndicesPseudoRandomPermutation, cls).get_management_fields() + \
+               ('batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt')
 
     @classmethod
     def get_indices_fields(cls) -> Tuple[dataclasses.Field, ...]:
