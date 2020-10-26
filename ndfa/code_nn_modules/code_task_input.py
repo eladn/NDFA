@@ -4,13 +4,13 @@ from typing import Optional, Dict
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
-    BatchedFlattenedIndicesPseudoRandomPermutation
+    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
            'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
            'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
-           'PDGInputTensors']
+           'PDGInputTensors', 'IdentifiersInputTensors']
 
 
 # TODO: this is an old impl - REMOVE!
@@ -70,18 +70,25 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
     # cfg_edges_attrs: Optional[torch.LongTensor] = None
 
-    cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesFlattenedSeq] = None
+    cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesPseudoRandomPermutation] = None
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
     cfg_control_flow_paths_ngrams: Optional[Dict[int, CFGPathsNGramsInputTensors]] = None
+
+
+@dataclasses.dataclass
+class IdentifiersInputTensors(TensorsDataClass):
+    sub_parts_batch: BatchFlattenedTensor  # (nr_sub_parts_in_batch, )
+    identifier_sub_parts_index: BatchedFlattenedIndicesFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifier_sub_parts_vocab_word_index: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifier_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
+    sub_parts_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange  # (nr_sub_parts_obfuscation_embeddings)
 
 
 @dataclasses.dataclass
 class MethodCodeInputTensors(TensorsDataClass):
     method_hash: str
 
-    identifiers_sub_parts: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
-    identifiers_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
-    identifiers_sub_parts_obfuscated: BatchedFlattenedIndicesPseudoRandomPermutation  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifiers: IdentifiersInputTensors
     symbols: SymbolsInputTensors
 
     method_tokenized_code: Optional[CodeExpressionTokensSequenceInputTensors] = None

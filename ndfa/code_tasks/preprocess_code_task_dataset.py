@@ -1,7 +1,6 @@
 import os
 import io
 import torch
-import hashlib
 import itertools
 import functools
 import dataclasses
@@ -23,10 +22,10 @@ from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWr
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, MethodCodeInputTensors, \
     CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors, \
-    CFGPathsNGramsInputTensors
+    CFGPathsNGramsInputTensors, IdentifiersInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
-    BatchedFlattenedIndicesPseudoRandomPermutation
+    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange
 from ndfa.misc.example_formatter import format_example, RawExtractedExample
 
 
@@ -156,7 +155,20 @@ def preprocess_code_task_example(
     if pdg_nodes_to_mask is None:
         pdg_nodes_to_mask = {}
 
-    identifiers_sub_parts = BatchFlattenedSeq(
+    identifiers_sub_parts_set = {
+        sub_part for identifier_sub_parts in method_pdg.sub_identifiers_by_idx for sub_part in identifier_sub_parts}
+    identifiers_sub_parts_sorted = sorted(list(identifiers_sub_parts_set))
+    identifiers_sub_parts_indexer = {
+        sub_part: sub_part_idx for sub_part_idx, sub_part in enumerate(identifiers_sub_parts_sorted)}
+
+    identifiers_sub_parts_indices = BatchedFlattenedIndicesFlattenedSeq(
+        sequences=[
+            torch.LongTensor([
+                identifiers_sub_parts_indexer[sub_part] for sub_part in identifier_sub_parts])
+            for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
+        self_indexing_group='identifiers', tgt_indexing_group='identifiers_sub_parts')
+
+    identifiers_sub_parts_vocab_word_index = BatchFlattenedSeq(
         sequences=[
             torch.LongTensor([
                 code_task_vocabs.sub_identifiers.get_word_idx_or_unk(sub_part)
@@ -174,9 +186,20 @@ def preprocess_code_task_example(
             for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
         self_indexing_group='identifiers')
 
-    identifiers_sub_parts_obfuscated = BatchedFlattenedIndicesPseudoRandomPermutation(
-        tgt_indexing_group='identifiers',
-        batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='idntf')
+    sub_parts_obfuscation = BatchFlattenedPseudoRandomSamplerFromRange(
+        sample_size=len(identifiers_sub_parts_indexer),
+        tgt_range_start=len(code_task_vocabs.sub_identifiers.special_words),
+        tgt_range_end=len(code_task_vocabs.sub_identifiers),
+        initial_seed_salt='idntf', replace=False)
+
+    identifiers = IdentifiersInputTensors(
+        sub_parts_batch=BatchFlattenedTensor(
+            tensor=torch.arange(len(identifiers_sub_parts_indexer)),
+            self_indexing_group='identifiers_sub_parts'),
+        identifier_sub_parts_index=identifiers_sub_parts_indices,
+        identifier_sub_parts_vocab_word_index=identifiers_sub_parts_vocab_word_index,
+        identifier_sub_parts_hashings=identifiers_sub_parts_hashings,
+        sub_parts_obfuscation=sub_parts_obfuscation)
 
     _counter = itertools.count()
     pdg_node_idx_to_expression_idx_mapping = {
@@ -305,7 +328,6 @@ def preprocess_code_task_example(
     #     print()
     #     # exit()
 
-    method_random_seed = int(hashlib.sha256(method.hash.encode('ascii')).hexdigest(), 16) % (2 ** 32)
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.pdg_node_control_kinds.get_word_idx(
@@ -317,10 +339,9 @@ def preprocess_code_task_example(
             [pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
              for pdg_node in method_pdg.pdg_nodes])),
         cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions,
-        cfg_nodes_random_permutation=BatchedFlattenedIndicesFlattenedSeq(
-            sequences=[torch.LongTensor(
-                np.random.RandomState(method_random_seed).permutation(len(method_pdg.pdg_nodes)))],
-            tgt_indexing_group='cfg_nodes'),
+        cfg_nodes_random_permutation=BatchedFlattenedIndicesPseudoRandomPermutation(
+            tgt_indexing_group='cfg_nodes',
+            batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='cfgn'),
         cfg_control_flow_paths=CFGPathsInputTensors(
             nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[torch.LongTensor([node_idx for node_idx, _ in path]) for path in control_flow_paths],
@@ -345,9 +366,8 @@ def preprocess_code_task_example(
             for key, ngrams in control_flow_paths_ngrams.items()})
 
     return MethodCodeInputTensors(
-        method_hash=method.hash, identifiers_sub_parts=identifiers_sub_parts,
-        identifiers_sub_parts_hashings=identifiers_sub_parts_hashings,
-        identifiers_sub_parts_obfuscated=identifiers_sub_parts_obfuscated,
+        method_hash=method.hash,
+        identifiers=identifiers,
         symbols=symbols, pdg=pdg)
 
 
