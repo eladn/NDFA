@@ -190,7 +190,7 @@ def preprocess_code_task_example(
         sample_size=len(identifiers_sub_parts_indexer),
         tgt_range_start=len(code_task_vocabs.sub_identifiers.special_words),
         tgt_range_end=len(code_task_vocabs.sub_identifiers),
-        initial_seed_salt='idntf', replace=False)
+        initial_seed_salt='idntf', replace=True)
 
     identifiers = IdentifiersInputTensors(
         sub_parts_batch=BatchFlattenedTensor(

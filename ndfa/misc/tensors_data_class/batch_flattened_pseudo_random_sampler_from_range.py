@@ -20,7 +20,7 @@ class BatchFlattenedPseudoRandomSamplerFromRange(TensorsDataClass):
     tgt_range_start: int = dataclasses.field(default=0)
     tgt_range_end: int = dataclasses.field(default=0)
     initial_seed_salt: str = dataclasses.field(default='0')
-    replace: bool = dataclasses.field(default=False)
+    replace: bool = dataclasses.field(default=True)
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
