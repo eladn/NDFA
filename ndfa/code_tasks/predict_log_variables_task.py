@@ -16,7 +16,7 @@ from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMe
 from ndfa.misc.code_data_structure_api import *
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
 from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDataset
-from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor
+from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor, CollateData
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
 from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
@@ -80,7 +80,9 @@ class PredictLogVarsTask(CodeTaskBase):
 
     def collate_examples(self, examples: List['PredictLogVarsTaggedExample']):
         assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
-        return PredictLogVarsTaggedExample.collate(examples)
+        example_hashes = [example.example_hash for example in examples]
+        return PredictLogVarsTaggedExample.collate(
+            examples, collate_data=CollateData(example_hashes=example_hashes))
 
     def evaluation_metrics(self, model_hps: NDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):

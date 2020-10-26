@@ -1,6 +1,8 @@
 import torch
+import hashlib
 import functools
 import dataclasses
+import numpy as np
 from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 from typing_extensions import Protocol
 
@@ -9,11 +11,12 @@ from ndfa.nn_utils.misc import seq_lengths_to_mask
 
 
 __all__ = [
-    'TensorsDataClass', 'TensorWithCollateMask',
+    'TensorsDataClass', 'TensorWithCollateMask', 'CollateData',
     'BatchFlattenedTensorsDataClass', 'BatchFlattenedTensor', 'BatchFlattenedSeq',
     'BatchedFlattenedIndicesFlattenedTensorsDataClass',
     'BatchedFlattenedIndicesFlattenedTensor', 'BatchedFlattenedIndicesFlattenedSeq',
-    'BatchedFlattenedIndicesTensor']
+    'BatchedFlattenedIndicesTensor', 'BatchedFlattenedIndicesPseudoRandomPermutation',
+    'PseudoRandomIDsSeq']
 
 
 # TODO:
@@ -103,6 +106,11 @@ def collate_tensors_with_variable_shapes(
     if create_collate_lengths:
         ret += collate_lengths,
     return ret[0] if len(ret) == 1 else ret
+
+
+@dataclasses.dataclass
+class CollateData:
+    example_hashes: Optional[List[str]] = None
 
 
 @dataclasses.dataclass
@@ -295,21 +303,25 @@ class TensorsDataClass:
         return object.__getattribute__(self, field_name)
 
     @classmethod
-    def collate_values(cls, values_as_tuple: CollatableValuesTuple):
+    def collate_values(cls, values_as_tuple: CollatableValuesTuple, collate_data: CollateData):
         assert all(type(value) == type(values_as_tuple[0]) for value in values_as_tuple)
         if values_as_tuple[0] is None:
             return None
         if isinstance(values_as_tuple[0], TensorsDataClass):
             assert hasattr(values_as_tuple[0].__class__, 'collate')
-            return values_as_tuple[0].__class__.collate(values_as_tuple, is_most_outer_call=False)
+            return values_as_tuple[0].__class__.collate(
+                values_as_tuple, collate_data=collate_data, is_most_outer_call=False)
         if isinstance(values_as_tuple[0], dict):
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
-            return {key: cls.collate_values(tuple(dct[key] for dct in values_as_tuple if key in dct))
+            return {key: cls.collate_values(tuple(dct[key] for dct in values_as_tuple if key in dct),
+                                            collate_data=collate_data)
                     for key in all_keys}
         if isinstance(values_as_tuple[0], (list, tuple)):
             collection_type = type(values_as_tuple[0])
             assert all(len(lst) == len(values_as_tuple[0]) for lst in values_as_tuple)
-            return collection_type(cls.collate_values(vals) for vals in zip(*values_as_tuple))
+            return collection_type(
+                cls.collate_values(vals, collate_data=collate_data)
+                for vals in zip(*values_as_tuple))
         if isinstance(values_as_tuple[0], torch.Tensor):
             return cls.collate_tensors(values_as_tuple)
         return values_as_tuple
@@ -323,33 +335,41 @@ class TensorsDataClass:
         return torch.cat(tuple(tensor.unsqueeze(0) for tensor in tensors), dim=0)
 
     @classmethod
-    def collate(cls, inputs: List['TensorsDataClass'], is_most_outer_call: bool = True):
+    def collate(cls, inputs: List['TensorsDataClass'],
+                collate_data: Optional[CollateData] = None,
+                is_most_outer_call: bool = True):
         assert all(isinstance(inp, cls) for inp in inputs)
         assert all(not inp.is_batched for inp in inputs)
         assert len(inputs) > 0
-        batched_obj = cls._collate_first_pass(inputs)
+        if collate_data is None:
+            collate_data = CollateData()
+        batched_obj = cls._collate_first_pass(
+            inputs, collate_data=collate_data)
         if batched_obj._batch_size is None:
             batched_obj._batch_size = len(inputs)
         if is_most_outer_call:
-            batched_obj.post_collate_indices_fix((), ())
+            batched_obj.post_collate_indices_fix((), (), collate_data)
             batched_obj.post_collate_remove_unnecessary_collate_info()
         return batched_obj
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['TensorsDataClass']):
+    def _collate_first_pass(cls, inputs: List['TensorsDataClass'], collate_data: CollateData):
         batched_obj = cls(
             **{field.name: cls.collate_values(
-                tuple(getattr(inp, field.name) for inp in inputs))
+                    tuple(getattr(inp, field.name) for inp in inputs),
+                    collate_data=collate_data)
                 for field in cls.get_data_fields() if field.init})
         batched_obj._batch_size = len(inputs)
         return batched_obj
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
+                                 collate_data: CollateData):
         for field in dataclasses.fields(self):
             field_value = getattr(self, field.name)
             if isinstance(field_value, TensorsDataClass):
                 field_value.post_collate_indices_fix(
-                    parents=parents + (self,), fields_path=fields_path + (field.name,))
+                    parents=parents + (self,), fields_path=fields_path + (field.name,),
+                    collate_data=collate_data)
 
     def post_collate_remove_unnecessary_collate_info(self):
         for field in dataclasses.fields(self):
@@ -409,7 +429,7 @@ class TensorWithCollateMask(TensorDataClassWithSingleDataTensor, TensorsDataClas
     collate_mask: torch.BoolTensor = dataclasses.field(default=None, init=False)
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['TensorWithCollateMask']):
+    def _collate_first_pass(cls, inputs: List['TensorWithCollateMask'], collate_data: CollateData):
         assert all(type(inp) is TensorWithCollateMask for inp in inputs)
         assert all(not inp.is_batched for inp in inputs)
         assert all(inp.collate_mask is None for inp in inputs)
@@ -446,7 +466,8 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroup):
             'batched_index_offset_additive_fix_per_example', '_nr_examples')
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchFlattenedTensorsDataClass']) -> 'BatchFlattenedTensorsDataClass':
+    def _collate_first_pass(cls, inputs: List['BatchFlattenedTensorsDataClass'],
+                            collate_data: CollateData) -> 'BatchFlattenedTensorsDataClass':
         data_fields = cls.get_data_fields()
         assert len(data_fields) > 0
         data_tensors_grouped_by_field = {field.name: tuple(getattr(inp, field.name) for inp in inputs)
@@ -529,7 +550,8 @@ class BatchFlattenedTensor(BatchFlattenedTensorsDataClass, TensorDataClassWithSi
 @dataclasses.dataclass
 class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSequences):
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchFlattenedSeq']) -> 'BatchFlattenedSeq':
+    def _collate_first_pass(cls, inputs: List['BatchFlattenedSeq'],
+                            collate_data: CollateData) -> 'BatchFlattenedSeq':
         assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
         if not inputs[0].batch_first:
             raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
@@ -551,7 +573,8 @@ class BatchFlattenedSeq(BatchFlattenedTensorsDataClass, TensorDataClassWithSeque
                 for fld in cls.get_management_fields():
                     setattr(fixed_inp, fld, getattr(inp, fld))
             inputs = fixed_inputs
-        flattened = super(BatchFlattenedSeq, cls)._collate_first_pass(inputs)
+        flattened = super(BatchFlattenedSeq, cls)._collate_first_pass(
+            inputs, collate_data=collate_data)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
         flattened.max_sequence_length = max(seq_lengths)
         flattened.sequences_mask = seq_lengths_to_mask(
@@ -587,11 +610,14 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
         return super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls).get_data_fields()
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesFlattenedTensorsDataClass']) \
+    def _collate_first_pass(
+            cls, inputs: List['BatchedFlattenedIndicesFlattenedTensorsDataClass'],
+            collate_data: CollateData) \
             -> 'BatchedFlattenedIndicesFlattenedTensorsDataClass':
         assert all(inp.example_index is None for inp in inputs)
         assert all(inp.within_example_indexing_start == inputs[0].within_example_indexing_start for inp in inputs)
-        flattened = super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls)._collate_first_pass(inputs)
+        flattened = super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls)._collate_first_pass(
+            inputs, collate_data=collate_data)
         indices_fields = cls.get_indices_fields()
         flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
         flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
@@ -601,7 +627,8 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchFlattenedTensorsData
             for example_idx, inp in enumerate(inputs)], dim=0)
         return flattened
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
+                                 collate_data: CollateData):
         if self.tgt_indexing_group is None:
             raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
         addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
@@ -638,7 +665,9 @@ class BatchedFlattenedIndicesFlattenedTensor(BatchedFlattenedIndicesFlattenedTen
 class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensorsDataClass,
                                           TensorDataClassWithSequences):
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesFlattenedSeq']) \
+    def _collate_first_pass(
+            cls, inputs: List['BatchedFlattenedIndicesFlattenedSeq'],
+            collate_data: CollateData) \
             -> 'BatchedFlattenedIndicesFlattenedSeq':
         assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
         if not inputs[0].batch_first:
@@ -661,7 +690,8 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
                 for fld in cls.get_management_fields():
                     setattr(fixed_inp, fld, getattr(inp, fld))
             inputs = fixed_inputs
-        flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(inputs)
+        flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(
+            inputs, collate_data=collate_data)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
         flattened.max_sequence_length = max(seq_lengths)
         flattened.sequences_mask = seq_lengths_to_mask(
@@ -681,9 +711,10 @@ class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensor
             padded_tensor[:, :tensor.size(1)] = tensor
         return torch.cat(padded_tensors, dim=0)
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
+                                 collate_data: CollateData):
         super(BatchedFlattenedIndicesFlattenedSeq, self).post_collate_indices_fix(
-            parents=parents, fields_path=fields_path)
+            parents=parents, fields_path=fields_path, collate_data=collate_data)
         # TODO: we might want to fix `post_collate_indices_fix` to give 0s
         #  (without example offset) for sequences paddings.
 
@@ -703,14 +734,19 @@ class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, Te
         return super(BatchedFlattenedIndicesTensor, cls).get_data_fields()
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchedFlattenedIndicesTensor']) -> 'BatchedFlattenedIndicesTensor':
+    def _collate_first_pass(
+            cls, inputs: List['BatchedFlattenedIndicesTensor'],
+            collate_data: CollateData) \
+            -> 'BatchedFlattenedIndicesTensor':
         assert all(inp.within_example_indexing_start == inputs[0].within_example_indexing_start for inp in inputs)
-        collated = super(BatchedFlattenedIndicesTensor, cls)._collate_first_pass(inputs)
+        collated = super(BatchedFlattenedIndicesTensor, cls)._collate_first_pass(
+            inputs, collate_data=collate_data)
         collated.tgt_indexing_group = inputs[0].tgt_indexing_group
         collated.within_example_indexing_start = inputs[0].within_example_indexing_start
         return collated
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...]):
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
+                                 collate_data: CollateData):
         if self.tgt_indexing_group is None:
             raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
         addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
@@ -729,3 +765,89 @@ class BatchedFlattenedIndicesTensor(TensorsDataClass, HasTargetIndexingGroup, Te
                 torch.zeros((1, ), dtype=original_indices.dtype, device=original_indices.device),
                 addressed_flattened_tensor.batched_index_offset_additive_fix_per_example.unsqueeze(-1).expand(original_indices.size()))
             setattr(self, field.name, original_indices + offsets_fixes)
+
+
+@final
+@dataclasses.dataclass
+class BatchedFlattenedIndicesPseudoRandomPermutation(TensorsDataClass, HasTargetIndexingGroup):
+    permutations: torch.LongTensor = dataclasses.field(default=None)
+    inverse_permutations: torch.LongTensor = dataclasses.field(default=None)
+
+    def __init__(self, batch_dependent_seed: bool = True,
+                 example_dependent_seed: bool = True,
+                 initial_seed_salt: str = '0'):
+        super(BatchedFlattenedIndicesPseudoRandomPermutation, self).__init__()
+        self.initial_seed_salt = initial_seed_salt
+        self.batch_dependent_seed = batch_dependent_seed
+        self.example_dependent_seed = example_dependent_seed
+
+    @classmethod
+    def get_indices_fields(cls) -> Tuple[dataclasses.Field, ...]:
+        return tuple(field for field in dataclasses.fields(cls)
+                     if field.name in {'permutations', 'inverse_permutations'})
+
+    @classmethod
+    def _collate_first_pass(
+            cls, inputs: List['BatchedFlattenedIndicesPseudoRandomPermutation'],
+            collate_data: CollateData) \
+            -> 'BatchedFlattenedIndicesPseudoRandomPermutation':
+        collated = super(BatchedFlattenedIndicesPseudoRandomPermutation, cls)._collate_first_pass(
+            inputs, collate_data=collate_data)
+        collated.tgt_indexing_group = inputs[0].tgt_indexing_group
+        return collated
+
+    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
+                                 collate_data: CollateData):
+        if self.tgt_indexing_group is None:
+            raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
+        addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
+        if addressed_flattened_tensor is None:
+            raise ValueError(
+                f'Not found field in tensors data class which is addressable '
+                f'via index group `{self.tgt_indexing_group}`.')
+        nr_items_per_example = addressed_flattened_tensor.nr_items_per_example
+        index_offsets = addressed_flattened_tensor.batched_index_offset_additive_fix_per_example
+
+        if self.batch_dependent_seed and self.example_dependent_seed:
+            random_seed_per_example = [
+                int(hashlib.sha256(f'{self.initial_seed_salt}|{"-".join(collate_data.example_hashes)}|{example_idx}'
+                                   .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+                for example_idx, _ in enumerate(collate_data.example_hashes)]
+        elif not self.batch_dependent_seed and self.example_dependent_seed:
+            random_seed_per_example = [
+                int(hashlib.sha256(f'{self.initial_seed_salt}|{example_hash}'
+                                   .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+                for example_hash in collate_data.example_hashes]
+        elif self.batch_dependent_seed and not self.example_dependent_seed:
+            random_seed_per_example = [
+                int(hashlib.sha256(f'{self.initial_seed_salt}|{"-".join(collate_data.example_hashes)}'
+                                   .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+                for _ in collate_data.example_hashes]
+        else:
+            random_seed_per_example = [
+                int(hashlib.sha256(f'{self.initial_seed_salt}'
+                                   .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+                for _ in collate_data.example_hashes]
+
+        permutations_without_offsets = [
+            torch.LongTensor(np.random.RandomState(random_seed_per_example[example_idx]).permutation(nr_items))
+            for example_idx, nr_items in enumerate(nr_items_per_example)]
+        # TODO: is it always correct that perm^2 == perm^-1
+        inverse_permutations_without_offsets = [perm[perm] for perm in permutations_without_offsets]
+        permutations_with_offsets = [
+            perm + index_offset for perm, index_offset in zip(permutations_without_offsets, index_offsets)]
+        inverse_permutations_with_ranges = [
+            perm + index_offset for perm, index_offset in zip(inverse_permutations_without_offsets, index_offsets)]
+        self.permutations = collate_tensors_with_variable_shapes(
+            tensors=tuple(permutations_with_offsets), create_collate_mask=False,
+            create_collate_lengths=False, last_variable_dim=0)
+        self.inverse_permutations = collate_tensors_with_variable_shapes(
+            tensors=tuple(inverse_permutations_with_ranges), create_collate_mask=False,
+            create_collate_lengths=False, last_variable_dim=0)
+
+
+# TODO: implement!
+@final
+@dataclasses.dataclass
+class PseudoRandomIDsSeq:
+    pass  # TODO: implement!
