@@ -13,10 +13,11 @@ from ndfa.nn_utils.misc import seq_lengths_to_mask
 __all__ = [
     'TensorsDataClass', 'TensorWithCollateMask', 'CollateData',
     'BatchFlattenedTensorsDataClass', 'BatchFlattenedTensor', 'BatchFlattenedSeq',
-    'BatchedFlattenedIndicesFlattenedTensorsDataClass',
+    'BatchFlattenedSequencesDataClass', 'BatchedFlattenedIndicesFlattenedTensorsDataClass',
     'BatchedFlattenedIndicesFlattenedTensor', 'BatchedFlattenedIndicesFlattenedSeq',
+    'BatchedFlattenedIndicesFlattenedSequencesDataClass',
     'BatchedFlattenedIndicesTensor', 'BatchedFlattenedIndicesPseudoRandomPermutation',
-    'PseudoRandomIDsBatchFlattenedSeq']
+    'BatchFlattenedPseudoRandomSamplerFromRange']
 
 
 # TODO:
@@ -681,64 +682,32 @@ class BatchedFlattenedIndicesFlattenedTensor(BatchedFlattenedIndicesFlattenedTen
 
 
 # TODO: check implementation!
-@final
 @dataclasses.dataclass
-class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedTensorsDataClass,
-                                          TensorDataClassWithSequences,
-                                          TensorDataClassWithSingleSequenceField):
+class BatchedFlattenedIndicesFlattenedSequencesDataClass(BatchedFlattenedIndicesFlattenedTensorsDataClass,
+                                                         BatchFlattenedSequencesDataClass):
     @classmethod
     def _collate_first_pass(
-            cls, inputs: List['BatchedFlattenedIndicesFlattenedSeq'],
+            cls, inputs: List['BatchedFlattenedIndicesFlattenedSequencesDataClass'],
             collate_data: CollateData) \
-            -> 'BatchedFlattenedIndicesFlattenedSeq':
-        assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
-        if not inputs[0].batch_first:
-            raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
-        assert all(inp.sequences_lengths is None for inp in inputs)
-        assert all(inp.sequences_mask is None for inp in inputs)
-        assert all(isinstance(inp.sequences, list) for inp in inputs) or \
-               all(isinstance(inp.sequences, torch.Tensor) for inp in inputs)
-        assert all(isinstance(seq, torch.Tensor) for inp in inputs for seq in inp.sequences)
-        assert all(seq.ndim >= 1 for inp in inputs for seq in inp.sequences)
-        seq_lengths = [seq.size(0) for inp in inputs for seq in inp.sequences]
-        if isinstance(inputs[0].sequences, list):
-            fixed_inputs = [
-                cls(
-                    sequences=collate_tensors_with_variable_shapes(
-                        tensors=tuple(inp.sequences), create_collate_mask=False,
-                        create_collate_lengths=False, last_variable_dim=0))
-                for inp in inputs]
-            for inp, fixed_inp in zip(inputs, fixed_inputs):
-                for fld in cls.get_management_fields():
-                    setattr(fixed_inp, fld, getattr(inp, fld))
-            inputs = fixed_inputs
-        flattened = super(BatchedFlattenedIndicesFlattenedSeq, cls)._collate_first_pass(
+            -> 'BatchedFlattenedIndicesFlattenedSequencesDataClass':
+        flattened = super(BatchedFlattenedIndicesFlattenedSequencesDataClass, cls)._collate_first_pass(
             inputs, collate_data=collate_data)
-        flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
-        flattened.max_sequence_length = max(seq_lengths)
-        flattened.sequences_mask = seq_lengths_to_mask(
-            seq_lengths=flattened.sequences_lengths, max_seq_len=flattened.max_sequence_length)
-        flattened.tgt_indexing_group = inputs[0].tgt_indexing_group
-        flattened.within_example_indexing_start = inputs[0].within_example_indexing_start
         return flattened
-
-    @classmethod
-    def _flatten_tensors(cls, tensors: List[torch.Tensor]):
-        max_seq_len = max(tensor.size(1) for tensor in tensors)
-        padded_tensors = [
-            torch.zeros((tensor.size(0), max_seq_len) + tensor.size()[2:],
-                        dtype=tensor.dtype, device=tensor.device)
-            for tensor in tensors]
-        for tensor, padded_tensor in zip(tensors, padded_tensors):
-            padded_tensor[:, :tensor.size(1)] = tensor
-        return torch.cat(padded_tensors, dim=0)
 
     def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
                                  collate_data: CollateData):
-        super(BatchedFlattenedIndicesFlattenedSeq, self).post_collate_indices_fix(
+        super(BatchedFlattenedIndicesFlattenedSequencesDataClass, self).post_collate_indices_fix(
             parents=parents, fields_path=fields_path, collate_data=collate_data)
         # TODO: we might want to fix `post_collate_indices_fix` to give 0s
         #  (without example offset) for sequences paddings.
+
+
+# TODO: check implementation!
+@final
+@dataclasses.dataclass
+class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedSequencesDataClass,
+                                          TensorDataClassWithSingleSequenceField):
+    pass  # the double inheritance is all the impl needed
 
 
 @final
@@ -869,27 +838,47 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(TensorsDataClass, HasTarget
             create_collate_lengths=False, last_variable_dim=0)
 
 
-# TODO: finish implementation!
 @final
 @dataclasses.dataclass
-class PseudoRandomIDsBatchFlattenedSeq(BatchFlattenedSequencesDataClass, TensorDataClassWithSingleSequenceField):
-    min_id: int = dataclasses.field(default=0)
-    max_id: int = dataclasses.field(default=0)
-    batch_dependent_seed: bool = dataclasses.field(default=True)
-    example_dependent_seed: bool = dataclasses.field(default=True)
+class BatchFlattenedPseudoRandomSamplerFromRange(TensorsDataClass):
+    sample: torch.LongTensor = dataclasses.field(default=None, init=False)
+
+    sample_size: Union[int, Tuple[int]] = dataclasses.field(default=0)
+    tgt_range_start: int = dataclasses.field(default=0)
+    tgt_range_end: int = dataclasses.field(default=0)
     initial_seed_salt: str = dataclasses.field(default='0')
+    replace: bool = dataclasses.field(default=False)
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
-        return super(PseudoRandomIDsBatchFlattenedSeq, cls).get_management_fields() + \
-               ('min_id', 'max_id', 'batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt')
+        return super(BatchFlattenedPseudoRandomSamplerFromRange, cls).get_management_fields() + \
+               ('sample_size', 'tgt_range_start', 'tgt_range_end', 'initial_seed_salt', 'replace')
 
     @classmethod
     def _collate_first_pass(
-            cls, inputs: List['PseudoRandomIDsBatchFlattenedSeq'],
+            cls, inputs: List['BatchFlattenedPseudoRandomSamplerFromRange'],
             collate_data: CollateData) \
-            -> 'PseudoRandomIDsBatchFlattenedSeq':
-        raise NotImplementedError  # TODO: impl!
-        collated = super(PseudoRandomIDsBatchFlattenedSeq, cls)._collate_first_pass(
-            inputs, collate_data=collate_data)
+            -> 'BatchFlattenedPseudoRandomSamplerFromRange':
+        sample_size = sum(inp.sample_size for inp in inputs)
+        tgt_range_start = inputs[0].tgt_range_start
+        tgt_range_end = inputs[0].tgt_range_end
+        initial_seed_salt = inputs[0].initial_seed_salt
+        replace = inputs[0].replace
+        assert all(inp.tgt_range_start == tgt_range_start for inp in inputs)
+        assert all(inp.tgt_range_end == tgt_range_end for inp in inputs)
+        assert all(inp.initial_seed_salt == initial_seed_salt for inp in inputs)
+        assert all(inp.replace == replace for inp in inputs)
+        random_seed = \
+            int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}'
+                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+        sample = torch.LongTensor(
+            np.random.RandomState(random_seed).choice(
+                a=np.arange(tgt_range_start, tgt_range_end), size=sample_size, replace=replace))
+        collated = cls(
+            sample_size=sample_size,
+            tgt_range_start=tgt_range_start,
+            tgt_range_end=tgt_range_end,
+            initial_seed_salt=initial_seed_salt,
+            replace=replace)
+        collated.sample = sample
         return collated
