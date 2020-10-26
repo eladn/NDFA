@@ -1,11 +1,11 @@
 import os
 import io
 import torch
-import shelve
+import dbm
 import itertools
 import numpy as np
 from warnings import warn
-from typing import Optional
+from typing import Optional, Mapping, ByteString
 from torch.utils.data.dataset import Dataset
 
 
@@ -27,7 +27,7 @@ class ChunkedRandomAccessDatasetWriter:
         self.cur_chunk_idx: Optional[int] = None
         self.cur_chunk_size_in_bytes: Optional[int] = None
         self.cur_chunk_nr_examples: Optional[int] = None
-        self.cur_chunk_file: Optional[shelve.Shelf] = None
+        self.cur_chunk_file: Optional[Mapping[ByteString, ByteString]] = None
         self.cur_chunk_filepath: Optional[str] = None
 
     @property
@@ -38,16 +38,16 @@ class ChunkedRandomAccessDatasetWriter:
         with io.BytesIO() as bytes_io_stream:
             torch.save(example, bytes_io_stream)
             binary_serialized_example = bytes_io_stream.getvalue()
-            # now we can store `binary_serialized_example` however we want (we use `shelve` KV store)
+            # now we can store `binary_serialized_example` however we want (we use `dbm` KV store)
         example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
-        chunk_file[str(self.next_example_idx)] = binary_serialized_example
+        chunk_file[str(self.next_example_idx).encode('ascii')] = binary_serialized_example
         self.next_example_idx += 1
         self.cur_chunk_nr_examples += 1
         self.cur_chunk_size_in_bytes += example_size_in_bytes
         assert self.cur_chunk_size_in_bytes <= self.max_chunk_size_in_bytes
 
-    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> shelve.Shelf:
+    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> Mapping[ByteString, ByteString]:
         assert example_size_in_bytes < self.max_chunk_size_in_bytes
         if self.cur_chunk_file is None or \
                 self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
@@ -66,7 +66,7 @@ class ChunkedRandomAccessDatasetWriter:
                 else:
                     warn(f'Overwriting existing preprocessed file `{self.cur_chunk_filepath}`.')
                     os.remove(self.cur_chunk_filepath)
-            self.cur_chunk_file = shelve.open(self.cur_chunk_filepath, 'c')
+            self.cur_chunk_file = dbm.open(self.cur_chunk_filepath, 'c')
             self.cur_chunk_size_in_bytes = 0
             self.cur_chunk_nr_examples = 0
         return self.cur_chunk_file
@@ -104,7 +104,7 @@ class ChunkedRandomAccessDataset(Dataset):
                 else:
                     break
             self._pp_data_chunks_filepaths.append(filepath)
-            kvstore = shelve.open(filepath, 'r')
+            kvstore = dbm.open(filepath, 'r')
             self._kvstore_chunks.append(kvstore)
             self._kvstore_chunks_lengths.append(kvstore['len'])
         self._len = sum(self._kvstore_chunks_lengths)
@@ -130,7 +130,7 @@ class ChunkedRandomAccessDataset(Dataset):
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len
         chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
-        binary_serialized_example = chunk_kvstore[str(idx)]
+        binary_serialized_example = chunk_kvstore[str(idx).encode('ascii')]
         with io.BytesIO(binary_serialized_example) as bytes_io_stream:
             bytes_io_stream.seek(0)
             return torch.load(bytes_io_stream)
