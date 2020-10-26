@@ -14,7 +14,7 @@ __all__ = ['BatchedFlattenedIndicesPseudoRandomPermutation']
 
 @final
 @dataclasses.dataclass
-class BatchedFlattenedIndicesPseudoRandomPermutation(TensorsDataClass, HasTargetIndexingGroupMixin):
+class BatchedFlattenedIndicesPseudoRandomPermutation(HasTargetIndexingGroupMixin, TensorsDataClass):
     permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
     inverse_permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
 
@@ -76,7 +76,7 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(TensorsDataClass, HasTarget
                 for _ in collate_data.example_hashes]
 
         permutations_without_offsets = [
-            torch.LongTensor(np.random.RandomState(random_seed_per_example[example_idx]).permutation(nr_items))
+            torch.LongTensor(np.random.RandomState(random_seed_per_example[example_idx]).permutation(int(nr_items)))
             for example_idx, nr_items in enumerate(nr_items_per_example)]
         # TODO: is it always correct that perm^2 == perm^-1
         inverse_permutations_without_offsets = [perm[perm] for perm in permutations_without_offsets]

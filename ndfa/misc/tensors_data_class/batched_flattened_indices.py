@@ -13,8 +13,9 @@ __all__ = ['BatchedFlattenedIndicesTensor']
 @final
 @dataclasses.dataclass
 class BatchedFlattenedIndicesTensor(
-        TensorsDataClass, HasTargetIndexingGroupMixin,
-        TensorDataClassWithSingleIndicesTensorMixin):
+        HasTargetIndexingGroupMixin,
+        TensorDataClassWithSingleIndicesTensorMixin,
+        TensorsDataClass):
     within_example_indexing_start: int = dataclasses.field(default=0)
 
     @classmethod

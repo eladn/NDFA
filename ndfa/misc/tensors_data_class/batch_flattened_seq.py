@@ -4,17 +4,18 @@ from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 
 from .misc import seq_lengths_to_mask, collate_tensors_with_variable_shapes, CollateData
 from .mixins import TensorDataClassWithSequencesMixin, TensorDataClassWithSingleSequenceFieldMixin
-from .batch_flattened import BatchFlattenedTensorsDataClass
+from .batch_flattened import BatchFlattenedTensorsDataClassMixin
+from .tensors_data_class import TensorsDataClass
 
 
-__all__ = ['BatchFlattenedSequencesDataClass', 'BatchFlattenedSeq']
+__all__ = ['BatchFlattenedSequencesDataClassMixin', 'BatchFlattenedSequencesDataClass', 'BatchFlattenedSeq']
 
 
 @dataclasses.dataclass
-class BatchFlattenedSequencesDataClass(BatchFlattenedTensorsDataClass, TensorDataClassWithSequencesMixin):
+class BatchFlattenedSequencesDataClassMixin(BatchFlattenedTensorsDataClassMixin, TensorDataClassWithSequencesMixin):
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchFlattenedSequencesDataClass'],
-                            collate_data: CollateData) -> 'BatchFlattenedSequencesDataClass':
+    def _collate_first_pass(cls, inputs: List['BatchFlattenedSequencesDataClassMixin'],
+                            collate_data: CollateData) -> 'BatchFlattenedSequencesDataClassMixin':
         assert all(inp.batch_first == inputs[0].batch_first for inp in inputs)
         if not inputs[0].batch_first:
             raise NotImplementedError('`batch_first` option is not implemented yet for `BatchFlattenedSeq`.')
@@ -50,7 +51,7 @@ class BatchFlattenedSequencesDataClass(BatchFlattenedTensorsDataClass, TensorDat
                 for fld in cls.get_management_fields():
                     setattr(fixed_inp, fld, getattr(inp, fld))
             inputs = fixed_inputs
-        flattened = super(BatchFlattenedSequencesDataClass, cls)._collate_first_pass(
+        flattened = super(BatchFlattenedSequencesDataClassMixin, cls)._collate_first_pass(
             inputs, collate_data=collate_data)
         flattened.sequences_lengths = torch.LongTensor(seq_lengths, device=flattened.sequences.device)
         flattened.max_sequence_length = max(seq_lengths)
@@ -68,6 +69,11 @@ class BatchFlattenedSequencesDataClass(BatchFlattenedTensorsDataClass, TensorDat
         for tensor, padded_tensor in zip(tensors, padded_tensors):
             padded_tensor[:, :tensor.size(1)] = tensor
         return torch.cat(padded_tensors, dim=0)
+
+
+@dataclasses.dataclass
+class BatchFlattenedSequencesDataClass(BatchFlattenedSequencesDataClassMixin, TensorsDataClass):
+    pass  # the double inheritance is all the impl needed
 
 
 @final

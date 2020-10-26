@@ -7,11 +7,11 @@ from .tensors_data_class import TensorsDataClass
 from .mixins import HasSelfIndexingGroupMixin, TensorDataClassWithSingleDataTensorMixin
 
 
-__all__ = ['BatchFlattenedTensorsDataClass', 'BatchFlattenedTensor']
+__all__ = ['BatchFlattenedTensorsDataClassMixin', 'BatchFlattenedTensorsDataClass', 'BatchFlattenedTensor']
 
 
 @dataclasses.dataclass
-class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroupMixin):
+class BatchFlattenedTensorsDataClassMixin(HasSelfIndexingGroupMixin):
     nr_items_per_example: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)  # (bsz,)
     max_nr_items: Optional[int] = dataclasses.field(init=False, default=None)
     unflattener: Optional[torch.LongTensor] = dataclasses.field(init=False, default=None)
@@ -29,13 +29,13 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroupMixin
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
-        return super(BatchFlattenedTensorsDataClass, cls).get_management_fields() + (
+        return super(BatchFlattenedTensorsDataClassMixin, cls).get_management_fields() + (
             'nr_items_per_example', 'max_nr_items', 'unflattener', 'unflattener_mask', 'flattener',
             'batched_index_offset_additive_fix_per_example', '_nr_examples')
 
     @classmethod
-    def _collate_first_pass(cls, inputs: List['BatchFlattenedTensorsDataClass'],
-                            collate_data: CollateData) -> 'BatchFlattenedTensorsDataClass':
+    def _collate_first_pass(cls, inputs: List['BatchFlattenedTensorsDataClassMixin'],
+                            collate_data: CollateData) -> 'BatchFlattenedTensorsDataClassMixin':
         data_fields = cls.get_data_fields()
         assert len(data_fields) > 0
         data_tensors_grouped_by_field = {field.name: tuple(getattr(inp, field.name) for inp in inputs)
@@ -105,6 +105,11 @@ class BatchFlattenedTensorsDataClass(TensorsDataClass, HasSelfIndexingGroupMixin
 
     def flatten(self, tensor: torch.Tensor) -> torch.Tensor:
         return tensor.flatten(0, 1)[self.flattener]
+
+
+@dataclasses.dataclass
+class BatchFlattenedTensorsDataClass(BatchFlattenedTensorsDataClassMixin, TensorsDataClass):
+    pass  # the double inheritance is all the impl needed
 
 
 @final

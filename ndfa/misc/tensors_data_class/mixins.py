@@ -34,9 +34,11 @@ class HasTargetIndexingGroupMixin:
         return supers + ('tgt_indexing_group',)
 
     def find_addressed_batched_flattened_tensor(self, tensors_data_class_root: 'TensorsDataClass') \
-            -> Optional['BatchFlattenedTensorsDataClass']:
+            -> Optional['HasSelfIndexingGroupMixin']:
+        # TODO: is it sufficient to check isinstance(HasSelfIndexingGroupMixin)?
+        #  doesn't it have to be 'BatchFlattenedTensorsDataClass'?
         return next((tensor_data_class for tensor_data_class in tensors_data_class_root.traverse()
-                     if isinstance(tensor_data_class, 'BatchFlattenedTensorsDataClass') and
+                     if isinstance(tensor_data_class, HasSelfIndexingGroupMixin) and
                      tensor_data_class.self_indexing_group == self.tgt_indexing_group), None)
 
 
