@@ -73,7 +73,7 @@ class ChunkedRandomAccessDatasetWriter:
 
     def close_last_written_chunk(self):
         assert self.cur_chunk_nr_examples > 0
-        self.cur_chunk_file[b'len'] = str(self.cur_chunk_nr_examples).encode('ascii')
+        self.cur_chunk_file[b'len'] = int(self.cur_chunk_nr_examples).to_bytes(8, 'little')
         self.cur_chunk_file.close()
         self.cur_chunk_file = None
 
@@ -106,7 +106,7 @@ class ChunkedRandomAccessDataset(Dataset):
             self._pp_data_chunks_filepaths.append(filepath)
             kvstore = dbm.open(filepath, 'r')
             self._kvstore_chunks.append(kvstore)
-            self._kvstore_chunks_lengths.append(int(kvstore[b'len'].decode('ascii')))
+            self._kvstore_chunks_lengths.append(int.from_bytes(kvstore[b'len'], 'little'))
         self._len = sum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
