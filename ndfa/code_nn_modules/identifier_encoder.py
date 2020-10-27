@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules.transformer import TransformerEncoderLayer, TransformerEncoder
-from torch.nn.modules.normalization import LayerNorm
-from typing import Optional
 
 from ndfa.ndfa_model_hyper_parameters import IdentifierEncoderParams
 from ndfa.nn_utils.misc import get_activation_layer

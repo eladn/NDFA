@@ -20,38 +20,50 @@ class BatchFlattenedPseudoRandomSamplerFromRange(TensorsDataClass):
     tgt_range_start: int = dataclasses.field(default=0)
     tgt_range_end: int = dataclasses.field(default=0)
     initial_seed_salt: str = dataclasses.field(default='0')
-    replace: bool = dataclasses.field(default=True)
+    replacement: str = dataclasses.field(default='wo_replacement_within_example')
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchFlattenedPseudoRandomSamplerFromRange, cls).get_management_fields() + \
-               ('sample_size', 'tgt_range_start', 'tgt_range_end', 'initial_seed_salt', 'replace')
+               ('sample_size', 'tgt_range_start', 'tgt_range_end', 'initial_seed_salt',
+                'replacement')
 
     @classmethod
     def _collate_first_pass(
             cls, inputs: List['BatchFlattenedPseudoRandomSamplerFromRange'],
             collate_data: CollateData) \
             -> 'BatchFlattenedPseudoRandomSamplerFromRange':
-        sample_size = sum(inp.sample_size for inp in inputs)
+        batched_sample_size = sum(inp.sample_size for inp in inputs)
         tgt_range_start = inputs[0].tgt_range_start
         tgt_range_end = inputs[0].tgt_range_end
         initial_seed_salt = inputs[0].initial_seed_salt
-        replace = inputs[0].replace
+        replacement = inputs[0].replacement
+        assert replacement in {'wo_replacement', 'with_replacement', 'wo_replacement_within_example'}
         assert all(inp.tgt_range_start == tgt_range_start for inp in inputs)
         assert all(inp.tgt_range_end == tgt_range_end for inp in inputs)
         assert all(inp.initial_seed_salt == initial_seed_salt for inp in inputs)
-        assert all(inp.replace == replace for inp in inputs)
+        assert all(inp.replacement == replacement for inp in inputs)
         random_seed = \
             int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}'
                                .encode('ascii')).hexdigest(), 16) % (2 ** 32)
-        sample = torch.LongTensor(
-            np.random.RandomState(random_seed).choice(
-                a=np.arange(tgt_range_start, tgt_range_end), size=sample_size, replace=replace))
+        if replacement == 'wo_replacement_within_example':
+            sample = torch.cat([
+                torch.LongTensor(
+                    np.random.RandomState(random_seed).choice(
+                        a=np.arange(tgt_range_start, tgt_range_end),
+                        size=inp.sample_size, replace=False))
+                for inp in inputs], dim=0)
+        else:
+            sample = torch.LongTensor(
+                np.random.RandomState(random_seed).choice(
+                    a=np.arange(tgt_range_start, tgt_range_end),
+                    size=batched_sample_size,
+                    replace=(replacement == 'with_replacement')))
         collated = cls(
-            sample_size=sample_size,
+            sample_size=batched_sample_size,
             tgt_range_start=tgt_range_start,
             tgt_range_end=tgt_range_end,
             initial_seed_salt=initial_seed_salt,
-            replace=replace)
+            replacement=replacement)
         collated.sample = sample
         return collated
