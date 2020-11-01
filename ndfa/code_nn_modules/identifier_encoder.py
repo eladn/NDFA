@@ -7,34 +7,37 @@ from ndfa.nn_utils.vocabulary import Vocabulary
 from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 from ndfa.code_nn_modules.code_task_input import IdentifiersInputTensors
+from ndfa.nn_utils.embedding_with_obfuscation import EmbeddingWithObfuscation
 
 
 __all__ = ['IdentifierEncoder']
 
 
+# TODO: add `EmbeddingWithObfuscationParams` to `IdentifierEncoderParams`.
 # TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,
                  encoder_params: IdentifierEncoderParams,
-                 obfuscate_sub_parts: bool = True,
+                 sub_parts_obfuscation: str = 'replace_oov_and_random',
+                 sub_parts_obfuscation_rate: float = 0.3,
+                 use_vocab: bool = True,
                  use_hashing_trick: bool = True,
                  nr_rnn_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(IdentifierEncoder, self).__init__()
-        self.activation_layer = get_activation_layer(activation_fn)()
+        assert sub_parts_obfuscation in {'none', 'add_all', 'replace_all', 'replace_oovs',
+                                         'replace_random', 'replace_oov_and_random'}
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.encoder_params = encoder_params
-        self.obfuscate_sub_parts = obfuscate_sub_parts
+        self.sub_parts_obfuscation = sub_parts_obfuscation
         self.use_hashing_trick = use_hashing_trick
 
-        if obfuscate_sub_parts:
-            self.sub_identifiers_obfuscation_embedding_layer = nn.Embedding(
-                num_embeddings=len(sub_identifiers_vocab), embedding_dim=self.encoder_params.identifier_embedding_dim,
-                padding_idx=sub_identifiers_vocab.get_word_idx('<PAD>'))
-        else:
-            self.sub_identifiers_embedding_layer = nn.Embedding(
-                num_embeddings=len(sub_identifiers_vocab), embedding_dim=self.encoder_params.identifier_embedding_dim,
-                padding_idx=sub_identifiers_vocab.get_word_idx('<PAD>'))
+        self.sub_identifiers_embedding = EmbeddingWithObfuscation(
+            vocab=sub_identifiers_vocab, embedding_dim=self.encoder_params.identifier_embedding_dim,
+            obfuscation_type=sub_parts_obfuscation, obfuscation_rate=sub_parts_obfuscation_rate,
+            use_vocab=use_vocab, use_hashing_trick=use_hashing_trick,
+            nr_hashing_features=self.encoder_params.nr_sub_identifier_hashing_features,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         # TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
         self.attn_rnn_encoder = AttnRNNEncoder(
@@ -43,19 +46,7 @@ class IdentifierEncoder(nn.Module):
             nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True, activation_fn=activation_fn)
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
-        self.identifier_sub_parts_hashing_linear = nn.Linear(
-            in_features=self.encoder_params.nr_sub_identifier_hashing_features,
-            out_features=self.encoder_params.nr_sub_identifier_hashing_features, bias=False)
-        if use_hashing_trick:
-            self.vocab_and_hashing_combiner = nn.Linear(
-                in_features=self.encoder_params.identifier_embedding_dim +
-                            self.encoder_params.nr_sub_identifier_hashing_features,
-                out_features=self.encoder_params.identifier_embedding_dim +
-                             self.encoder_params.nr_sub_identifier_hashing_features)
-            self.vocab_and_hashing_combiner_final_projection_layer = nn.Linear(
-                in_features=self.encoder_params.identifier_embedding_dim +
-                            self.encoder_params.nr_sub_identifier_hashing_features,
-                out_features=self.encoder_params.identifier_embedding_dim)
+        self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, identifiers: IdentifiersInputTensors):
         assert isinstance(identifiers.identifier_sub_parts_vocab_word_index, BatchFlattenedSeq)
@@ -68,35 +59,12 @@ class IdentifierEncoder(nn.Module):
         assert identifiers.identifier_sub_parts_vocab_word_index.sequences.ndim == 2
         nr_identifiers_in_batch, max_nr_sub_identifiers_in_identifier = identifiers.identifier_sub_parts_vocab_word_index.sequences.size()
 
-        if self.obfuscate_sub_parts:
-            identifier_sub_parts_obfuscated_indices = identifiers.sub_parts_obfuscation.sample[
-                identifiers.identifier_sub_parts_index.sequences]
-            identifier_sub_parts_obfuscated_indices.masked_fill_(
-                ~identifiers.identifier_sub_parts_index.sequences_mask, 0)
-            identifiers_sub_parts_embeddings = self.sub_identifiers_obfuscation_embedding_layer(
-                identifier_sub_parts_obfuscated_indices)
-            identifiers_sub_parts_embeddings = self.dropout_layer(identifiers_sub_parts_embeddings)
-        else:
-            identifiers_sub_parts_embeddings = self.sub_identifiers_embedding_layer(
-                identifiers.identifier_sub_parts_vocab_word_index.sequences)
-            identifiers_sub_parts_embeddings = self.dropout_layer(identifiers_sub_parts_embeddings)
-        assert identifiers_sub_parts_embeddings.size() == \
-               (nr_identifiers_in_batch, max_nr_sub_identifiers_in_identifier, self.encoder_params.identifier_embedding_dim)
-
-        if self.use_hashing_trick:
-            assert identifiers.identifier_sub_parts_hashings is not None
-            identifiers_sub_parts_hashings_projected = self.identifier_sub_parts_hashing_linear(
-                identifiers.identifier_sub_parts_hashings.sequences)
-            identifiers_sub_parts_hashings_projected = self.dropout_layer(identifiers_sub_parts_hashings_projected)
-            identifiers_sub_parts_vocab_embeddings_and_hashings_combined = self.vocab_and_hashing_combiner(
-                torch.cat([identifiers_sub_parts_embeddings, identifiers_sub_parts_hashings_projected], dim=-1))
-            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_layer(
-                identifiers_sub_parts_vocab_embeddings_and_hashings_combined))
-            identifiers_sub_parts_embeddings = self.vocab_and_hashing_combiner_final_projection_layer(
-                identifiers_sub_parts_embeddings)
-            identifiers_sub_parts_embeddings = self.dropout_layer(self.activation_layer(
-                identifiers_sub_parts_embeddings))
-            identifiers_sub_parts_embeddings = identifiers_sub_parts_embeddings.masked_fill(
+        identifiers_sub_parts_embeddings = self.sub_identifiers_embedding(
+            vocab_word_idx=identifiers.identifier_sub_parts_vocab_word_index.sequences,
+            word_hashes=identifiers.identifier_sub_parts_hashings.sequences,
+            batch_unique_word_idx=identifiers.identifier_sub_parts_index.sequences,
+            obfuscation_vocab_random_indices_shuffle=identifiers.sub_parts_obfuscation.sample)
+        identifiers_sub_parts_embeddings = identifiers_sub_parts_embeddings.masked_fill(
                 ~identifiers.identifier_sub_parts_index.sequences_mask.unsqueeze(-1)
                     .expand(identifiers_sub_parts_embeddings.shape), 0)
 

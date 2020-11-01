@@ -10,6 +10,9 @@ from ndfa.nn_utils.vocabulary import Vocabulary
 __all__ = ['EmbeddingWithObfuscation']
 
 
+# TODO: create params class `EmbeddingWithObfuscationParams`.
+
+
 class EmbeddingWithObfuscation(nn.Module):
     def __init__(self, vocab: Vocabulary,
                  embedding_dim: int,
@@ -37,9 +40,9 @@ class EmbeddingWithObfuscation(nn.Module):
 
         if self.obfuscation_type != 'none':
             if obfuscation_embeddings_type == 'learnable':
+                # TODO: should we set `padding_idx=vocab.get_word_idx('<PAD>')` here?
                 self.obfuscation_embedding_layer = nn.Embedding(
-                    num_embeddings=len(vocab), embedding_dim=embedding_dim,
-                    padding_idx=vocab.get_word_idx('<PAD>'))
+                    num_embeddings=len(vocab), embedding_dim=embedding_dim)
             elif obfuscation_embeddings_type == 'fix_orthogonal':
                 # TODO: we might want to fix `nr_obfuscation_words` to be `min(nr_obfuscation_words, embedding_dim)`
                 # self.nr_obfuscation_words = min(self.nr_obfuscation_words, self.embedding_dim)
@@ -60,8 +63,8 @@ class EmbeddingWithObfuscation(nn.Module):
                     padding_idx=vocab.get_word_idx('<PAD>'))
             if self.use_hashing_trick:
                 self.hashing_linear = nn.Linear(
-                    in_features=self.encoder_params.nr_sub_identifier_hashing_features,
-                    out_features=self.encoder_params.nr_sub_identifier_hashing_features, bias=False)
+                    in_features=self.nr_hashing_features,
+                    out_features=self.nr_hashing_features, bias=False)
             if int(self.use_vocab) + int(self.use_hashing_trick) + int(self.obfuscation_type == 'add_all') >= 2:
                 combiner_input_dim = 0
                 if self.use_vocab:
@@ -91,8 +94,9 @@ class EmbeddingWithObfuscation(nn.Module):
             input_words_shape = batch_unique_word_idx.shape
         assert input_words_shape is not None
         assert vocab_word_idx is None or input_words_shape == vocab_word_idx.shape
-        assert word_hashes is None or input_words_shape == word_hashes[:-1].shape
+        assert word_hashes is None or input_words_shape == word_hashes.shape[:-1]
         assert batch_unique_word_idx is None or input_words_shape == batch_unique_word_idx.shape
+        output_shape = input_words_shape + (self.embedding_dim,)
 
         if self.obfuscation_type != 'none':
             assert batch_unique_word_idx is not None
@@ -106,6 +110,7 @@ class EmbeddingWithObfuscation(nn.Module):
             obfuscation_words_embeddings = self.dropout_layer(obfuscation_words_embeddings)
 
         if self.obfuscation_type == 'replace_all':
+            assert obfuscation_words_embeddings.shape == output_shape
             return obfuscation_words_embeddings
 
         assert self.use_vocab or self.use_hashing_trick
@@ -115,6 +120,7 @@ class EmbeddingWithObfuscation(nn.Module):
             non_obfuscated_words_embeddings = vocab_words_embeddings
         if self.use_hashing_trick:
             assert word_hashes is not None
+            assert word_hashes.size(-1) == self.nr_hashing_features
             hashing_words_embeddings = self.dropout_layer(self.hashing_linear(word_hashes))
             non_obfuscated_words_embeddings = hashing_words_embeddings
 
@@ -134,12 +140,14 @@ class EmbeddingWithObfuscation(nn.Module):
 
         if self.obfuscation_type in {'replace_oovs', 'replace_oov_and_random'}:
             oovs_mask = (vocab_word_idx == self.vocab.get_word_idx('<UNK>'))
+            oovs_mask = oovs_mask.unsqueeze(-1).expand(obfuscation_words_embeddings.shape)
             words_with_oov_obfuscated_embeddings = torch.where(
                 oovs_mask, obfuscation_words_embeddings, non_obfuscated_words_embeddings)
 
         if self.obfuscation_type in {'replace_random', 'replace_oov_and_random'}:
             # TODO: consider using a given dedicated RNG here.
-            random_obfuscation_mask = torch.rand(input_words_shape) < self.obfuscation_rate
+            random_obfuscation_mask = (torch.rand(input_words_shape) < self.obfuscation_rate)
+            random_obfuscation_mask = random_obfuscation_mask.unsqueeze(-1).expand(obfuscation_words_embeddings.shape)
 
         if self.obfuscation_type == 'add_all':
             final_words_embeddings = combined_words_embeddings
@@ -152,5 +160,5 @@ class EmbeddingWithObfuscation(nn.Module):
             final_words_embeddings = torch.where(
                 random_obfuscation_mask, obfuscation_words_embeddings, words_with_oov_obfuscated_embeddings)
 
-        assert final_words_embeddings.size() == input_words_shape + (self.embedding_dim,)
+        assert final_words_embeddings.shape == output_shape
         return final_words_embeddings
