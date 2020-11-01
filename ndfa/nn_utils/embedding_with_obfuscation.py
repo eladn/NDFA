@@ -13,7 +13,7 @@ __all__ = ['EmbeddingWithObfuscation']
 class EmbeddingWithObfuscation(nn.Module):
     def __init__(self, vocab: Vocabulary,
                  embedding_dim: int,
-                 obfuscation_type: str = 'oov_and_random',
+                 obfuscation_type: str = 'replace_oov_and_random',
                  obfuscation_rate: float = 0.3,
                  obfuscation_embeddings_type: str = 'learnable',
                  nr_obfuscation_words: Optional[int] = None,
@@ -22,7 +22,8 @@ class EmbeddingWithObfuscation(nn.Module):
                  nr_hashing_features: Optional[int] = None,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(EmbeddingWithObfuscation, self).__init__()
-        assert obfuscation_type in {'none', 'all', 'oovs', 'random', 'oov_and_random'}
+        assert obfuscation_type in {'none', 'add_all', 'replace_all', 'replace_oovs',
+                                    'replace_random', 'replace_oov_and_random'}
         assert obfuscation_embeddings_type in {'learnable', 'fix_orthogonal'}
         self.vocab = vocab
         self.embedding_dim = embedding_dim
@@ -51,7 +52,7 @@ class EmbeddingWithObfuscation(nn.Module):
                     (self.nr_obfuscation_words, embedding_dim),
                     dtype=torch.float, requires_grad=False)
                 nn.init.orthogonal_(self.obfuscation_fixed_embeddings)
-        if self.obfuscation_type != 'all':
+        if self.obfuscation_type != 'replace_all':
             assert self.use_vocab or self.use_hashing_trick
             if self.use_vocab:
                 self.vocab_embedding_layer = nn.Embedding(
@@ -61,13 +62,18 @@ class EmbeddingWithObfuscation(nn.Module):
                 self.hashing_linear = nn.Linear(
                     in_features=self.encoder_params.nr_sub_identifier_hashing_features,
                     out_features=self.encoder_params.nr_sub_identifier_hashing_features, bias=False)
-            if self.use_vocab and self.use_hashing_trick:
-                self.vocab_and_hashing_combiner = nn.Linear(
-                    in_features=self.embedding_dim + self.nr_hashing_features,
-                    out_features=self.embedding_dim + self.nr_hashing_features)
-                self.vocab_and_hashing_combiner_final_projection_layer = nn.Linear(
-                    in_features=self.embedding_dim + self.nr_hashing_features,
-                    out_features=self.embedding_dim)
+            if int(self.use_vocab) + int(self.use_hashing_trick) + int(self.obfuscation_type == 'add_all') >= 2:
+                combiner_input_dim = 0
+                if self.use_vocab:
+                    combiner_input_dim += self.embedding_dim
+                if self.use_hashing_trick:
+                    combiner_input_dim += self.nr_hashing_features
+                if self.obfuscation_type == 'add_all':
+                    combiner_input_dim += self.embedding_dim
+                self.combiner_first_layer = nn.Linear(
+                    in_features=combiner_input_dim, out_features=combiner_input_dim)
+                self.combiner_second_layer = nn.Linear(
+                    in_features=combiner_input_dim, out_features=self.embedding_dim)
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -98,37 +104,53 @@ class EmbeddingWithObfuscation(nn.Module):
             elif self.obfuscation_embeddings_type == 'fix_orthogonal':
                 obfuscation_words_embeddings = self.obfuscation_fixed_embeddings[words_obfuscated_indices]
             obfuscation_words_embeddings = self.dropout_layer(obfuscation_words_embeddings)
-        if self.obfuscation_type != 'all':
-            assert self.use_vocab or self.use_hashing_trick
+
+        if self.obfuscation_type == 'replace_all':
+            return obfuscation_words_embeddings
+
+        assert self.use_vocab or self.use_hashing_trick
+        if self.use_vocab:
+            assert vocab_word_idx is not None
+            vocab_words_embeddings = self.dropout_layer(self.vocab_embedding_layer(vocab_word_idx))
+            non_obfuscated_words_embeddings = vocab_words_embeddings
+        if self.use_hashing_trick:
+            assert word_hashes is not None
+            hashing_words_embeddings = self.dropout_layer(self.hashing_linear(word_hashes))
+            non_obfuscated_words_embeddings = hashing_words_embeddings
+
+        if int(self.use_vocab) + int(self.use_hashing_trick) + int(self.obfuscation_type == 'add_all') >= 2:
+            combiner_inputs = []
             if self.use_vocab:
-                assert vocab_word_idx is not None
-                vocab_words_embeddings = self.dropout_layer(self.vocab_embedding_layer(vocab_word_idx))
-                non_obfuscated_words_embeddings = vocab_words_embeddings
+                combiner_inputs.append(vocab_words_embeddings)
             if self.use_hashing_trick:
-                assert word_hashes is not None
-                hashing_words_embeddings = self.dropout_layer(self.hashing_linear(word_hashes))
-                non_obfuscated_words_embeddings = hashing_words_embeddings
-            if self.use_vocab and self.use_hashing_trick:
-                vocab_and_hashing_words_embeddings = self.vocab_and_hashing_combiner(
-                    torch.cat([vocab_words_embeddings, hashing_words_embeddings], dim=-1))
-                vocab_and_hashing_words_embeddings = self.dropout_layer(self.activation_layer(
-                    vocab_and_hashing_words_embeddings))
-                vocab_and_hashing_words_embeddings = self.vocab_and_hashing_combiner_final_projection_layer(
-                    vocab_and_hashing_words_embeddings)
-                vocab_and_hashing_words_embeddings = self.dropout_layer(self.activation_layer(
-                    vocab_and_hashing_words_embeddings))
-                non_obfuscated_words_embeddings = vocab_and_hashing_words_embeddings
+                combiner_inputs.append(hashing_words_embeddings)
+            if self.obfuscation_type == 'add_all':
+                combiner_inputs.append(obfuscation_words_embeddings)
+            combined_words_embeddings = self.combiner_first_layer(torch.cat(combiner_inputs, dim=-1))
+            combined_words_embeddings = self.dropout_layer(self.activation_layer(combined_words_embeddings))
+            combined_words_embeddings = self.dropout_layer(self.combiner_second_layer(combined_words_embeddings))
+            if self.obfuscation_type != 'add_all':
+                non_obfuscated_words_embeddings = combined_words_embeddings
 
-        if self.obfuscation_type == 'all':
-            pass
-        elif self.obfuscation_type == 'oovs':
-            pass
-        elif self.obfuscation_type == 'random':
-            pass
-        elif self.obfuscation_type == 'oov_and_random':
-            pass
+        if self.obfuscation_type in {'replace_oovs', 'replace_oov_and_random'}:
+            oovs_mask = (vocab_word_idx == self.vocab.get_word_idx('<UNK>'))
+            words_with_oov_obfuscated_embeddings = torch.where(
+                oovs_mask, obfuscation_words_embeddings, non_obfuscated_words_embeddings)
 
-        raise NotImplementedError
+        if self.obfuscation_type in {'replace_random', 'replace_oov_and_random'}:
+            # TODO: consider using a given dedicated RNG here.
+            random_obfuscation_mask = torch.rand(input_words_shape) < self.obfuscation_rate
+
+        if self.obfuscation_type == 'add_all':
+            final_words_embeddings = combined_words_embeddings
+        elif self.obfuscation_type == 'replace_oovs':
+            final_words_embeddings = words_with_oov_obfuscated_embeddings
+        elif self.obfuscation_type == 'replace_random':
+            final_words_embeddings = torch.where(
+                random_obfuscation_mask, obfuscation_words_embeddings, non_obfuscated_words_embeddings)
+        elif self.obfuscation_type == 'replace_oov_and_random':
+            final_words_embeddings = torch.where(
+                random_obfuscation_mask, obfuscation_words_embeddings, words_with_oov_obfuscated_embeddings)
 
         assert final_words_embeddings.size() == input_words_shape + (self.embedding_dim,)
         return final_words_embeddings
