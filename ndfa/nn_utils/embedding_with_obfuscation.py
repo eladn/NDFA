@@ -42,7 +42,7 @@ class EmbeddingWithObfuscation(nn.Module):
             if obfuscation_embeddings_type == 'learnable':
                 # TODO: should we set `padding_idx=vocab.get_word_idx('<PAD>')` here?
                 self.obfuscation_embedding_layer = nn.Embedding(
-                    num_embeddings=len(vocab), embedding_dim=embedding_dim)
+                    num_embeddings=self.nr_obfuscation_words, embedding_dim=embedding_dim)
             elif obfuscation_embeddings_type == 'fix_orthogonal':
                 # TODO: we might want to fix `nr_obfuscation_words` to be `min(nr_obfuscation_words, embedding_dim)`
                 # self.nr_obfuscation_words = min(self.nr_obfuscation_words, self.embedding_dim)
@@ -59,7 +59,7 @@ class EmbeddingWithObfuscation(nn.Module):
             assert self.use_vocab or self.use_hashing_trick
             if self.use_vocab:
                 self.vocab_embedding_layer = nn.Embedding(
-                    num_embeddings=self.nr_obfuscation_words, embedding_dim=embedding_dim,
+                    num_embeddings=len(vocab), embedding_dim=embedding_dim,
                     padding_idx=vocab.get_word_idx('<PAD>'))
             if self.use_hashing_trick:
                 self.hashing_linear = nn.Linear(
