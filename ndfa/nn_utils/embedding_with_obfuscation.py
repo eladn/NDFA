@@ -98,6 +98,11 @@ class EmbeddingWithObfuscation(nn.Module):
         assert batch_unique_word_idx is None or input_words_shape == batch_unique_word_idx.shape
         output_shape = input_words_shape + (self.embedding_dim,)
 
+        pad_mask = None
+        if vocab_word_idx is not None:
+            pad_mask = (vocab_word_idx == self.vocab.get_word_idx('<PAD>'))
+            pad_mask = pad_mask.unsqueeze(-1).expand(output_shape)
+
         if self.obfuscation_type != 'none':
             assert batch_unique_word_idx is not None
             assert obfuscation_vocab_random_indices_shuffle is not None
@@ -110,8 +115,11 @@ class EmbeddingWithObfuscation(nn.Module):
             obfuscation_words_embeddings = self.dropout_layer(obfuscation_words_embeddings)
 
         if self.obfuscation_type == 'replace_all':
-            assert obfuscation_words_embeddings.shape == output_shape
-            return obfuscation_words_embeddings
+            final_words_embeddings = obfuscation_words_embeddings
+            if pad_mask is not None:
+                final_words_embeddings = final_words_embeddings.masked_fill(pad_mask, 0)
+            assert final_words_embeddings.shape == output_shape
+            return final_words_embeddings
 
         assert self.use_vocab or self.use_hashing_trick
         if self.use_vocab:
@@ -160,5 +168,7 @@ class EmbeddingWithObfuscation(nn.Module):
             final_words_embeddings = torch.where(
                 random_obfuscation_mask, obfuscation_words_embeddings, words_with_oov_obfuscated_embeddings)
 
+        if pad_mask is not None:
+            final_words_embeddings = final_words_embeddings.masked_fill(pad_mask, 0)
         assert final_words_embeddings.shape == output_shape
         return final_words_embeddings
