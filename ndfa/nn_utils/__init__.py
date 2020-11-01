@@ -3,6 +3,7 @@ from . import attention
 from . import attn_rnn_decoder
 from . import attn_rnn_encoder
 from . import dbg_test_grads
+from . import embedding_with_obfuscation
 from . import gate
 from . import misc
 from . import module_repeater
@@ -28,6 +29,7 @@ __all__ = \
     attn_rnn_decoder.__all__ + \
     attn_rnn_encoder.__all__ + \
     dbg_test_grads.__all__ + \
+    embedding_with_obfuscation.__all__ + \
     gate.__all__ + \
     misc.__all__ + \
     module_repeater.__all__ + \
