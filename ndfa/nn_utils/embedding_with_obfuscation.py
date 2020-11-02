@@ -34,16 +34,21 @@ class EmbeddingWithObfuscation(nn.Module):
         self.obfuscation_rate = obfuscation_rate
         self.obfuscation_embeddings_type = obfuscation_embeddings_type
         self.nr_obfuscation_words = len(vocab) if nr_obfuscation_words is None else nr_obfuscation_words
-        self.use_hashing_trick = use_hashing_trick
-        self.use_vocab = use_vocab
+        self.use_hashing_trick = False if self.obfuscation_type == 'replace_all' else use_hashing_trick
+        if use_hashing_trick and self.obfuscation_type == 'replace_all':
+            warn('`use_hashing_trick` is set on, but `obfuscation_type` is set to `replace_all`.')
+        self.use_vocab = False if self.obfuscation_type == 'replace_all' else use_vocab
+        if use_vocab and self.obfuscation_type == 'replace_all':
+            warn('`use_vocab` is set on, but `obfuscation_type` is set to `replace_all`.')
         self.nr_hashing_features = len(vocab) if nr_hashing_features is None else nr_hashing_features
 
         if self.obfuscation_type != 'none':
-            if obfuscation_embeddings_type == 'learnable':
-                # TODO: should we set `padding_idx=vocab.get_word_idx('<PAD>')` here?
+            if self.obfuscation_embeddings_type == 'learnable':
+                # Note: we don't set here `padding_idx=vocab.get_word_idx('<PAD>')`, because
+                # all of the words here are accessed randomly. We mask-out the paddings later.
                 self.obfuscation_embedding_layer = nn.Embedding(
-                    num_embeddings=self.nr_obfuscation_words, embedding_dim=embedding_dim)
-            elif obfuscation_embeddings_type == 'fix_orthogonal':
+                    num_embeddings=self.nr_obfuscation_words, embedding_dim=self.embedding_dim)
+            elif self.obfuscation_embeddings_type == 'fix_orthogonal':
                 # TODO: we might want to fix `nr_obfuscation_words` to be `min(nr_obfuscation_words, embedding_dim)`
                 # self.nr_obfuscation_words = min(self.nr_obfuscation_words, self.embedding_dim)
                 if nr_hashing_features is not None and nr_obfuscation_words != self.nr_obfuscation_words:
