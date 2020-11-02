@@ -161,7 +161,8 @@ class EmbeddingWithObfuscation(nn.Module):
 
         if self.obfuscation_type in {'replace_random', 'replace_oov_and_random'}:
             # TODO: consider using a given dedicated RNG here.
-            random_obfuscation_mask = (torch.rand(input_words_shape) < self.obfuscation_rate)
+            random_obfuscation_probs = torch.rand(input_words_shape, device=obfuscation_words_embeddings.device)
+            random_obfuscation_mask = (random_obfuscation_probs < self.obfuscation_rate)
             random_obfuscation_mask = random_obfuscation_mask.unsqueeze(-1).expand(obfuscation_words_embeddings.shape)
 
         if self.obfuscation_type == 'none':
