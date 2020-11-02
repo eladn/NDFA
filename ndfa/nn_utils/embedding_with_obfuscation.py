@@ -162,7 +162,9 @@ class EmbeddingWithObfuscation(nn.Module):
             random_obfuscation_mask = (torch.rand(input_words_shape) < self.obfuscation_rate)
             random_obfuscation_mask = random_obfuscation_mask.unsqueeze(-1).expand(obfuscation_words_embeddings.shape)
 
-        if self.obfuscation_type == 'add_all':
+        if self.obfuscation_type == 'none':
+            final_words_embeddings = non_obfuscated_words_embeddings
+        elif self.obfuscation_type == 'add_all':
             final_words_embeddings = combined_words_embeddings
         elif self.obfuscation_type == 'replace_oovs':
             final_words_embeddings = words_with_oov_obfuscated_embeddings
