@@ -154,6 +154,7 @@ class EmbeddingWithObfuscation(nn.Module):
                 non_obfuscated_words_embeddings = combined_words_embeddings
 
         if self.obfuscation_type in {'replace_oovs', 'replace_oov_and_random'}:
+            assert vocab_word_idx is not None  # we need it to detect the OOVs.
             oovs_mask = (vocab_word_idx == self.vocab.get_word_idx('<UNK>'))
             oovs_mask = oovs_mask.unsqueeze(-1).expand(obfuscation_words_embeddings.shape)
             words_with_oov_obfuscated_embeddings = torch.where(
