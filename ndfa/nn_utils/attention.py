@@ -11,7 +11,8 @@ __all__ = ['Attention']
 
 class Attention(nn.Module):
     def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
-                 key_in_features: Optional[int] = None, activation_fn: str = 'relu'):
+                 key_in_features: Optional[int] = None, project_values: bool = True,
+                 activation_fn: str = 'relu'):
         super(Attention, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
         self.nr_features = nr_features
@@ -20,6 +21,8 @@ class Attention(nn.Module):
             nn.Linear(in_features=self.key_in_features, out_features=nr_features) if project_key else None
         self.query_linear_projection_layer = \
             nn.Linear(in_features=nr_features, out_features=nr_features) if project_query else None
+        self.value_linear_projection_layer = \
+            nn.Linear(in_features=nr_features, out_features=nr_features) if project_values else None
 
     def forward(self, sequences: torch.Tensor, attn_key_from: Optional[torch.Tensor] = None,
                 attn_weights: Optional[torch.Tensor] = None, mask: Optional[torch.BoolTensor] = None,
@@ -56,7 +59,9 @@ class Attention(nn.Module):
                 torch.zeros(1, dtype=torch.float, device=attn_weights.device),
                 torch.full(size=(1,), fill_value=float('-inf'), dtype=torch.float, device=attn_weights.device))
         attn_probs = F.softmax(attn_weights, dim=1)  # (bsz, seq_len)
+        values = sequences if self.value_linear_projection_layer is None else \
+            self.value_linear_projection_layer(sequences)
         # (bsz, 1, seq_len) * (bsz, seq_len, nr_features) -> (bsz, 1, nr_features)
-        attn_applied = torch.bmm(attn_probs.unsqueeze(1), sequences).squeeze(1)  # (bsz, nr_features)
+        attn_applied = torch.bmm(attn_probs.unsqueeze(1), values).squeeze(1)  # (bsz, nr_features)
         assert attn_applied.size() == (batch_size, nr_features)
         return attn_applied
