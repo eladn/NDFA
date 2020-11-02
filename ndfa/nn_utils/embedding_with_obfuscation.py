@@ -61,7 +61,9 @@ class EmbeddingWithObfuscation(nn.Module):
                     dtype=torch.float, requires_grad=False)
                 nn.init.orthogonal_(self.obfuscation_fixed_embeddings)
         if self.obfuscation_type != 'replace_all':
-            assert self.use_vocab or self.use_hashing_trick
+            if not self.use_vocab and not self.use_hashing_trick:
+                raise ValueError(f'`obfuscation_type` is set to `{self.obfuscation_type}` (!= `replace_all`), '
+                                 f'but neither `use_vocab` nor `use_hashing_trick` is set.')
             if self.use_vocab:
                 self.vocab_embedding_layer = nn.Embedding(
                     num_embeddings=len(vocab), embedding_dim=embedding_dim,
