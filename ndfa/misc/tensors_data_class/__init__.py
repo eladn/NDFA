@@ -18,7 +18,7 @@ from .tensors_data_class import TensorsDataClass
 __all__ = [
     'BatchFlattenedTensor', 'BatchFlattenedTensorsDataClassMixin', 'BatchFlattenedTensorsDataClass',
     'BatchFlattenedPseudoRandomSamplerFromRange',
-    'BatchFlattenedSeq', 'BatchFlattenedSequencesDataClass', 'BatchFlattenedSequencesDataClass',
+    'BatchFlattenedSeq', 'BatchFlattenedSequencesDataClassMixin', 'BatchFlattenedSequencesDataClass',
     'BatchedFlattenedIndicesTensor',
     'BatchedFlattenedIndicesFlattenedTensorsDataClassMixin', 'BatchedFlattenedIndicesFlattenedTensorsDataClass',
     'BatchedFlattenedIndicesFlattenedTensor', 'BatchedFlattenedIndicesFlattenedSequencesDataClassMixin',
