@@ -35,10 +35,13 @@ class ChunkedRandomAccessDatasetWriter:
         return self.next_example_idx
 
     def write_example(self, example):
-        with io.BytesIO() as bytes_io_stream:
-            torch.save(example, bytes_io_stream)
-            binary_serialized_example = bytes_io_stream.getvalue()
-            # now we can store `binary_serialized_example` however we want (we use `dbm` KV store)
+        if isinstance(example, bytes):
+            binary_serialized_example = example
+        else:
+            with io.BytesIO() as bytes_io_stream:
+                torch.save(example, bytes_io_stream)
+                binary_serialized_example = bytes_io_stream.getvalue()
+        # now the example is already serialized (into bytes) and we directly export it as-is to `dbm` KV-store.
         example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
         chunk_file[str(self.next_example_idx).encode('ascii')] = binary_serialized_example
