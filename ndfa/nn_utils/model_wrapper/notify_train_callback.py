@@ -1,11 +1,9 @@
 import time
-from notify_run import Notify
 from typing import Dict, Optional
-import multiprocessing as mp
 
-from ndfa.nn_utils.train_callback import TrainCallback
-from ndfa.nn_utils.window_average import WindowAverage
-from ndfa.misc.async_notify import AsyncNotifyChannel
+from ndfa.nn_utils.model_wrapper.train_callback import TrainCallback
+from ndfa.nn_utils.model_wrapper.window_average import WindowAverage
+from ndfa.nn_utils.model_wrapper.async_notify import AsyncNotifyChannel
 
 
 __all__ = ['NotifyCallback']

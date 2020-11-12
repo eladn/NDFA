@@ -4,7 +4,7 @@ from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.misc.code_data_structure_api import SerTokenKind, SerToken
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
-from ndfa.nn_utils.vocabulary import Vocabulary
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 
 
 __all__ = ['CodeTaskVocabs', 'kos_token_to_kos_token_vocab_word']

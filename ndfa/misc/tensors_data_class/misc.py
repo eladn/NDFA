@@ -1,15 +1,21 @@
 import torch
 import functools
 import dataclasses
-from typing import List, Union, Optional, Tuple, Dict, Set, Any
+from typing import List, Union, Optional, Tuple, Dict, Any
 from typing_extensions import Protocol
-
-
-from ndfa.nn_utils.misc import seq_lengths_to_mask
 
 
 __all__ = ['seq_lengths_to_mask', 'compose_fns', 'collate_tensors_with_variable_shapes',
            'CollateData', 'CollatableValuesTuple', 'MapFn']
+
+
+def seq_lengths_to_mask(seq_lengths: torch.LongTensor, max_seq_len: int, batch_first: bool = True):
+    assert batch_first
+    batch_size = seq_lengths.size(0)
+    batched_ranges = torch.arange(start=1, end=max_seq_len + 1, dtype=torch.long, device=seq_lengths.device) \
+        .unsqueeze(0).expand(batch_size, max_seq_len)
+    mask = (batched_ranges <= seq_lengths.unsqueeze(-1).expand(batch_size, max_seq_len))
+    return mask
 
 
 def compose_fns(*functions):

@@ -3,8 +3,8 @@ import torch.nn as nn
 from warnings import warn
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.nn_utils.vocabulary import Vocabulary
+from ndfa.nn_utils.misc.misc import get_activation_layer
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 
 
 __all__ = ['EmbeddingWithObfuscation']

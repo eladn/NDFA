@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.nn_utils.gate import Gate
-from ndfa.nn_utils.misc import get_activation_layer
+from ndfa.nn_utils.modules.gate import Gate
+from ndfa.nn_utils.misc.misc import get_activation_layer
 
 
 __all__ = ['SeqContextAdder']

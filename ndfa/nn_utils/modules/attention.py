@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation_layer, seq_lengths_to_mask
+from ndfa.nn_utils.misc.misc import get_activation_layer, seq_lengths_to_mask
 
 
 __all__ = ['Attention']

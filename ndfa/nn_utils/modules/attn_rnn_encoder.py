@@ -1,9 +1,8 @@
 import torch
-import torch.nn as nn
 from typing import Optional
 
-from ndfa.nn_utils.rnn_encoder import RNNEncoder
-from ndfa.nn_utils.attention import Attention
+from ndfa.nn_utils.modules.rnn_encoder import RNNEncoder
+from ndfa.nn_utils.modules.attention import Attention
 
 
 __all__ = ['AttnRNNEncoder']

@@ -4,8 +4,8 @@ from torch.nn.modules.normalization import LayerNorm
 import numpy as np
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.nn_utils.attention import Attention
+from ndfa.nn_utils.misc.misc import get_activation_layer
+from ndfa.nn_utils.modules.attention import Attention
 from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
 
 

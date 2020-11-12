@@ -1,16 +1,23 @@
+import dataclasses
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional, Union
 
-from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.nn_utils.vocabulary import Vocabulary
-from ndfa.nn_utils.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
-from ndfa.nn_utils.attention import Attention
-from ndfa.nn_utils.scattered_encodings import ScatteredEncodings
+from ndfa.nn_utils.misc.misc import get_activation_layer
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
+from ndfa.nn_utils.functions.apply_batched_embeddings import apply_batched_embeddings, apply_batched_flattened_embeddings
+from ndfa.nn_utils.modules.attention import Attention
 
 
-__all__ = ['AttnRNNDecoder']
+__all__ = ['AttnRNNDecoder', 'ScatteredEncodings']
+
+
+@dataclasses.dataclass
+class ScatteredEncodings:
+    encodings: torch.FloatTensor
+    indices: torch.LongTensor
+    mask: torch.BoolTensor
 
 
 def apply_embeddings(

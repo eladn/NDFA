@@ -8,8 +8,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from typing import Optional, Callable, List, Type, Tuple, Dict, Collection
 
-from ndfa.nn_utils.window_average import WindowAverage
-from ndfa.nn_utils.train_callback import TrainCallback
+from ndfa.nn_utils.model_wrapper.window_average import WindowAverage
+from ndfa.nn_utils.model_wrapper.train_callback import TrainCallback
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 
 

@@ -6,8 +6,8 @@ import dataclasses
 from typing import Optional
 
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
-from ndfa.nn_utils.rnn_encoder import RNNEncoder
-from ndfa.nn_utils.sequence_combiner import SequenceCombiner
+from ndfa.nn_utils.modules.rnn_encoder import RNNEncoder
+from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 
 
 __all__ = ['EncodedSequence', 'SequenceEncoder']

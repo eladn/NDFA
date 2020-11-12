@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch_scatter import scatter_sum, scatter_mean
 from typing import Optional
 
-from ndfa.nn_utils.scatter_attention import ScatterAttention
+from ndfa.nn_utils.modules.scatter_attention import ScatterAttention
 
 
 __all__ = ['ScatterCombiner']

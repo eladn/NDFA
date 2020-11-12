@@ -1,26 +1,25 @@
-import itertools
 import torch
 import torch.nn as nn
 from typing import NamedTuple
 
-from ndfa.nn_utils.misc import get_activation_layer
+from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
-from ndfa.nn_utils.sequence_combiner import SequenceCombiner
+from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder, EncodedCFGPaths
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
-from ndfa.nn_utils.sequence_encoder import SequenceEncoder
-from ndfa.nn_utils.seq_context_adder import SeqContextAdder
-from ndfa.nn_utils.scatter_combiner import ScatterCombiner
+from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
+from ndfa.nn_utils.modules.seq_context_adder import SeqContextAdder
+from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
-from ndfa.nn_utils.weave_tensors import weave_tensors, unweave_tensor
-from ndfa.nn_utils.gate import Gate
-from ndfa.nn_utils.norm_wrapper import NormWrapper
-from ndfa.nn_utils.module_repeater import ModuleRepeater
+from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
+from ndfa.nn_utils.modules.gate import Gate
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
+from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 
 
 __all__ = ['MethodCFGEncoder', 'EncodedMethodCFG']

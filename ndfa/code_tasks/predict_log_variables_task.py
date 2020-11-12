@@ -4,7 +4,6 @@ import typing
 import dataclasses
 from warnings import warn
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.utils.data.dataset import Dataset
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
@@ -15,7 +14,7 @@ from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ndfa.misc.code_data_structure_api import *
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
-from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDataset
+from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDataset
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor, CollateData
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
@@ -23,7 +22,7 @@ from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, \
     PreprocessLimitExceedError, PreprocessLimitation
-from ndfa.nn_utils.dbg_test_grads import ModuleWithDbgTestGrads
+from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMixin
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 
 
@@ -149,10 +148,10 @@ class PredictLogVarsTaggedExample(TensorsDataClass):
         yield self.target_symbols_idxs_used_in_logging_call
 
 
-class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGrads):
+class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
     def __init__(self, model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs, dropout_rate: float = 0.3):
         super(PredictLogVarsModel, self).__init__()
-        ModuleWithDbgTestGrads.__init__(self)
+        ModuleWithDbgTestGradsMixin.__init__(self)
         self.model_hps = model_hps
         self.code_task_vocabs = code_task_vocabs
 

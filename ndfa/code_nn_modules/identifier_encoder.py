@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 
 from ndfa.ndfa_model_hyper_parameters import IdentifierEncoderParams
-from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.nn_utils.vocabulary import Vocabulary
-from ndfa.nn_utils.attn_rnn_encoder import AttnRNNEncoder
+from ndfa.nn_utils.misc.misc import get_activation_layer
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
+from ndfa.nn_utils.modules.attn_rnn_encoder import AttnRNNEncoder
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 from ndfa.code_nn_modules.code_task_input import IdentifiersInputTensors
-from ndfa.nn_utils.embedding_with_obfuscation import EmbeddingWithObfuscation
+from ndfa.nn_utils.modules.embedding_with_obfuscation import EmbeddingWithObfuscation
 
 
 __all__ = ['IdentifierEncoder']

@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.nn_utils.misc import get_activation_layer
+from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
-from ndfa.nn_utils.scatter_combiner import ScatterCombiner
+from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 
 
 __all__ = ['SymbolsEncoder']

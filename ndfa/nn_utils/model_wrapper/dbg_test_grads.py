@@ -1,10 +1,10 @@
 import torch
 
 
-__all__ = ['ModuleWithDbgTestGrads']
+__all__ = ['ModuleWithDbgTestGradsMixin']
 
 
-class ModuleWithDbgTestGrads:
+class ModuleWithDbgTestGradsMixin:
     def __init__(self, is_enabled: bool = True):
         self.is_grads_dbg_enabled = is_enabled
         self._dbg__tensors_to_check_grads = {}

@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import dataclasses
 
-from ndfa.nn_utils.misc import seq_lengths_to_mask
-from ndfa.nn_utils.sequence_encoder import SequenceEncoder
+from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
+from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
-from ndfa.nn_utils.vocabulary import Vocabulary
-from ndfa.nn_utils.weave_tensors import weave_tensors, unweave_tensor
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
+from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 
 
 __all__ = ['CFGPathEncoder', 'EncodedCFGPaths']

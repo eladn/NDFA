@@ -13,7 +13,7 @@ from ndfa.execution_parameters import ModelExecutionParams
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.dataset_properties import DataFold
-from ndfa.nn_utils.train_loop import fit, evaluate
+from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 
 
@@ -170,7 +170,7 @@ def main():
 
         train_callbacks = []
         if exec_params.use_notify:
-            from ndfa.nn_utils.notify_train_callback import NotifyCallback
+            from ndfa.nn_utils.model_wrapper.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
 
         print('Starting training.')
