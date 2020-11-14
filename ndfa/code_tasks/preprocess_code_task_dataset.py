@@ -4,10 +4,7 @@ import torch
 import itertools
 import functools
 import dataclasses
-import numpy as np
 import multiprocessing as mp
-import torch.nn as nn
-import torch.nn.functional as F
 from collections import defaultdict, namedtuple
 from warnings import warn
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
@@ -15,10 +12,10 @@ from typing_extensions import Protocol
 from sklearn.feature_extraction.text import HashingVectorizer
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
-from ndfa.dataset_properties import DataFold
-from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, SerPDGNode
+from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
+from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths
-from ndfa.misc.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
+from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, MethodCodeInputTensors, \
     CodeExpressionTokensSequenceInputTensors, SymbolsInputTensors, PDGInputTensors, CFGPathsInputTensors, \
@@ -26,8 +23,6 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, M
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange
-from ndfa.misc.example_formatter import format_example, RawExtractedExample
-
 
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
@@ -308,6 +303,7 @@ def preprocess_code_task_example(
         max_val=0)])
 
     # FOR DEBUG:
+    # from ndfa.misc.example_formatter import format_example, RawExtractedExample
     # node_idxs_not_in_any_cfg_path = sorted(list(node_idxs_not_in_any_cfg_path))
     # if method.hash == '195c251e':  # 'b6c08e69':
     # if len(node_idxs_not_in_any_cfg_path) > 0 and node_idxs_not_in_any_cfg_path != [0]:
