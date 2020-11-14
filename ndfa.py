@@ -12,7 +12,7 @@ from warnings import warn
 from ndfa.execution_parameters import ModelExecutionParams
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_base import CodeTaskBase
-from ndfa.dataset_properties import DataFold
+from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 

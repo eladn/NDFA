@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.utils.data.dataset import Dataset
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
-from ndfa.dataset_properties import DatasetProperties, DataFold
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties, DataFold
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
@@ -96,6 +96,22 @@ class PredictLogVarsTask(CodeTaskBase):
             raw_train_data_path: Optional[str] = None) -> CodeTaskVocabs:
         return CodeTaskVocabs.load_or_create(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
+
+    def create_optimizer(self, model: nn.Module, train_hps: NDFAModelHyperParams) -> torch.optim.Optimizer:
+        # TODO: fully implement (choose optimizer and lr)!
+        return torch.optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0)
+        # return torch.optim.Adam(model.parameters(), lr=0.0005)
+
+    def create_lr_schedulers(
+            self, model: nn.Module, train_hps: NDFAModelHyperParams, optimizer: torch.optim.Optimizer) \
+            -> typing.Tuple[torch.optim.lr_scheduler._LRScheduler, ...]:
+        # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
+        return (
+            torch.optim.lr_scheduler.LambdaLR(
+                optimizer=optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1),
+            torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer=optimizer, mode='min', factor=0.8, patience=4, verbose=True,
+                threshold=0.1, threshold_mode='rel'))
 
 
 class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):

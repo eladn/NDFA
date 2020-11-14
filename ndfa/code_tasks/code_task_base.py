@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
-from ndfa.dataset_properties import DatasetProperties, DataFold
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties, DataFold
 from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_dataset, PreprocessLimitExceedError
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties, task_names

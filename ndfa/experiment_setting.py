@@ -2,7 +2,7 @@ from confclass import confclass, confparam
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams, NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties
-from ndfa.dataset_properties import DatasetProperties
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
 
 
 __all__ = ['ExperimentSetting']

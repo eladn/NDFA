@@ -3,10 +3,10 @@ import torch.nn as nn
 from functools import reduce
 
 from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
-from ndfa.nn_utils.misc import get_activation_layer
-from ndfa.nn_utils.vocabulary import Vocabulary
+from ndfa.nn_utils.misc.misc import get_activation_layer
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.misc.code_data_structure_api import *
-from ndfa.nn_utils.sequence_encoder import SequenceEncoder
+from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
@@ -66,7 +66,7 @@ class ExpressionEncoder(nn.Module):
                 encoded_identifiers: torch.Tensor):
         token_kind_embeddings = self.tokens_kinds_embedding_layer(expressions.token_type.sequences)
         kos_tokens_embeddings = self.kos_tokens_embedding_layer(expressions.kos_token_index.tensor)
-        identifiers_embeddings = encoded_identifiers[expressions.identifier_index.indices]
+        identifiers_occurrences_embeddings = encoded_identifiers[expressions.identifier_index.indices]
         is_identifier_token = \
             expressions.token_type.sequences == self.tokens_kinds_vocab.get_word_idx(SerTokenKind.IDENTIFIER.value)
 
@@ -85,11 +85,11 @@ class ExpressionEncoder(nn.Module):
         # Note: we could consider concatenate kos & identifier embeddings: <kos|None> or <None|identifier>.
         kos_or_identifier_token_encoding = torch.zeros(
             size=token_kind_embeddings.size()[:-1] + (self.kos_or_identifier_token_embedding_dim,),
-            dtype=identifiers_embeddings.dtype, device=identifiers_embeddings.device)
+            dtype=identifiers_occurrences_embeddings.dtype, device=identifiers_occurrences_embeddings.device)
 
         kos_or_identifier_token_encoding.masked_scatter_(
             mask=is_identifier_token_mask,
-            source=identifiers_embeddings)
+            source=identifiers_occurrences_embeddings)
         kos_or_identifier_token_encoding = kos_or_identifier_token_encoding.masked_scatter(
             is_kos_token_mask, kos_tokens_embeddings)
 
