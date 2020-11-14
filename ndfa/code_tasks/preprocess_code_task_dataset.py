@@ -249,7 +249,23 @@ def preprocess_code_task_example(
              if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
              for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)
              if token.kind == SerTokenKind.IDENTIFIER]),
-            tgt_indexing_group='identifiers'))
+            tgt_indexing_group='identifiers'),
+        symbol_index=BatchedFlattenedIndicesFlattenedTensor(torch.LongTensor(
+            [token.symbol_idx
+             for pdg_node in method_pdg.pdg_nodes
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask
+             for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)
+             if token.symbol_idx is not None]),
+            tgt_indexing_group='symbols'),
+        is_symbol_mask=BatchFlattenedSeq(
+            [torch.BoolTensor(
+                [token.symbol_idx is not None
+                 for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
+             for pdg_node in method_pdg.pdg_nodes
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]))
+    assert \
+        cfg_nodes_tokenized_expressions.symbol_index.indices.size(0) == \
+        sum(seq.to(torch.long).sum().item() for seq in cfg_nodes_tokenized_expressions.is_symbol_mask.sequences)
 
     control_flow_paths = get_all_pdg_simple_paths(
         method_pdg=method_pdg,
@@ -361,10 +377,53 @@ def preprocess_code_task_example(
                         for ngram in ngrams]))
             for key, ngrams in control_flow_paths_ngrams.items()})
 
+    token_ranges_to_mask = [
+        (method_pdg.pdg_nodes[pdg_node_idx].code_sub_token_range_ref, mask_replacement)
+        for pdg_node_idx, mask_replacement in pdg_nodes_to_mask.items()
+        if method_pdg.pdg_nodes[pdg_node_idx].code_sub_token_range_ref is not None]
+    token_indices_mask = {
+        token_range_to_mask.begin_token_idx: mask_replacement
+        for token_range_to_mask, mask_replacement in token_ranges_to_mask}
+    token_indices_to_ignore = {
+        token_idx for token_idx in range(len(method.code.tokenized))
+        if any(token_range_to_mask.begin_token_idx < token_idx <= token_range_to_mask.end_token_idx
+               for token_range_to_mask, _ in token_ranges_to_mask)}
+    token_indices_to_mask_or_ignore = {
+        token_idx for token_idx in range(len(method.code.tokenized))
+        if any(token_range_to_mask.begin_token_idx <= token_idx <= token_range_to_mask.end_token_idx
+               for token_range_to_mask, _ in token_ranges_to_mask)}
+    method_tokenized_code = CodeExpressionTokensSequenceInputTensors(
+        token_type=BatchFlattenedSeq([torch.LongTensor([
+            code_task_vocabs.tokens_kinds.get_word_idx(token_indices_mask.get(token_idx, token.kind.value))
+            for token_idx, token in enumerate(method.code.tokenized)
+            if token_idx not in token_indices_to_ignore])]),
+        kos_token_index=BatchFlattenedTensor(torch.LongTensor(
+            [code_task_vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))
+             for token_idx, token in enumerate(method.code.tokenized)
+             if token.kind in {SerTokenKind.KEYWORD, SerTokenKind.OPERATOR, SerTokenKind.SEPARATOR}
+             if token_idx not in token_indices_to_mask_or_ignore])),
+        identifier_index=BatchedFlattenedIndicesFlattenedTensor(torch.LongTensor(
+            [token.identifier_idx
+             for token_idx, token in enumerate(method.code.tokenized)
+             if token.kind == SerTokenKind.IDENTIFIER
+             if token_idx not in token_indices_to_mask_or_ignore]),
+            tgt_indexing_group='identifiers'),
+        symbol_index=BatchedFlattenedIndicesFlattenedTensor(torch.LongTensor(
+            [token.symbol_idx
+             for token_idx, token in enumerate(method.code.tokenized)
+             if token.symbol_idx is not None
+             if token_idx not in token_indices_to_mask_or_ignore]),
+            tgt_indexing_group='symbols'),
+        is_symbol_mask=BatchFlattenedSeq([torch.BoolTensor(
+            [token.symbol_idx is not None and token_idx not in token_indices_mask
+             for token_idx, token in enumerate(method.code.tokenized)
+             if token_idx not in token_indices_to_ignore])]))
+    assert method_tokenized_code.symbol_index.indices.size(0) == \
+           method_tokenized_code.is_symbol_mask.sequences[0].to(torch.long).sum().item()
+
     return MethodCodeInputTensors(
-        method_hash=method.hash,
-        identifiers=identifiers,
-        symbols=symbols, pdg=pdg)
+        method_hash=method.hash, identifiers=identifiers, symbols=symbols,
+        method_tokenized_code=method_tokenized_code, pdg=pdg)
 
 
 def preprocess_code_task_example_with_padding(

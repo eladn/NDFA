@@ -65,9 +65,10 @@ class CodeTaskVocabs(NamedTuple):
             for pdg_node in example.method_pdg.pdg_nodes
             if pdg_node.code_sub_token_range_ref is not None
             for token in get_pdg_node_tokenized_expression(example.method, pdg_node))
+        # TODO: '<LOG_PRED>' special word is specific to LoggingCalls task. make it more generic here.
         tokens_kinds_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='tokens_kinds',
-            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
             carpus_generator=tokens_kinds_carpus_generator)
 
         pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
