@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
+from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
@@ -27,21 +28,26 @@ class SymbolsEncoder(nn.Module):
 
     def forward(self, encoded_identifiers: torch.Tensor,
                 symbols: SymbolsInputTensors,
-                encoded_cfg_expressions: Optional[torch.Tensor] = None):
+                encoded_expressions: Optional[torch.Tensor] = None,
+                tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None):
         symbols_identifiers_encodings = encoded_identifiers[symbols.symbols_identifier_indices.indices]
 
-        if encoded_cfg_expressions is not None:
-            max_nr_tokens_per_expression = encoded_cfg_expressions.size(1)
-            cfg_expr_tokens_indices_of_symbols_occurrences = \
-                max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
-                symbols.symbols_appearances_expression_token_idx.tensor
-            cfg_expr_tokens_encodings_of_symbols_occurrences = \
-                encoded_cfg_expressions.flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
+        if encoded_expressions is not None:
+            assert tokenized_expressions_input.is_symbol_mask.sequences.shape == encoded_expressions.shape[:-1]
+            encodings_of_symbols_occurrences = encoded_expressions[tokenized_expressions_input.is_symbol_mask.sequences]
+            assert encodings_of_symbols_occurrences.shape[:-1] == tokenized_expressions_input.symbol_index.indices.shape
+
+            # max_nr_tokens_per_expression = encoded_expressions.size(1)
+            # cfg_expr_tokens_indices_of_symbols_occurrences = \
+            #     max_nr_tokens_per_expression * symbols.symbols_appearances_cfg_expression_idx.indices + \
+            #     symbols.symbols_appearances_expression_token_idx.tensor
+            # cfg_expr_tokens_encodings_of_symbols_occurrences = \
+            #     encoded_expressions.flatten(0, 1)[cfg_expr_tokens_indices_of_symbols_occurrences]
             nr_symbols = symbols.symbols_identifier_indices.indices.size(0)
 
             symbols_occurrences_encodings = self.scatter_combiner(
-                scattered_input=cfg_expr_tokens_encodings_of_symbols_occurrences,
-                indices=symbols.symbols_appearances_symbol_idx.indices,
+                scattered_input=encodings_of_symbols_occurrences,
+                indices=tokenized_expressions_input.symbol_index.indices,  #symbols.symbols_appearances_symbol_idx.indices,
                 dim_size=nr_symbols, attn_keys=symbols_identifiers_encodings)
 
             # symbols_occurrences_encodings = scatter_add(

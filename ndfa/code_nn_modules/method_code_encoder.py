@@ -11,6 +11,7 @@ from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ndfa.code_nn_modules.method_cfg_encoder import MethodCFGEncoder, EncodedMethodCFG
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
+from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 
 
 __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
@@ -18,6 +19,7 @@ __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
 
 class EncodedMethodCode(NamedTuple):
     encoded_identifiers: torch.Tensor
+    encoded_method_as_single_tokens_seq: torch.Tensor
     encoded_cfg_nodes: torch.Tensor
     encoded_cfg_nodes_after_bridge: torch.Tensor
     encoded_symbols: torch.Tensor
@@ -56,6 +58,10 @@ class MethodCodeEncoder(nn.Module):
                 encoder_params=self.encoder_params.method_linear_seq_expression_encoder_type,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.symbols_encoder = SymbolsEncoder(
+                symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
+                expression_encoding_dim=self.encoder_params.method_cfg_encoder.cfg_node_expression_encoder.token_encoding_dim,
+                combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unexpected method code encoder type `{self.encoder_params.method_encoder_type}`.')
 
@@ -83,24 +89,40 @@ class MethodCodeEncoder(nn.Module):
         encoded_identifiers = self.identifier_encoder(
             identifiers=code_task_input.identifiers)  # (nr_identifiers_in_batch, identifier_encoding_dim)
 
-        encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
-            code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
-
-        unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
-            encoded_method_cfg.encoded_cfg_nodes)
-
-        encoded_cfg_nodes_after_bridge = unflattened_cfg_nodes_encodings
-        if len(self.encoder_decoder_bridge_dense_layers) > 0:
-            encoded_cfg_nodes_after_bridge = functools.reduce(
-                lambda last_res, cur_layer: self.dropout_layer(self.activation_layer(cur_layer(last_res))),
-                self.encoder_decoder_bridge_dense_layers,
-                encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
-                .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
+        encoded_method_as_single_tokens_seq = None
+        unflattened_cfg_nodes_encodings = None
+        encoded_cfg_nodes_after_bridge = None
+        if self.encoder_params.method_encoder_type == 'method-cfg':
+            encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
+                code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
+            unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
+                encoded_method_cfg.encoded_cfg_nodes)
+            encoded_symbols = encoded_method_cfg.encoded_symbols
+            encoded_cfg_nodes_after_bridge = unflattened_cfg_nodes_encodings
+            if len(self.encoder_decoder_bridge_dense_layers) > 0:
+                encoded_cfg_nodes_after_bridge = functools.reduce(
+                    lambda last_res, cur_layer: self.dropout_layer(self.activation_layer(cur_layer(last_res))),
+                    self.encoder_decoder_bridge_dense_layers,
+                    encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
+                    .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
+        elif self.encoder_params.method_encoder_type == 'method-linear-seq':
+            encoded_method_as_single_tokens_seq = self.linear_seq_method_code_encoder(
+                expressions=code_task_input.method_tokenized_code,
+                encoded_identifiers=encoded_identifiers)
+            encoded_symbols = self.symbols_encoder(
+                encoded_identifiers=encoded_identifiers,
+                symbols=code_task_input.symbols,
+                encoded_expressions=encoded_method_as_single_tokens_seq
+                if self.encoder_params.use_symbols_occurrences_for_symbols_encodings else None,
+                tokenized_expressions_input=code_task_input.method_tokenized_code)
+        else:
+            assert False
 
         return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
+            encoded_method_as_single_tokens_seq=encoded_method_as_single_tokens_seq,
             encoded_cfg_nodes=unflattened_cfg_nodes_encodings,
-            encoded_symbols=encoded_method_cfg.encoded_symbols,
+            encoded_symbols=encoded_symbols,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)
 
         # TODO: REMOVE!

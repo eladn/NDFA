@@ -182,11 +182,18 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
             embedding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
             padding_idx=self.code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))
 
+        if self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg':
+            encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
+        elif self.model_hps.method_code_encoder.method_encoder_type == 'method-linear-seq':
+            encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_expression_encoder.token_encoding_dim
+        else:
+            assert False
+
         self.symbols_decoder = SymbolsDecoder(
             symbols_special_words_embedding=self.symbols_special_words_embedding,  # FIXME: might be problematic because 2 different modules hold this (both PredictLogVarsModel and SymbolsDecoder).
             symbols_special_words_vocab=self.code_task_vocabs.symbols_special_words,
             max_nr_taget_symbols=model_hps.target_symbols_decoder.max_nr_target_symbols + 2,
-            encoder_output_dim=self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim,
+            encoder_output_dim=encoder_output_dim,
             symbols_encoding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
             use_batch_flattened_target_symbols_vocab=
             self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab,
@@ -210,9 +217,18 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
 
+        if self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg':
+            encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
+            encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
+        elif self.model_hps.method_code_encoder.method_encoder_type == 'method-linear-seq':
+            encoder_outputs = encoded_code.encoded_method_as_single_tokens_seq
+            encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
+        else:
+            assert False
+
         decoder_outputs = self.symbols_decoder(
-            encoder_outputs=encoded_code.encoded_cfg_nodes_after_bridge,
-            encoder_outputs_mask=code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask,
+            encoder_outputs=encoder_outputs,
+            encoder_outputs_mask=encoder_outputs_mask,
             symbols=code_task_input.symbols,
             batched_flattened_symbols_encodings=encoded_code.encoded_symbols,
             encoded_symbols_occurrences=encoded_code.encoded_symbols_occurrences,

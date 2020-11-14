@@ -312,14 +312,16 @@ class MethodCFGEncoder(nn.Module):
                 encoded_symbols = self.last_symbols_encoder(
                     encoded_identifiers=encoded_identifiers,
                     symbols=code_task_input.symbols,
-                    encoded_cfg_expressions=encoded_expressions_with_context
-                    if self.use_symbols_occurrences_for_symbols_encodings else None)
+                    encoded_expressions=encoded_expressions_with_context
+                    if self.use_symbols_occurrences_for_symbols_encodings else None,
+                    tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions)
             elif self.symbols_occurrences_fusion:
                 encoded_symbols = self.symbols_encoder_for_non_last_layers(
                     encoded_identifiers=encoded_identifiers,
                     symbols=code_task_input.symbols,
-                    encoded_cfg_expressions=encoded_expressions_with_context
+                    encoded_expressions=encoded_expressions_with_context
                     if self.use_symbols_occurrences_for_symbols_encodings else None,
+                    tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
                     layer_idx=layer_idx)
                 if self.use_norm:
                     encoded_symbols = self.symbols_norm(encoded_symbols, layer_idx=layer_idx)
