@@ -10,6 +10,8 @@ from .batched_flattened_indices_flattened import BatchedFlattenedIndicesFlattene
     BatchedFlattenedIndicesFlattenedSequencesDataClass, \
     BatchedFlattenedIndicesFlattenedSeq
 from .batched_flattened_indices_pseudo_random_permutation import BatchedFlattenedIndicesPseudoRandomPermutation
+from .batched_flattened_indices_pseudo_random_permutation_from_lengths import \
+    BatchedFlattenedIndicesPseudoRandomPermutationFromLengths
 from .misc import CollateData
 from .tensor_with_collate_mask import TensorWithCollateMask
 from .tensors_data_class import TensorsDataClass
