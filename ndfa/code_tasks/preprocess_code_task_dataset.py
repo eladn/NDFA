@@ -266,7 +266,8 @@ def preprocess_code_task_example(
              for pdg_node in method_pdg.pdg_nodes
              if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]),
         sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
-            lengths=tuple(len(seq) for seq in cfg_nodes_tokenized_expressions_token_type.sequences)))
+            lengths=tuple(len(seq) for seq in cfg_nodes_tokenized_expressions_token_type.sequences),
+            initial_seed_salt='cfg_nodes_tokenized_expressions_seq_permuter'))
     assert \
         cfg_nodes_tokenized_expressions.symbol_index.indices.size(0) == \
         sum(seq.to(torch.long).sum().item() for seq in cfg_nodes_tokenized_expressions.is_symbol_mask.sequences)
@@ -424,7 +425,8 @@ def preprocess_code_task_example(
              for token_idx, token in enumerate(method.code.tokenized)
              if token_idx not in token_indices_to_ignore])]),
         sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
-            lengths=tuple(len(seq) for seq in method_tokenized_code_token_type.sequences)))
+            lengths=tuple(len(seq) for seq in method_tokenized_code_token_type.sequences),
+            initial_seed_salt='method_tokenized_code_seq_permuter'))
     assert method_tokenized_code.symbol_index.indices.size(0) == \
            method_tokenized_code.is_symbol_mask.sequences[0].to(torch.long).sum().item()
 
