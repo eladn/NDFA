@@ -21,7 +21,7 @@ class IdentifierEncoder(nn.Module):
                  sub_parts_obfuscation: str = 'replace_oov_and_random',
                  sub_parts_obfuscation_rate: float = 0.3,
                  use_vocab: bool = True,
-                 use_hashing_trick: bool = True,
+                 use_hashing_trick: bool = False,
                  nr_rnn_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(IdentifierEncoder, self).__init__()
