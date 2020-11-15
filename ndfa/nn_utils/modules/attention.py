@@ -11,7 +11,7 @@ __all__ = ['Attention']
 
 class Attention(nn.Module):
     def __init__(self, nr_features: int, project_key: bool = True, project_query: bool = True,
-                 key_in_features: Optional[int] = None, project_values: bool = True,
+                 key_in_features: Optional[int] = None, project_values: bool = False,
                  activation_fn: str = 'relu'):
         super(Attention, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
