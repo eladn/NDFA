@@ -107,24 +107,15 @@ class ExpressionEncoder(nn.Module):
             final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_token_seqs_encodings_projected)))
 
-        # TODO: embed this shuffler within `SequenceEncoder`
         if self.shuffle_expressions:
-            p = expressions_input.sequence_permuter.permutations.unsqueeze(-1)\
-                .expand(final_token_seqs_encodings_projected.shape)
-            permuted_seqs = torch.gather(input=final_token_seqs_encodings_projected, dim=1, index=p)
-            permuted_seqs = permuted_seqs.masked_fill(
-                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
-            final_token_seqs_encodings_projected = permuted_seqs
+            final_token_seqs_encodings_projected = \
+                expressions_input.sequence_permuter.shuffle(final_token_seqs_encodings_projected)
 
         expressions_encodings = self.sequence_encoder(
             sequence_input=final_token_seqs_encodings_projected,
             lengths=expressions_input.token_type.sequences_lengths, batch_first=True).sequence
 
-        # TODO: embed this shuffler within `SequenceEncoder`
         if self.shuffle_expressions:
-            ip = expressions_input.sequence_permuter.inverse_permutations.unsqueeze(-1).expand(expressions_encodings.shape)
-            expressions_encodings = torch.gather(input=expressions_encodings, dim=1, index=ip)
-            expressions_encodings = expressions_encodings.masked_fill(
-                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
+            expressions_encodings = expressions_input.sequence_permuter.unshuffle(expressions_encodings)
 
         return expressions_encodings

@@ -445,26 +445,17 @@ class ExpressionUpdater(nn.Module):
     def forward(self, previous_expression_encodings: torch.Tensor,
                 expressions_input: CodeExpressionTokensSequenceInputTensors):
         input_to_seq_encoder = previous_expression_encodings
-        # TODO: embed this shuffler within `SequenceEncoder`
         if self.shuffle_expressions:
-            p = expressions_input.sequence_permuter.permutations.unsqueeze(-1).expand(input_to_seq_encoder.shape)
-            permuted_seqs = torch.gather(input=input_to_seq_encoder, dim=1, index=p)
-            permuted_seqs = permuted_seqs.masked_fill(
-                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
-            input_to_seq_encoder = permuted_seqs
+            input_to_seq_encoder = expressions_input.sequence_permuter.shuffle(input_to_seq_encoder)
 
         updated_expression_encodings = self.sequence_encoder(
             sequence_input=input_to_seq_encoder,
             lengths=expressions_input.token_type.sequences_lengths,
             batch_first=True).sequence
 
-        # TODO: embed this shuffler within `SequenceEncoder`
         if self.shuffle_expressions:
-            ip = expressions_input.sequence_permuter.inverse_permutations.unsqueeze(-1)\
-                .expand(updated_expression_encodings.shape)
-            updated_expression_encodings = torch.gather(input=updated_expression_encodings, dim=1, index=ip)
-            updated_expression_encodings = updated_expression_encodings.masked_fill(
-                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
+            updated_expression_encodings = \
+                expressions_input.sequence_permuter.unshuffle(updated_expression_encodings)
 
         return updated_expression_encodings
 
