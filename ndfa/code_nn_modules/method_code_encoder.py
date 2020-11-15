@@ -107,7 +107,7 @@ class MethodCodeEncoder(nn.Module):
                     .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
         elif self.encoder_params.method_encoder_type == 'method-linear-seq':
             encoded_method_as_single_tokens_seq = self.linear_seq_method_code_encoder(
-                expressions=code_task_input.method_tokenized_code,
+                expressions_input=code_task_input.method_tokenized_code,
                 encoded_identifiers=encoded_identifiers)
             encoded_symbols = self.symbols_encoder(
                 encoded_identifiers=encoded_identifiers,

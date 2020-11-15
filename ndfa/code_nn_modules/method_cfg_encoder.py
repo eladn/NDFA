@@ -4,7 +4,8 @@ from typing import NamedTuple
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
+    CodeExpressionTokensSequenceInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
@@ -38,7 +39,7 @@ class MethodCFGEncoder(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu',
                  nr_layers: int = 2, use_skip_connections: bool = False,
                  use_norm: bool = True, share_weights_between_layers: bool = False,
-                 symbols_occurrences_fusion: bool = True):
+                 symbols_occurrences_fusion: bool = True, shuffle_expressions: bool = False):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.nr_layers = nr_layers
@@ -52,12 +53,13 @@ class MethodCFGEncoder(nn.Module):
             identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
             identifier_embedding_dim=self.identifier_embedding_dim,
+            shuffle_expressions=shuffle_expressions,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.expression_updater = ModuleRepeater(
-            lambda: SequenceEncoder(
-                encoder_params=self.encoder_params.cfg_node_expression_encoder.sequence_encoder,
-                input_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-                hidden_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            lambda: ExpressionUpdater(
+                sequence_encoder_params=self.encoder_params.cfg_node_expression_encoder.sequence_encoder,
+                token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             repeats=range(1, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
         self.expression_combiner = ModuleRepeater(
@@ -73,8 +75,8 @@ class MethodCFGEncoder(nn.Module):
             pdg_node_control_kinds_vocab=code_task_vocabs.pdg_node_control_kinds,
             pdg_node_control_kinds_embedding_dim=self.encoder_params.cfg_node_control_kinds_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.cfg_node_updater = ModuleRepeater(
-            lambda: CFGNodeEncoderExpressionUpdateLayer(
+        self.cfg_node_encoding_mixer_with_expression_encoding = ModuleRepeater(
+            lambda: CFGNodeEncodingMixerWithExpressionEncoding(
                 cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                 cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
@@ -188,7 +190,7 @@ class MethodCFGEncoder(nn.Module):
             assert not (encoded_expressions_with_context is None) ^ (layer_idx == 0)
             if layer_idx == 0:
                 encoded_expressions = self.first_expression_encoder(
-                    expressions=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+                    expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
                     encoded_identifiers=encoded_identifiers)
             else:
                 if self.symbols_occurrences_fusion:
@@ -202,9 +204,9 @@ class MethodCFGEncoder(nn.Module):
                             encoded_expressions_with_context, layer_idx=layer_idx, usage_point=0)
 
                 new_encoded_expressions = self.expression_updater(
-                    sequence_input=encoded_expressions_with_context,
-                    lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths,
-                    batch_first=True, layer_idx=layer_idx).sequence
+                    previous_expression_encodings=encoded_expressions_with_context,
+                    expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+                    layer_idx=layer_idx)
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
                     encoded_expressions = encoded_expressions + new_encoded_expressions  # skip-connection
@@ -224,7 +226,7 @@ class MethodCFGEncoder(nn.Module):
                     combined_cfg_expressions_encodings=combined_expressions, pdg=code_task_input.pdg)
             else:
                 assert encoded_cfg_nodes is not None
-                new_encoded_cfg_nodes = self.cfg_node_updater(
+                new_encoded_cfg_nodes = self.cfg_node_encoding_mixer_with_expression_encoding(
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     cfg_combined_expressions_encodings=combined_expressions,
                     cfg_nodes_has_expression_mask=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor,
@@ -426,10 +428,51 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
         return updated_expressions_encodings.view(orig_expressions_encodings_shape)
 
 
-class CFGNodeEncoderExpressionUpdateLayer(nn.Module):
+class ExpressionUpdater(nn.Module):
+    def __init__(
+            self, sequence_encoder_params: SequenceEncoderParams,
+            token_encoding_dim: int, shuffle_expressions: bool = False,
+            dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+        super(ExpressionUpdater, self).__init__()
+        self.token_encoding_dim = token_encoding_dim
+        self.sequence_encoder = SequenceEncoder(
+            encoder_params=sequence_encoder_params,
+            input_dim=self.token_encoding_dim,
+            hidden_dim=self.token_encoding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.shuffle_expressions = shuffle_expressions
+
+    def forward(self, previous_expression_encodings: torch.Tensor,
+                expressions_input: CodeExpressionTokensSequenceInputTensors):
+        input_to_seq_encoder = previous_expression_encodings
+        # TODO: embed this shuffler within `SequenceEncoder`
+        if self.shuffle_expressions:
+            p = expressions_input.sequence_permuter.permutations.unsqueeze(-1).expand(input_to_seq_encoder.shape)
+            permuted_seqs = torch.gather(input=input_to_seq_encoder, dim=1, index=p)
+            permuted_seqs = permuted_seqs.masked_fill(
+                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
+            input_to_seq_encoder = permuted_seqs
+
+        updated_expression_encodings = self.sequence_encoder(
+            sequence_input=input_to_seq_encoder,
+            lengths=expressions_input.token_type.sequences_lengths,
+            batch_first=True).sequence
+
+        # TODO: embed this shuffler within `SequenceEncoder`
+        if self.shuffle_expressions:
+            ip = expressions_input.sequence_permuter.inverse_permutations.unsqueeze(-1)\
+                .expand(updated_expression_encodings.shape)
+            updated_expression_encodings = torch.gather(input=updated_expression_encodings, dim=1, index=ip)
+            updated_expression_encodings = updated_expression_encodings.masked_fill(
+                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
+
+        return updated_expression_encodings
+
+
+class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
     def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(CFGNodeEncoderExpressionUpdateLayer, self).__init__()
+        super(CFGNodeEncodingMixerWithExpressionEncoding, self).__init__()
         self.cfg_node_dim = cfg_node_dim
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
         # self.projection_layer = nn.Linear(
