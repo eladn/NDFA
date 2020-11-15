@@ -6,7 +6,7 @@ from typing_extensions import Protocol
 
 
 __all__ = ['seq_lengths_to_mask', 'compose_fns', 'collate_tensors_with_variable_shapes',
-           'CollateData', 'CollatableValuesTuple', 'MapFn']
+           'CollateData', 'CollatableValuesTuple', 'MapFn', 'inverse_permutation']
 
 
 def seq_lengths_to_mask(seq_lengths: torch.LongTensor, max_seq_len: int, batch_first: bool = True):
@@ -111,3 +111,10 @@ CollatableValuesTuple = Union[
 
 class MapFn(Protocol):
     def __call__(self, value: Optional[CollatableValuesTuple]) -> Optional[CollatableValuesTuple]: ...
+
+
+def inverse_permutation(permutation: torch.LongTensor) -> torch.LongTensor:
+    assert permutation.ndim == 1
+    inverse = torch.empty_like(permutation)
+    inverse[permutation] = torch.arange(len(permutation))
+    return inverse

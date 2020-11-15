@@ -4,7 +4,7 @@ import dataclasses
 import numpy as np
 from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 
-from .misc import collate_tensors_with_variable_shapes, CollateData
+from .misc import collate_tensors_with_variable_shapes, CollateData, inverse_permutation
 from .tensors_data_class import TensorsDataClass
 from .mixins import HasTargetIndexingGroupMixin
 
@@ -78,8 +78,7 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(HasTargetIndexingGroupMixin
         permutations_without_offsets = [
             torch.LongTensor(np.random.RandomState(random_seed_per_example[example_idx]).permutation(int(nr_items)))
             for example_idx, nr_items in enumerate(nr_items_per_example)]
-        # TODO: is it always correct that perm^2 == perm^-1
-        inverse_permutations_without_offsets = [perm[perm] for perm in permutations_without_offsets]
+        inverse_permutations_without_offsets = [inverse_permutation(perm) for perm in permutations_without_offsets]
         permutations_with_offsets = [
             perm + index_offset for perm, index_offset in zip(permutations_without_offsets, index_offsets)]
         inverse_permutations_with_ranges = [

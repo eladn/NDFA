@@ -4,7 +4,7 @@ import dataclasses
 import numpy as np
 from typing import List, Tuple, final
 
-from .misc import collate_tensors_with_variable_shapes, CollateData
+from .misc import collate_tensors_with_variable_shapes, CollateData, inverse_permutation
 from .tensors_data_class import TensorsDataClass
 from .mixins import TensorDataClassWithSequencesMixin
 from .misc import seq_lengths_to_mask
@@ -75,8 +75,7 @@ class BatchFlattenedSeqShuffler(TensorDataClassWithSequencesMixin, TensorsDataCl
             torch.LongTensor(random_state_per_example[example_idx].permutation(int(nr_items)))
             for example_idx, inp in enumerate(inputs)
             for nr_items in inp.lengths]
-        # TODO: is it always correct that perm^2 == perm^-1
-        inverse_permutations = [perm[perm] for perm in permutations]
+        inverse_permutations = [inverse_permutation(perm) for perm in permutations]
         collated.lengths = tuple(length for inp in inputs for length in inp.lengths)
         collated.sequences_lengths = torch.LongTensor(collated.lengths)
         collated.max_sequence_length = max(collated.lengths)
