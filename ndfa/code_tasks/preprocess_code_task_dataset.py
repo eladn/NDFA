@@ -23,7 +23,7 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, M
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
-    BatchedFlattenedIndicesPseudoRandomPermutationFromLengths
+    BatchFlattenedSeqShuffler
 
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
@@ -265,7 +265,7 @@ def preprocess_code_task_example(
                  for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
              for pdg_node in method_pdg.pdg_nodes
              if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]),
-        sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
+        sequence_permuter=BatchFlattenedSeqShuffler(
             lengths=tuple(len(seq) for seq in cfg_nodes_tokenized_expressions_token_type.sequences),
             initial_seed_salt='cfg_nodes_tokenized_expressions_seq_permuter'))
     assert \
@@ -424,7 +424,7 @@ def preprocess_code_task_example(
             [token.symbol_idx is not None and token_idx not in token_indices_mask
              for token_idx, token in enumerate(method.code.tokenized)
              if token_idx not in token_indices_to_ignore])]),
-        sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
+        sequence_permuter=BatchFlattenedSeqShuffler(
             lengths=tuple(len(seq) for seq in method_tokenized_code_token_type.sequences),
             initial_seed_salt='method_tokenized_code_seq_permuter'))
     assert method_tokenized_code.symbol_index.indices.size(0) == \

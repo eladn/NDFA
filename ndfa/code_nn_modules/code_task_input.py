@@ -5,7 +5,7 @@ from typing import Optional, Dict
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
-    BatchedFlattenedIndicesPseudoRandomPermutationFromLengths
+    BatchFlattenedSeqShuffler
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
@@ -40,7 +40,7 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     identifier_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_identifier_tokens_in_all_expressions_in_batch,)
     symbol_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbol_occurrences_in_all_expressions_in_batch,)
     is_symbol_mask: BatchFlattenedSeq  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    sequence_permuter: BatchedFlattenedIndicesPseudoRandomPermutationFromLengths  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    sequence_permuter: BatchFlattenedSeqShuffler  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
 
 
 @dataclasses.dataclass

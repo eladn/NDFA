@@ -8,7 +8,7 @@ from .misc import collate_tensors_with_variable_shapes, CollateData
 from .tensors_data_class import TensorsDataClass
 
 
-__all__ = ['BatchedFlattenedIndicesPseudoRandomPermutationFromLengths']
+__all__ = ['BatchFlattenedSeqShuffler']
 
 
 def get_random_seed_per_example(
@@ -38,7 +38,7 @@ def get_random_seed_per_example(
 
 @final
 @dataclasses.dataclass
-class BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(TensorsDataClass):
+class BatchFlattenedSeqShuffler(TensorsDataClass):
     permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
     inverse_permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
 
@@ -49,7 +49,7 @@ class BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(TensorsDataClass
 
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
-        return super(BatchedFlattenedIndicesPseudoRandomPermutationFromLengths, cls).get_management_fields() + \
+        return super(BatchFlattenedSeqShuffler, cls).get_management_fields() + \
                ('lengths', 'batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt')
 
     @classmethod
@@ -59,10 +59,10 @@ class BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(TensorsDataClass
 
     @classmethod
     def _collate_first_pass(
-            cls, inputs: List['BatchedFlattenedIndicesPseudoRandomPermutation'],
+            cls, inputs: List['BatchFlattenedSeqShuffler'],
             collate_data: CollateData) \
-            -> 'BatchedFlattenedIndicesPseudoRandomPermutation':
-        collated = super(BatchedFlattenedIndicesPseudoRandomPermutationFromLengths, cls)._collate_first_pass(
+            -> 'BatchFlattenedSeqShuffler':
+        collated = super(BatchFlattenedSeqShuffler, cls)._collate_first_pass(
             inputs, collate_data=collate_data)
         batch_dependent_seed = inputs[0].batch_dependent_seed
         example_dependent_seed = inputs[0].example_dependent_seed
