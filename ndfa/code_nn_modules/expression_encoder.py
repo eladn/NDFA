@@ -20,7 +20,7 @@ class ExpressionEncoder(nn.Module):
                  identifiers_special_words_vocab: Vocabulary,
                  encoder_params: CodeExpressionEncoderParams,
                  identifier_embedding_dim: int, nr_out_linear_layers: int = 1,
-                 randomly_permute_expressions: bool = False,
+                 shuffle_expressions: bool = False,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_out_linear_layers >= 1
         super(ExpressionEncoder, self).__init__()
@@ -62,15 +62,16 @@ class ExpressionEncoder(nn.Module):
             input_dim=self.encoder_params.token_encoding_dim,
             hidden_dim=self.encoder_params.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.randomly_permute_expressions = randomly_permute_expressions
+        self.shuffle_expressions = shuffle_expressions
 
-    def forward(self, expressions: CodeExpressionTokensSequenceInputTensors,
+    def forward(self, expressions_input: CodeExpressionTokensSequenceInputTensors,
                 encoded_identifiers: torch.Tensor):
-        token_kind_embeddings = self.tokens_kinds_embedding_layer(expressions.token_type.sequences)
-        kos_tokens_embeddings = self.kos_tokens_embedding_layer(expressions.kos_token_index.tensor)
-        identifiers_occurrences_embeddings = encoded_identifiers[expressions.identifier_index.indices]
+        token_kind_embeddings = self.tokens_kinds_embedding_layer(expressions_input.token_type.sequences)
+        kos_tokens_embeddings = self.kos_tokens_embedding_layer(expressions_input.kos_token_index.tensor)
+        identifiers_occurrences_embeddings = encoded_identifiers[expressions_input.identifier_index.indices]
         is_identifier_token = \
-            expressions.token_type.sequences == self.tokens_kinds_vocab.get_word_idx(SerTokenKind.IDENTIFIER.value)
+            expressions_input.token_type.sequences == \
+            self.tokens_kinds_vocab.get_word_idx(SerTokenKind.IDENTIFIER.value)
 
         is_identifier_token_mask = is_identifier_token.unsqueeze(-1).expand(
             is_identifier_token.size() + (self.identifier_embedding_dim,))
@@ -80,7 +81,8 @@ class ExpressionEncoder(nn.Module):
             self.tokens_kinds_vocab.get_word_idx(SerTokenKind.KEYWORD.value))
         is_kos_token = reduce(
             torch.Tensor.logical_or,
-            ((expressions.token_type.sequences == token_kind) for token_kind in token_kinds_for_kos_tokens_vocab))
+            ((expressions_input.token_type.sequences == token_kind)
+             for token_kind in token_kinds_for_kos_tokens_vocab))
         is_kos_token_mask = is_kos_token.unsqueeze(-1).expand(
             is_kos_token.size() + (self.encoder_params.kos_token_embedding_dim,))
 
@@ -96,7 +98,7 @@ class ExpressionEncoder(nn.Module):
             is_kos_token_mask, kos_tokens_embeddings)
 
         final_token_seqs_encodings = torch.cat([token_kind_embeddings, kos_or_identifier_token_encoding], dim=-1)
-        assert final_token_seqs_encodings.size()[:-1] == expressions.token_type.sequences.size()
+        assert final_token_seqs_encodings.size()[:-1] == expressions_input.token_type.sequences.size()
 
         final_token_seqs_encodings = self.dropout_layer(final_token_seqs_encodings)
         final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(
@@ -105,21 +107,24 @@ class ExpressionEncoder(nn.Module):
             final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_token_seqs_encodings_projected)))
 
-        if self.randomly_permute_expressions:
-            p = expressions.sequence_permuter.permutations.unsqueeze(-1).expand(final_token_seqs_encodings_projected.shape)
+        # TODO: embed this shuffler within `SequenceEncoder`
+        if self.shuffle_expressions:
+            p = expressions_input.sequence_permuter.permutations.unsqueeze(-1)\
+                .expand(final_token_seqs_encodings_projected.shape)
             permuted_seqs = torch.gather(input=final_token_seqs_encodings_projected, dim=1, index=p)
             permuted_seqs = permuted_seqs.masked_fill(
-                ~expressions.token_type.sequences_mask.unsqueeze(-1), 0)
+                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
             final_token_seqs_encodings_projected = permuted_seqs
 
         expressions_encodings = self.sequence_encoder(
             sequence_input=final_token_seqs_encodings_projected,
-            lengths=expressions.token_type.sequences_lengths, batch_first=True).sequence
+            lengths=expressions_input.token_type.sequences_lengths, batch_first=True).sequence
 
-        if self.randomly_permute_expressions:
-            ip = expressions.sequence_permuter.inverse_permutations.unsqueeze(-1).expand(expressions_encodings.shape)
+        # TODO: embed this shuffler within `SequenceEncoder`
+        if self.shuffle_expressions:
+            ip = expressions_input.sequence_permuter.inverse_permutations.unsqueeze(-1).expand(expressions_encodings.shape)
             expressions_encodings = torch.gather(input=expressions_encodings, dim=1, index=ip)
             expressions_encodings = expressions_encodings.masked_fill(
-                ~expressions.token_type.sequences_mask.unsqueeze(-1), 0)
+                ~expressions_input.token_type.sequences_mask.unsqueeze(-1), 0)
 
         return expressions_encodings
