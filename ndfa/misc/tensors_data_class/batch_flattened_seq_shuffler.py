@@ -6,6 +6,8 @@ from typing import List, Tuple, final
 
 from .misc import collate_tensors_with_variable_shapes, CollateData
 from .tensors_data_class import TensorsDataClass
+from .mixins import TensorDataClassWithSequencesMixin
+from .misc import seq_lengths_to_mask
 
 
 __all__ = ['BatchFlattenedSeqShuffler']
@@ -38,7 +40,7 @@ def get_random_seed_per_example(
 
 @final
 @dataclasses.dataclass
-class BatchFlattenedSeqShuffler(TensorsDataClass):
+class BatchFlattenedSeqShuffler(TensorDataClassWithSequencesMixin, TensorsDataClass):
     permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
     inverse_permutations: torch.LongTensor = dataclasses.field(default=None, init=False)
 
@@ -51,11 +53,6 @@ class BatchFlattenedSeqShuffler(TensorsDataClass):
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchFlattenedSeqShuffler, cls).get_management_fields() + \
                ('lengths', 'batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt')
-
-    @classmethod
-    def get_indices_fields(cls) -> Tuple[dataclasses.Field, ...]:
-        return tuple(field for field in dataclasses.fields(cls)
-                     if field.name in {'permutations', 'inverse_permutations'})
 
     @classmethod
     def _collate_first_pass(
@@ -81,6 +78,10 @@ class BatchFlattenedSeqShuffler(TensorsDataClass):
         # TODO: is it always correct that perm^2 == perm^-1
         inverse_permutations = [perm[perm] for perm in permutations]
         collated.lengths = tuple(length for inp in inputs for length in inp.lengths)
+        collated.sequences_lengths = torch.LongTensor(collated.lengths)
+        collated.max_sequence_length = max(collated.lengths)
+        collated.sequences_mask = seq_lengths_to_mask(
+            seq_lengths=collated.sequences_lengths, max_seq_len=collated.max_sequence_length)
         collated.permutations = collate_tensors_with_variable_shapes(
             tensors=tuple(permutations), create_collate_mask=False,
             create_collate_lengths=False, last_variable_dim=0)
@@ -89,3 +90,19 @@ class BatchFlattenedSeqShuffler(TensorsDataClass):
             create_collate_lengths=False, last_variable_dim=0)
 
         return collated
+
+    def shuffle(self, sequence_input: torch.Tensor) -> torch.Tensor:
+        assert sequence_input.shape[:-1] == self.permutations.shape
+        extended_perm = self.permutations.unsqueeze(-1).expand(sequence_input.shape)
+        shuffled_seqs = torch.gather(input=sequence_input, dim=1, index=extended_perm)
+        shuffled_seqs = shuffled_seqs.masked_fill(
+            ~self.sequences_mask.unsqueeze(-1), 0)
+        return shuffled_seqs
+
+    def unshuffle(self, shuffled_sequence_input: torch.Tensor) -> torch.Tensor:
+        assert shuffled_sequence_input.shape[:-1] == self.permutations.shape
+        extended_perm = self.permutations.unsqueeze(-1).expand(shuffled_sequence_input.shape)
+        unshuffled_seqs = torch.gather(input=shuffled_sequence_input, dim=1, index=extended_perm)
+        unshuffled_seqs = unshuffled_seqs.masked_fill(
+            ~self.sequences_mask.unsqueeze(-1), 0)
+        return unshuffled_seqs
