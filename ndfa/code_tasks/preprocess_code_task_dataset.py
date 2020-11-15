@@ -22,7 +22,8 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, M
     CFGPathsNGramsInputTensors, IdentifiersInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
-    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange
+    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
+    BatchedFlattenedIndicesPseudoRandomPermutationFromLengths
 
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
@@ -229,14 +230,15 @@ def preprocess_code_task_example(
             torch.LongTensor([symbol_occurrence.expression_idx for symbol_occurrence in symbols_occurrences]),
             tgt_indexing_group='cfg_expressions'))
 
+    cfg_nodes_tokenized_expressions_token_type = BatchFlattenedSeq(
+        [torch.LongTensor(
+            [code_task_vocabs.tokens_kinds.get_word_idx(token.kind.value)
+             for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
+            for pdg_node in method_pdg.pdg_nodes
+            if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask],
+        self_indexing_group='cfg_expressions')
     cfg_nodes_tokenized_expressions = CodeExpressionTokensSequenceInputTensors(
-        token_type=BatchFlattenedSeq(
-            [torch.LongTensor(
-                [code_task_vocabs.tokens_kinds.get_word_idx(token.kind.value)
-                 for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
-             for pdg_node in method_pdg.pdg_nodes
-             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask],
-            self_indexing_group='cfg_expressions'),
+        token_type=cfg_nodes_tokenized_expressions_token_type,
         kos_token_index=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))
              for pdg_node in method_pdg.pdg_nodes
@@ -262,7 +264,9 @@ def preprocess_code_task_example(
                 [token.symbol_idx is not None
                  for token in get_pdg_node_tokenized_expression(method=method, pdg_node=pdg_node)])
              for pdg_node in method_pdg.pdg_nodes
-             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]))
+             if pdg_node.code_sub_token_range_ref is not None and pdg_node.idx not in pdg_nodes_to_mask]),
+        sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
+            lengths=tuple(len(seq) for seq in cfg_nodes_tokenized_expressions_token_type.sequences)))
     assert \
         cfg_nodes_tokenized_expressions.symbol_index.indices.size(0) == \
         sum(seq.to(torch.long).sum().item() for seq in cfg_nodes_tokenized_expressions.is_symbol_mask.sequences)
@@ -392,11 +396,12 @@ def preprocess_code_task_example(
         token_idx for token_idx in range(len(method.code.tokenized))
         if any(token_range_to_mask.begin_token_idx <= token_idx <= token_range_to_mask.end_token_idx
                for token_range_to_mask, _ in token_ranges_to_mask)}
+    method_tokenized_code_token_type = BatchFlattenedSeq([torch.LongTensor([
+        code_task_vocabs.tokens_kinds.get_word_idx(token_indices_mask.get(token_idx, token.kind.value))
+        for token_idx, token in enumerate(method.code.tokenized)
+        if token_idx not in token_indices_to_ignore])], self_indexing_group='method_tokenized_expr_seq')
     method_tokenized_code = CodeExpressionTokensSequenceInputTensors(
-        token_type=BatchFlattenedSeq([torch.LongTensor([
-            code_task_vocabs.tokens_kinds.get_word_idx(token_indices_mask.get(token_idx, token.kind.value))
-            for token_idx, token in enumerate(method.code.tokenized)
-            if token_idx not in token_indices_to_ignore])]),
+        token_type=method_tokenized_code_token_type,
         kos_token_index=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.kos_tokens.get_word_idx_or_unk(kos_token_to_kos_token_vocab_word(token))
              for token_idx, token in enumerate(method.code.tokenized)
@@ -417,7 +422,9 @@ def preprocess_code_task_example(
         is_symbol_mask=BatchFlattenedSeq([torch.BoolTensor(
             [token.symbol_idx is not None and token_idx not in token_indices_mask
              for token_idx, token in enumerate(method.code.tokenized)
-             if token_idx not in token_indices_to_ignore])]))
+             if token_idx not in token_indices_to_ignore])]),
+        sequence_permuter=BatchedFlattenedIndicesPseudoRandomPermutationFromLengths(
+            lengths=tuple(len(seq) for seq in method_tokenized_code_token_type.sequences)))
     assert method_tokenized_code.symbol_index.indices.size(0) == \
            method_tokenized_code.is_symbol_mask.sequences[0].to(torch.long).sum().item()
 
