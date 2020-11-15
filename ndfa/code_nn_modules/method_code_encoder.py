@@ -28,7 +28,7 @@ class EncodedMethodCode(NamedTuple):
 
 class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, encoder_params: MethodCodeEncoderParams,
-                 nr_encoder_decoder_bridge_layers: int = 0,
+                 nr_encoder_decoder_bridge_layers: int = 0, shuffle_expressions: bool = False,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCodeEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -48,6 +48,7 @@ class MethodCodeEncoder(nn.Module):
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 use_symbols_occurrences_for_symbols_encodings=
                 self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
+                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'method-linear-seq':
             self.linear_seq_method_code_encoder = ExpressionEncoder(
@@ -57,6 +58,7 @@ class MethodCodeEncoder(nn.Module):
                 identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
                 encoder_params=self.encoder_params.method_linear_seq_expression_encoder_type,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
+                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             self.symbols_encoder = SymbolsEncoder(
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
