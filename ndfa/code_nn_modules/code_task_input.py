@@ -1,11 +1,11 @@
 import torch
 import dataclasses
-from typing import Optional, Dict
+from typing import Optional
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
-    BatchFlattenedSeqShuffler
+    BatchFlattenedSeqShuffler, TensorsDataDict
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
@@ -76,7 +76,7 @@ class PDGInputTensors(TensorsDataClass):
 
     cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesPseudoRandomPermutation] = None
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
-    cfg_control_flow_paths_ngrams: Optional[Dict[int, CFGPathsNGramsInputTensors]] = None
+    cfg_control_flow_paths_ngrams: Optional[TensorsDataDict[int, CFGPathsNGramsInputTensors]] = None
 
 
 @dataclasses.dataclass

@@ -23,7 +23,7 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputPaddedTensors, M
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
-    BatchFlattenedSeqShuffler
+    BatchFlattenedSeqShuffler, TensorsDataDict
 
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
@@ -369,7 +369,7 @@ def preprocess_code_task_example(
                         '<PAD>' if edge_type is None else edge_type)
                      for _, edge_type in path])
                     for path in control_flow_paths])),
-        cfg_control_flow_paths_ngrams={
+        cfg_control_flow_paths_ngrams=TensorsDataDict({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                     sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
@@ -380,7 +380,7 @@ def preprocess_code_task_example(
                             '<PAD>' if edge_type is None else edge_type)
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
-            for key, ngrams in control_flow_paths_ngrams.items()})
+            for key, ngrams in control_flow_paths_ngrams.items()}))
 
     token_ranges_to_mask = [
         (method_pdg.pdg_nodes[pdg_node_idx].code_sub_token_range_ref, mask_replacement)
