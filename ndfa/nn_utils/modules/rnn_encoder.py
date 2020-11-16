@@ -37,9 +37,10 @@ class RNNEncoder(nn.Module):
         if mask is not None and lengths is None:
             lengths = mask.long().sum(dim=1)
 
-        packed_input = pack_padded_sequence(
-            sequence_input, lengths=lengths, enforce_sorted=sorted_by_length)
-        rnn_outputs, (last_hidden_out, _) = self.rnn_layer(packed_input)
+        if lengths is not None:
+            sequence_input = pack_padded_sequence(
+                sequence_input, lengths=lengths, enforce_sorted=sorted_by_length)
+        rnn_outputs, (last_hidden_out, _) = self.rnn_layer(sequence_input)
         assert last_hidden_out.size() == \
                (self.nr_rnn_layers * self.nr_rnn_directions, batch_size, self.hidden_dim)
         last_hidden_out = last_hidden_out\
@@ -47,7 +48,8 @@ class RNNEncoder(nn.Module):
         last_hidden_out = last_hidden_out.sum(dim=0) if self.nr_rnn_directions > 1 else last_hidden_out.squeeze(0)
         assert last_hidden_out.size() == (batch_size, self.hidden_dim)
 
-        rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
+        if lengths is not None:
+            rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
         assert rnn_outputs.size() == (seq_len, batch_size, self.nr_rnn_directions * self.hidden_dim)
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \
