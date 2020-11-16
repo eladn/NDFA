@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from typing import NamedTuple
+from typing import NamedTuple, Dict
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
-    CodeExpressionTokensSequenceInputTensors
+    CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
@@ -21,6 +21,7 @@ from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 
 
 __all__ = ['MethodCFGEncoder', 'EncodedMethodCFG']
@@ -93,6 +94,15 @@ class MethodCFGEncoder(nn.Module):
                     cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                     dropout_rate=dropout_rate, activation_fn=activation_fn),
                 repeats=range(1, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
+        if self.encoder_params.encoder_type == 'control-flow-paths-ngrams':
+            self.cfg_paths_ngrams_encoder = CFGPathsNGramsEncoder(
+                cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+                cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = ScatterCFGEncodedNGramsToCFGNodeEncodings(
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
                 cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -293,7 +303,14 @@ class MethodCFGEncoder(nn.Module):
             elif self.encoder_params.encoder_type == 'gnn':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams':
-                raise NotImplementedError  # TODO: impl
+                cfg_paths_ngrams_encodings = self.cfg_paths_ngrams_encoder(
+                    cfg_nodes_encodings=encoded_cfg_nodes,
+                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams)
+                encoded_cfg_nodes = self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings(
+                    encoded_cfg_node_occurrences_in_ngrams=cfg_paths_ngrams_encodings,
+                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                    previous_cfg_nodes_encodings=encoded_cfg_nodes,
+                    nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
             elif self.encoder_params.encoder_type == 'set-of-nodes':
                 pass  # We actually do not need to do anything in this case.
             else:
@@ -553,6 +570,99 @@ class CFGPathsUpdater(nn.Module):
         return EncodedCFGPaths(
             nodes_occurrences=nodes_occurrences_encodings,
             edges_occurrences=edges_occurrences_encodings)
+
+
+class CFGPathsNGramsEncoder(nn.Module):
+    def __init__(self, cfg_node_dim: int,
+                 cfg_paths_sequence_encoder_params: SequenceEncoderParams,
+                 control_flow_edge_types_vocab: Vocabulary,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+        super(CFGPathsNGramsEncoder, self).__init__()
+        self.cfg_node_dim = cfg_node_dim
+        self.control_flow_edge_types_vocab = control_flow_edge_types_vocab
+        self.control_flow_edge_types_embeddings = nn.Embedding(
+            num_embeddings=len(self.control_flow_edge_types_vocab),
+            embedding_dim=self.cfg_node_dim,
+            padding_idx=self.control_flow_edge_types_vocab.get_word_idx('<PAD>'))
+        self.sequence_encoder_layer = SequenceEncoder(
+            encoder_params=cfg_paths_sequence_encoder_params,
+            input_dim=self.cfg_node_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+
+    def forward(
+            self, cfg_nodes_encodings: torch.Tensor,
+            cfg_control_flow_paths_ngrams_input: Dict[int, CFGPathsNGramsInputTensors]) \
+            -> Dict[int, torch.Tensor]:
+        results = {}
+        for ngrams_n, ngrams in cfg_control_flow_paths_ngrams_input.items():
+            ngrams_nodes_encodings = cfg_nodes_encodings[ngrams.nodes_indices.sequences]
+            ngrams_edges_types_embeddings = self.control_flow_edge_types_embeddings(ngrams.edges_types.sequences)
+
+            # weave nodes & edge-types in each path
+            interwoven_nodes_and_edge_types_embeddings = weave_tensors(
+                tensors=[ngrams_nodes_encodings, ngrams_edges_types_embeddings], dim=1)
+            assert interwoven_nodes_and_edge_types_embeddings.shape == \
+                   (ngrams_nodes_encodings.size(0),
+                    2 * ngrams_nodes_encodings.size(1),
+                    self.cfg_node_dim)
+
+            ngrams_encodings = self.sequence_encoder_layer(
+                sequence_input=interwoven_nodes_and_edge_types_embeddings,
+                batch_first=True).sequence
+            assert ngrams_encodings.shape == interwoven_nodes_and_edge_types_embeddings.shape
+
+            # separate nodes encodings and edge types embeddings from paths
+            nodes_occurrences_encodings, _ = unweave_tensor(
+                woven_tensor=ngrams_encodings, dim=1, nr_target_tensors=2)
+            assert nodes_occurrences_encodings.shape == ngrams_nodes_encodings.shape
+            results[ngrams_n] = nodes_occurrences_encodings
+
+        return results
+
+
+class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
+    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn',
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+        super(ScatterCFGEncodedNGramsToCFGNodeEncodings, self).__init__()
+        self.combining_method = combining_method
+        self.cfg_node_encoding_dim = cfg_node_encoding_dim
+        self.scatter_combiner_layer = ScatterCombiner(
+            encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
+        self.gate = Gate(
+            state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+
+    def forward(self, encoded_cfg_node_occurrences_in_ngrams: Dict[int, torch.tensor],
+                cfg_control_flow_paths_ngrams_input: Dict[int, CFGPathsNGramsInputTensors],
+                previous_cfg_nodes_encodings: torch.Tensor, nr_cfg_nodes: int):
+        # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
+        # The mask also helps to ignore paddings.
+        sorted_ngrams_n = sorted(list(
+            set(encoded_cfg_node_occurrences_in_ngrams.keys()) & set(cfg_control_flow_paths_ngrams_input.keys())))
+        assert all(
+            encoded_cfg_node_occurrences_in_ngrams[ngrams_n].shape[:-1] ==
+            cfg_control_flow_paths_ngrams_input[ngrams_n].nodes_indices.sequences.shape
+            for ngrams_n in sorted_ngrams_n)
+        flattened_nodes_occurrences = torch.cat(
+            [encoded_cfg_node_occurrences_in_ngrams[ngrams_n].flatten(0, 1) for ngrams_n in sorted_ngrams_n], dim=0)
+        flattened_nodes_indices = torch.cat(
+            [cfg_control_flow_paths_ngrams_input[ngrams_n].nodes_indices.sequences.flatten(0, 1)
+             for ngrams_n in sorted_ngrams_n], dim=0)
+        if self.combining_method == 'attn':
+            assert previous_cfg_nodes_encodings is not None
+            assert previous_cfg_nodes_encodings.size(0) == nr_cfg_nodes
+        updated_cfg_nodes_encodings = self.scatter_combiner_layer(
+            scattered_input=flattened_nodes_occurrences,
+            indices=flattened_nodes_indices,
+            dim_size=nr_cfg_nodes,
+            attn_keys=previous_cfg_nodes_encodings)
+        assert updated_cfg_nodes_encodings.size() == (nr_cfg_nodes, self.cfg_node_encoding_dim)
+
+        # Note: This gate here is the last we added so far (in the paths case).
+        new_cfg_nodes_encodings = self.gate(
+            previous_state=previous_cfg_nodes_encodings,
+            state_update=updated_cfg_nodes_encodings)
+        return new_cfg_nodes_encodings
 
 
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
