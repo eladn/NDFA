@@ -109,15 +109,17 @@ class MethodCFGEncoder(nn.Module):
                     dropout_rate=dropout_rate, activation_fn=activation_fn),
                 repeats=range(1, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
         if self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
-            # TODO: wrap in with a module repeater
-            self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = ScatterCFGEncodedNGramsToCFGNodeEncodings(
-                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = ModuleRepeater(
+                lambda: ScatterCFGEncodedNGramsToCFGNodeEncodings(
+                    cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                    dropout_rate=dropout_rate, activation_fn=activation_fn),
+                repeats=range(0, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
-            # TODO: wrap in with a module repeater
-            self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ScatterCFGEncodedPathsToCFGNodeEncodings(
-                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.scatter_cfg_encoded_paths_to_cfg_node_encodings = ModuleRepeater(
+                lambda: ScatterCFGEncodedPathsToCFGNodeEncodings(
+                    cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                    dropout_rate=dropout_rate, activation_fn=activation_fn),
+                repeats=range(0, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
         elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                   'all-nodes-single-random-permutation-seq'}:
             cfg_single_path_sequence_type = \
@@ -302,7 +304,8 @@ class MethodCFGEncoder(nn.Module):
                     cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
                     cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
-                    nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
+                    nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size,
+                    layer_idx=layer_idx)
                 if self.use_skip_connections:
                     # TODO: use AddNorm for skip-connections here
                     encoded_cfg_nodes = encoded_cfg_nodes + new_encoded_cfg_nodes  # skip-connection
@@ -337,7 +340,8 @@ class MethodCFGEncoder(nn.Module):
                     encoded_cfg_paths_ngrams=encoded_cfg_paths_ngrams,
                     cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
-                    nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
+                    nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size,
+                    layer_idx=layer_idx)
             elif self.encoder_params.encoder_type == 'set-of-nodes':
                 pass  # We actually do not need to do anything in this case.
             else:
