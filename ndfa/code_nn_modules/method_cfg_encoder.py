@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Dict, Optional
+from typing import NamedTuple, Dict, Optional, Tuple
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
@@ -282,15 +282,18 @@ class MethodCFGEncoder(nn.Module):
                         layer_idx=layer_idx)
             if self.encoder_params.encoder_type in \
                     {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
+                ngrams_ns = None  # TODO: put in encoder's HPs
+                # ngrams_ns = (2, 3)  # TODO: put in encoder's HPs
                 if layer_idx == 0:
                     encoded_cfg_paths_ngrams = self.first_cfg_paths_ngrams_encoder(
                         cfg_nodes_encodings=encoded_cfg_nodes,
-                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams)
+                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                        ngrams_ns=ngrams_ns)
                 else:
                     encoded_cfg_paths_ngrams = self.cfg_paths_ngrams_updater(
                         cfg_nodes_encodings=encoded_cfg_nodes,
                         cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
-                        previous_encoding_layer_output=encoded_cfg_paths_ngrams,
+                        ngrams_ns=ngrams_ns, previous_encoding_layer_output=encoded_cfg_paths_ngrams,
                         layer_idx=layer_idx)
 
             if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
@@ -621,11 +624,14 @@ class CFGPathsNGramsEncoder(nn.Module):
     def forward(
             self, cfg_nodes_encodings: torch.Tensor,
             cfg_control_flow_paths_ngrams_input: Dict[int, CFGPathsNGramsInputTensors],
+            ngrams_ns: Optional[Tuple[int, ...]] = None,
             previous_encoding_layer_output: Optional[Dict[int, EncodedCFGPaths]] = None) \
             -> Dict[int, EncodedCFGPaths]:
         assert (previous_encoding_layer_output is not None) ^ self.is_first
         results = {}
         for ngrams_n, ngrams in cfg_control_flow_paths_ngrams_input.items():
+            if ngrams_ns is not None and ngrams_n not in ngrams_ns:
+                continue
             if self.is_first:
                 ngrams_edges_types_embeddings = self.control_flow_edge_types_embeddings(ngrams.edges_types.sequences)
                 ngrams_nodes_encodings = cfg_nodes_encodings[ngrams.nodes_indices.sequences]
