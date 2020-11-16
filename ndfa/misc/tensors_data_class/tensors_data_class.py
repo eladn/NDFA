@@ -2,6 +2,11 @@ import torch
 import dataclasses
 from typing import List, Optional, Tuple, Dict, Set
 
+try:
+    from torch_geometric.data import Data as TorchGeometricData, Batch as TorchGeometricBatch
+except ImportError:
+    TorchGeometricData, TorchGeometricBatch = None, None
+
 from .misc import compose_fns, CollateData, CollatableValuesTuple, MapFn
 
 
@@ -176,6 +181,15 @@ class TensorsDataClass:
             assert hasattr(values_as_tuple[0].__class__, 'collate')
             return values_as_tuple[0].__class__.collate(
                 values_as_tuple, collate_data=collate_data, is_most_outer_call=False)
+        if TorchGeometricData is not None:
+            if isinstance(values_as_tuple[0], TorchGeometricData):
+                return TorchGeometricBatch.from_data_list(values_as_tuple, [])
+            # TODO: just temporary. it should not be here.
+            #  we should have a dedicated type `FlattenedTorchGeometricData`.
+            if isinstance(values_as_tuple[0], (list, tuple)) and \
+                    any(len(elem) > 0 and isinstance(elem[0], TorchGeometricData) for elem in values_as_tuple):
+                flattened = tuple(values_as_tuple for elem in values_as_tuple for datum in elem)
+                return TorchGeometricBatch.from_data_list(flattened, [])
         if isinstance(values_as_tuple[0], dict):
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
             return {key: cls.collate_values(tuple(dct[key] for dct in values_as_tuple if key in dct),
