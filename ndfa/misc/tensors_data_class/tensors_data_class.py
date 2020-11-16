@@ -134,6 +134,15 @@ class TensorsDataClass:
                     map_fn=map_fn, mapper_override_group=mapper_override_group,
                     lazy_map_usage_history=lazy_map_usage_history,
                     parents_path=new_parents_path, fields_path=new_fields_path)
+            elif isinstance(field_value, dict):
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
+                mapped_field_values[field.name] = {
+                    key: val.deep_lazy_map(
+                        map_fn=map_fn, mapper_override_group=mapper_override_group,
+                        lazy_map_usage_history=lazy_map_usage_history,
+                        parents_path=new_parents_path, fields_path=new_fields_path + (key,))
+                        if isinstance(val, TensorsDataClass) else map_fn(val)  # TODO: fix it here..
+                    for key, val in field_value.items()}
             elif field.name in lazy_map_usage_history_for_obj:
                 assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
                 mapped_field_values[field.name] = map_fn(field_value)
