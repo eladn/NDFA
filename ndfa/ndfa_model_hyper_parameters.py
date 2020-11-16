@@ -100,7 +100,8 @@ class MethodCFGEncoderParams:
     encoder_type: str = confparam(
         default='control-flow-paths-folded-to-nodes',
         choices=('set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
-                 'control-flow-paths-ngrams', 'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
+                 'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
+                 'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
                  'all-nodes-single-random-permutation-seq'),
         description="Representation type of the method-CFG (specific architecture of the method-CFG-code-encoder).")
 
