@@ -23,10 +23,10 @@ class TensorsDataDict(TensorsDataClass, Generic[DictKeyT, DictValueT]):
     @classmethod
     def _collate_first_pass(cls, inputs: List['TensorsDataDict'], collate_data: CollateData) -> 'TensorsDataDict':
         assert all(isinstance(inp, TensorsDataDict) for inp in inputs)
-        all_keys = {key for dct in inputs for key in dct.keys()}
+        all_keys = {key for dct in inputs for key in dct.dict.keys()}
         batched_obj = TensorsDataDict(dict={
             key: cls.collate_values(
-                tuple(dct[key] for dct in inputs if key in dct),
+                tuple(dct.dict[key] for dct in inputs if key in dct.dict),
                 collate_data=collate_data)
             for key in all_keys})
         batched_obj._batch_size = len(inputs)
