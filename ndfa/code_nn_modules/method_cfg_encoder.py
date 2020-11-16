@@ -181,7 +181,7 @@ class MethodCFGEncoder(nn.Module):
                     module_create_fn=lambda: NormWrapper(
                         self.encoder_params.cfg_node_encoding_dim,
                         affine=affine_norm, norm_type=norm_type),
-                    repeats=3, share=share_norm_between_usage_points, repeat_key='usage_point'),
+                    repeats=2, share=share_norm_between_usage_points, repeat_key='usage_point'),
                 repeats=nr_layers, share=share_weights_between_layers, repeat_key='layer_idx')
 
         self.use_symbols_occurrences_for_symbols_encodings = \
@@ -328,7 +328,7 @@ class MethodCFGEncoder(nn.Module):
                 #     previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
                 encoded_cfg_nodes = new_encoded_cfg_nodes
                 if self.use_norm:
-                    encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, layer_idx=layer_idx, usage_point=2)
+                    encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, layer_idx=layer_idx, usage_point=1)
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'gnn':
@@ -342,6 +342,8 @@ class MethodCFGEncoder(nn.Module):
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size,
                     layer_idx=layer_idx)
+                if self.use_norm:
+                    encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, layer_idx=layer_idx, usage_point=1)
             elif self.encoder_params.encoder_type == 'set-of-nodes':
                 pass  # We actually do not need to do anything in this case.
             else:
