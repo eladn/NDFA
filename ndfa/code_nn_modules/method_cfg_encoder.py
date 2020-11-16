@@ -289,12 +289,12 @@ class MethodCFGEncoder(nn.Module):
                 if layer_idx == 0:
                     encoded_cfg_paths_ngrams = self.first_cfg_paths_ngrams_encoder(
                         cfg_nodes_encodings=encoded_cfg_nodes,
-                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
                         ngrams_ns=ngrams_ns)
                 else:
                     encoded_cfg_paths_ngrams = self.cfg_paths_ngrams_updater(
                         cfg_nodes_encodings=encoded_cfg_nodes,
-                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
                         ngrams_ns=ngrams_ns, previous_encoding_layer_output=encoded_cfg_paths_ngrams,
                         layer_idx=layer_idx)
 
@@ -338,7 +338,7 @@ class MethodCFGEncoder(nn.Module):
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
                 encoded_cfg_nodes = self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings(
                     encoded_cfg_paths_ngrams=encoded_cfg_paths_ngrams,
-                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size,
                     layer_idx=layer_idx)
