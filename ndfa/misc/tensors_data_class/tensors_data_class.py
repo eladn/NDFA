@@ -186,8 +186,8 @@ class TensorsDataClass:
     def access_field(self, name: str):
         return getattr(self, name)
 
-    def get_all_traversable_data_field_names(self) -> Tuple[str]:
-        return dataclasses.fields(self)
+    def get_all_traversable_data_field_names(self) -> Tuple[str, ...]:
+        return tuple(field.name for field in dataclasses.fields(self))
 
     @classmethod
     def collate_values(cls, values_as_tuple: CollatableValuesTuple, collate_data: CollateData):

@@ -17,8 +17,8 @@ class TensorsDataDict(TensorsDataClass, Generic[DictKeyT, DictValueT]):
     def access_field(self, name: str):
         return self.dict[name]
 
-    def get_all_traversable_data_field_names(self) -> Tuple[str]:
-        return dataclasses.fields(self)
+    def get_all_traversable_data_field_names(self) -> Tuple[str, ...]:
+        return tuple(self.dict.keys())
 
     @classmethod
     def _collate_first_pass(cls, inputs: List['TensorsDataDict'], collate_data: CollateData) -> 'TensorsDataDict':
