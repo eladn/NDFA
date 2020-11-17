@@ -354,7 +354,8 @@ def preprocess_code_task_example(
         edge_attr=torch.LongTensor(
             [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(cf_edge.type.value)
              for pdg_node in method_pdg.pdg_nodes
-             for cf_edge in pdg_node.control_flow_out_edges]))
+             for cf_edge in pdg_node.control_flow_out_edges]),
+        num_nodes=len(method_pdg.pdg_nodes))
     assert (set(cfg_control_flow_graph.edge_index[0].tolist()) |
             set(cfg_control_flow_graph.edge_index[1].tolist())) == set(range(len(method_pdg.pdg_nodes)))
 
