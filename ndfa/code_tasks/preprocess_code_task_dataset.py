@@ -356,6 +356,8 @@ def preprocess_code_task_example(
              for pdg_node in method_pdg.pdg_nodes
              for cf_edge in pdg_node.control_flow_out_edges]),
         num_nodes=len(method_pdg.pdg_nodes))
+    assert not cfg_control_flow_graph.contains_isolated_nodes()
+    assert cfg_control_flow_graph.is_directed()
     assert (set(cfg_control_flow_graph.edge_index[0].tolist()) |
             set(cfg_control_flow_graph.edge_index[1].tolist())) == set(range(len(method_pdg.pdg_nodes)))
 
