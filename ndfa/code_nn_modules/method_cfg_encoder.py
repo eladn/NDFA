@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import NamedTuple, Dict, Optional, Tuple, Mapping
+from torch_geometric import nn as tgnn
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
@@ -108,6 +109,17 @@ class MethodCFGEncoder(nn.Module):
                     control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types, is_first=False,
                     dropout_rate=dropout_rate, activation_fn=activation_fn),
                 repeats=range(1, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
+        if self.encoder_params.encoder_type == 'gnn':
+            self.cfg_gnn = ModuleRepeater(
+                lambda: tgnn.GCNConv(
+                    in_channels=self.encoder_params.cfg_node_encoding_dim,
+                    out_channels=self.encoder_params.cfg_node_encoding_dim,
+                    cached=False, normalize=True, add_self_loops=True),
+                repeats=range(0, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
+            self.control_flow_edge_types_embeddings = nn.Embedding(
+                num_embeddings=len(code_task_vocabs.pdg_control_flow_edge_types),
+                embedding_dim=self.encoder_params.cfg_node_encoding_dim,
+                padding_idx=code_task_vocabs.pdg_control_flow_edge_types.get_word_idx('<PAD>'))
         if self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
             self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = ModuleRepeater(
                 lambda: ScatterCFGEncodedNGramsToCFGNodeEncodings(
@@ -205,6 +217,8 @@ class MethodCFGEncoder(nn.Module):
         #          update_dim=self.encoder_params.cfg_node_encoding_dim,
         #          dropout_rate=dropout_rate, activation_fn=activation_fn)
         #     for _ in range(nr_layers)])
+
+        self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFG:
         encoded_expressions, encoded_expressions_with_context = None, None
@@ -332,7 +346,13 @@ class MethodCFGEncoder(nn.Module):
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'gnn':
-                raise NotImplementedError  # TODO: impl
+                # edge_weight = self.control_flow_edge_types_embeddings(
+                #     code_task_input.pdg.cfg_control_flow_graph.edge_attr)
+                encoded_cfg_nodes = self.dropout_layer(self.activation_layer(self.cfg_gnn(
+                    x=encoded_cfg_nodes,
+                    edge_index=code_task_input.pdg.cfg_control_flow_graph.edge_index,
+                    layer_idx=layer_idx)))  # edge_weight,
+                # TODO: should we have normalization here?
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths-ngrams':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
