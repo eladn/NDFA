@@ -1,6 +1,7 @@
 import torch
 import dataclasses
 from typing import Optional
+from torch_geometric.data import Data as TGData
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
@@ -77,6 +78,8 @@ class PDGInputTensors(TensorsDataClass):
     cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesPseudoRandomPermutation] = None
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
     cfg_control_flow_paths_ngrams: Optional[TensorsDataDict[int, CFGPathsNGramsInputTensors]] = None
+
+    cfg_control_flow_graph: Optional[TGData] = None
 
 
 @dataclasses.dataclass

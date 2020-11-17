@@ -10,6 +10,7 @@ from warnings import warn
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
 from typing_extensions import Protocol
 from sklearn.feature_extraction.text import HashingVectorizer
+from torch_geometric.data import Data as TGData
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
@@ -345,6 +346,18 @@ def preprocess_code_task_example(
     #     print()
     #     # exit()
 
+    cfg_control_flow_graph = TGData(
+        edge_index=torch.LongTensor(
+            [[pdg_node.idx, cf_edge.pgd_node_idx]
+             for pdg_node in method_pdg.pdg_nodes
+             for cf_edge in pdg_node.control_flow_out_edges]).transpose(0, 1),
+        edge_attr=torch.LongTensor(
+            [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(cf_edge.type.value)
+             for pdg_node in method_pdg.pdg_nodes
+             for cf_edge in pdg_node.control_flow_out_edges]))
+    assert (set(cfg_control_flow_graph.edge_index[0].tolist()) |
+            set(cfg_control_flow_graph.edge_index[1].tolist())) == set(range(len(method_pdg.pdg_nodes)))
+
     pdg = PDGInputTensors(
         cfg_nodes_control_kind=BatchFlattenedTensor(torch.LongTensor(
             [code_task_vocabs.pdg_node_control_kinds.get_word_idx(
@@ -380,7 +393,8 @@ def preprocess_code_task_example(
                             '<PAD>' if edge_type is None else edge_type)
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
-            for key, ngrams in control_flow_paths_ngrams.items()}))
+            for key, ngrams in control_flow_paths_ngrams.items()}),
+        cfg_control_flow_graph=cfg_control_flow_graph)
 
     token_ranges_to_mask = [
         (method_pdg.pdg_nodes[pdg_node_idx].code_sub_token_range_ref, mask_replacement)
