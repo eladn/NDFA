@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Dict, Optional, Tuple
+from typing import NamedTuple, Dict, Optional, Tuple, Mapping
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
@@ -289,12 +289,12 @@ class MethodCFGEncoder(nn.Module):
                 if layer_idx == 0:
                     encoded_cfg_paths_ngrams = self.first_cfg_paths_ngrams_encoder(
                         cfg_nodes_encodings=encoded_cfg_nodes,
-                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
+                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
                         ngrams_ns=ngrams_ns)
                 else:
                     encoded_cfg_paths_ngrams = self.cfg_paths_ngrams_updater(
                         cfg_nodes_encodings=encoded_cfg_nodes,
-                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
+                        cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
                         ngrams_ns=ngrams_ns, previous_encoding_layer_output=encoded_cfg_paths_ngrams,
                         layer_idx=layer_idx)
 
@@ -338,7 +338,7 @@ class MethodCFGEncoder(nn.Module):
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
                 encoded_cfg_nodes = self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings(
                     encoded_cfg_paths_ngrams=encoded_cfg_paths_ngrams,
-                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams.dict,
+                    cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
                     previous_cfg_nodes_encodings=encoded_cfg_nodes,
                     nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size,
                     layer_idx=layer_idx)
@@ -629,7 +629,7 @@ class CFGPathsNGramsEncoder(nn.Module):
 
     def forward(
             self, cfg_nodes_encodings: torch.Tensor,
-            cfg_control_flow_paths_ngrams_input: Dict[int, CFGPathsNGramsInputTensors],
+            cfg_control_flow_paths_ngrams_input: Mapping[int, CFGPathsNGramsInputTensors],
             ngrams_ns: Optional[Tuple[int, ...]] = None,
             previous_encoding_layer_output: Optional[Dict[int, EncodedCFGPaths]] = None) \
             -> Dict[int, EncodedCFGPaths]:
@@ -689,7 +689,7 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self, encoded_cfg_paths_ngrams: Dict[int, EncodedCFGPaths],
-                cfg_control_flow_paths_ngrams_input: Dict[int, CFGPathsNGramsInputTensors],
+                cfg_control_flow_paths_ngrams_input: Mapping[int, CFGPathsNGramsInputTensors],
                 previous_cfg_nodes_encodings: torch.Tensor, nr_cfg_nodes: int):
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
         # The mask also helps to ignore paddings.
