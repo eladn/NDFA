@@ -1,6 +1,6 @@
 import torch
 import dataclasses
-from typing import List, Optional, Tuple, Dict, Set
+from typing import List, Optional, Tuple, Dict, Set, Iterable, Union
 
 try:
     from torch_geometric.data import Data as TorchGeometricData, Batch as TorchGeometricBatch
@@ -30,6 +30,12 @@ class TensorsDataClass:
         supers = super(TensorsDataClass, cls).get_management_fields() \
             if hasattr(super(TensorsDataClass, cls), 'get_management_fields') else ()
         return supers + ('_batch_size', )
+
+    @classmethod
+    def get_indices_fields(cls) -> Tuple[dataclasses.Field, ...]:
+        supers = super(TensorsDataClass, cls).get_indices_fields() \
+            if hasattr(super(TensorsDataClass, cls), 'get_indices_fields') else ()
+        return supers
 
     @classmethod
     def get_data_fields(cls) -> Tuple[dataclasses.Field, ...]:
@@ -83,30 +89,26 @@ class TensorsDataClass:
             fields_path: Tuple[str, ...] = ()) -> 'TensorsDataClass':
         mapped_field_values = {}
         new_parents_path = parents_path + (self,)
-        for field in dataclasses.fields(self):
-            field_value = object.__getattribute__(self, field.name)
-            new_fields_path = fields_path + (field.name,)
+        for field_name in self.get_field_names_by_group(group='all'):
+            field_value = self.access_field_wo_applying_lazy_maps(field_name)
+            new_fields_path = fields_path + (field_name,)
             if isinstance(field_value, TensorsDataClass):
-                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
-                mapped_field_values[field.name] = field_value.deep_map(
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field_name not in self._lazy_map_fns_per_field
+                mapped_field_values[field_name] = field_value.deep_map(
                     map_fn=map_fn, mapper_override_group=mapper_override_group,
                     parents_path=new_parents_path, fields_path=new_fields_path)
-            elif hasattr(self, '_lazy_map_fns_per_field') and field.name in self._lazy_map_fns_per_field:
-                new_mapping_fns = list(self._lazy_map_fns_per_field[field.name])
+            elif hasattr(self, '_lazy_map_fns_per_field') and field_name in self._lazy_map_fns_per_field:
+                new_mapping_fns = list(self._lazy_map_fns_per_field[field_name])
                 if mapper_override_group is not None:
                     while len(new_mapping_fns) > 0 and new_mapping_fns[-1][1] is not None and \
                             new_mapping_fns[-1][1] == mapper_override_group:
                         new_mapping_fns.pop()
                 new_mapping_fns.append((map_fn, mapper_override_group))
                 composed_map_fn = compose_fns(*(fn for fn, _ in new_mapping_fns))
-                mapped_field_values[field.name] = composed_map_fn(field_value)
+                mapped_field_values[field_name] = composed_map_fn(field_value)
             else:
-                mapped_field_values[field.name] = map_fn(field_value)
-        new_obj = self.__class__(
-            **{field.name: mapped_field_values[field.name] for field in dataclasses.fields(self) if field.init})
-        for field in dataclasses.fields(self):
-            if not field.init:
-                setattr(new_obj, field.name, mapped_field_values[field.name])
+                mapped_field_values[field_name] = map_fn(field_value)
+        new_obj = self.factory(mapped_field_values)
         return new_obj
 
     # TODO: generalize to support `TensorDataDict`!
@@ -126,47 +128,55 @@ class TensorsDataClass:
         if fields_path not in lazy_map_usage_history:
             lazy_map_usage_history[fields_path] = set()
         lazy_map_usage_history_for_obj = lazy_map_usage_history[fields_path]
-        for field in dataclasses.fields(self):
-            field_value = object.__getattribute__(self, field.name)
-            new_fields_path = fields_path + (field.name,)
+        for field_name in self.get_field_names_by_group(group='all'):
+            field_value = self.access_field_wo_applying_lazy_maps(field_name)
+            new_fields_path = fields_path + (field_name,)
             if isinstance(field_value, TensorsDataClass):
-                assert field.name not in lazy_map_usage_history_for_obj
-                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
-                mapped_field_values[field.name] = field_value.deep_lazy_map(
+                assert field_name not in lazy_map_usage_history_for_obj
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field_name not in self._lazy_map_fns_per_field
+                mapped_field_values[field_name] = field_value.deep_lazy_map(
                     map_fn=map_fn, mapper_override_group=mapper_override_group,
                     lazy_map_usage_history=lazy_map_usage_history,
                     parents_path=new_parents_path, fields_path=new_fields_path)
             # elif isinstance(field_value, dict):  # TODO: REMOVE this case! we do not longer support native dict!
-            #     assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
-            #     mapped_field_values[field.name] = {
+            #     assert not hasattr(self, '_lazy_map_fns_per_field') or field_name not in self._lazy_map_fns_per_field
+            #     mapped_field_values[field_name] = {
             #         key: val.deep_lazy_map(
             #             map_fn=map_fn, mapper_override_group=mapper_override_group,
             #             lazy_map_usage_history=lazy_map_usage_history,
             #             parents_path=new_parents_path, fields_path=new_fields_path + (key,))
             #             if isinstance(val, TensorsDataClass) else map_fn(val)  # TODO: fix it here..
             #         for key, val in field_value.items()}
-            elif field.name in lazy_map_usage_history_for_obj:
-                assert not hasattr(self, '_lazy_map_fns_per_field') or field.name not in self._lazy_map_fns_per_field
-                mapped_field_values[field.name] = map_fn(field_value)
+            elif field_name in lazy_map_usage_history_for_obj:
+                assert not hasattr(self, '_lazy_map_fns_per_field') or field_name not in self._lazy_map_fns_per_field
+                mapped_field_values[field_name] = map_fn(field_value)
             else:
-                mapped_field_values[field.name] = field_value
-                if hasattr(self, '_lazy_map_fns_per_field') and field.name in self._lazy_map_fns_per_field:
-                    new_mapping_fns = list(self._lazy_map_fns_per_field[field.name])
+                mapped_field_values[field_name] = field_value
+                if hasattr(self, '_lazy_map_fns_per_field') and field_name in self._lazy_map_fns_per_field:
+                    new_mapping_fns = list(self._lazy_map_fns_per_field[field_name])
                     if mapper_override_group is not None:
                         while len(new_mapping_fns) > 0 and new_mapping_fns[-1][1] is not None and \
                                 new_mapping_fns[-1][1] == mapper_override_group:
                             new_mapping_fns.pop()
                     new_mapping_fns.append((map_fn, mapper_override_group))
-                    lazy_map_fns_per_field[field.name] = new_mapping_fns
+                    lazy_map_fns_per_field[field_name] = new_mapping_fns
                 else:
-                    lazy_map_fns_per_field[field.name] = [(map_fn, mapper_override_group)]
-        new_obj = self.__class__(
-            **{field.name: mapped_field_values[field.name] for field in dataclasses.fields(self) if field.init})
-        for field in dataclasses.fields(self):
-            if not field.init:
-                setattr(new_obj, field.name, mapped_field_values[field.name])
+                    lazy_map_fns_per_field[field_name] = [(map_fn, mapper_override_group)]
+
+        new_obj = self.factory(mapped_field_values)
         new_obj._lazy_map_fns_per_field = lazy_map_fns_per_field
         new_obj._lazy_map_usage_history = lazy_map_usage_history_for_obj
+        return new_obj
+
+    @classmethod
+    def factory(cls, kwargs: Dict) -> 'TensorsDataClass':
+        dataclass_fields_not_to_init = {
+            field.name: field for field in dataclasses.fields(cls) if not field.init}
+        new_obj = cls(
+            **{key: val for key, val in kwargs.items()
+               if key not in dataclass_fields_not_to_init})
+        for field_name in set(dataclass_fields_not_to_init.keys()) & set(kwargs.keys()):
+            setattr(new_obj, field_name, kwargs[field_name])
         return new_obj
 
     def __getattribute__(self, field_name):
@@ -186,8 +196,23 @@ class TensorsDataClass:
     def access_field(self, name: str):
         return getattr(self, name)
 
-    def get_all_traversable_data_field_names(self) -> Tuple[str, ...]:
+    def access_field_wo_applying_lazy_maps(self, name: str):
+        return object.__getattribute__(self, name)
+
+    def get_all_fields(self) -> Tuple[str, ...]:
         return tuple(field.name for field in dataclasses.fields(self))
+
+    def get_field_names_by_group(self, group: str = 'all') -> Tuple[str, ...]:
+        if group == 'all':
+            return self.get_all_fields()
+        elif group == 'data':
+            return tuple(field.name for field in self.get_data_fields())
+        elif group == 'indices':
+            return tuple(field.name for field in self.get_indices_fields())
+        elif group == 'management':
+            return tuple(self.get_management_fields())
+        else:
+            raise ValueError(f'Unsupported fields group `{group}`.')
 
     @classmethod
     def collate_values(cls, values_as_tuple: CollatableValuesTuple, collate_data: CollateData):
@@ -262,35 +287,38 @@ class TensorsDataClass:
     def post_collate_indices_fix(
             self, parents: Tuple['TensorsDataClass', ...],
             fields_path: Tuple[str, ...], collate_data: CollateData):
-        for field in dataclasses.fields(self):
-            field_value = getattr(self, field.name)
+        for field_name in self.get_all_fields():
+            field_value = self.access_field(field_name)
             if isinstance(field_value, TensorsDataClass):
                 field_value.post_collate_indices_fix(
-                    parents=parents + (self,), fields_path=fields_path + (field.name,),
+                    parents=parents + (self,), fields_path=fields_path + (field_name,),
                     collate_data=collate_data)
 
     def post_collate_remove_unnecessary_collate_info(self):
-        for field in dataclasses.fields(self):
-            field_value = getattr(self, field.name)
+        for field_name in self.get_all_fields():
+            field_value = self.access_field(field_name)
             if isinstance(field_value, TensorsDataClass):
                 field_value.post_collate_remove_unnecessary_collate_info()
 
-    def traverse(self,
-                 parents_path: Optional[Tuple['TensorsDataClass', ...]] = None,
-                 fields_path: Optional[Tuple[str, ...]] = None,
-                 traversal_order: str = 'previsit'):
+    def traverse(
+            self, parents_path: Optional[Tuple['TensorsDataClass', ...]] = None,
+            fields_path: Optional[Tuple[str, ...]] = None,
+            traversal_order: str = 'previsit', fields_group: str = 'all') \
+            -> Iterable[Union[
+                'TensorsDataClass', Tuple['TensorsDataClass', Tuple['TensorsDataClass', ...], Tuple[str, ...]]]]:
         assert traversal_order in ('previsit', 'postvisit')
         assert not ((parents_path is None) ^ (fields_path is None))
         if traversal_order == 'previsit':
             yield self if parents_path is None else (self, parents_path, fields_path)
-        for field_name in self.get_all_traversable_data_field_names():
+        for field_name in self.get_field_names_by_group(group=fields_group):
             field_value = self.access_field(field_name)
             if not isinstance(field_value, TensorsDataClass):
                 continue
             new_parents_path = None if parents_path is None else parents_path + (self,)
             new_fields_path = None if fields_path is None else fields_path + (field_name,)
             for child in field_value.traverse(
-                    parents_path=new_parents_path, fields_path=new_fields_path, traversal_order=traversal_order):
+                    parents_path=new_parents_path, fields_path=new_fields_path,
+                    traversal_order=traversal_order, fields_group=fields_group):
                 yield child
         if traversal_order == 'postvisit':
             yield self if parents_path is None else (self, parents_path, fields_path)
