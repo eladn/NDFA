@@ -112,7 +112,7 @@ class MethodCFGEncoder(nn.Module):
         if self.encoder_params.encoder_type == 'gnn':
             self.nr_gnn_layers = 1
             self.cfg_gnn = ModuleRepeater(
-                # ModuleRepeater(
+                lambda: ModuleRepeater(
                     # lambda: tgnn.GCNConv(
                     #     in_channels=self.encoder_params.cfg_node_encoding_dim,
                     #     out_channels=self.encoder_params.cfg_node_encoding_dim,
@@ -120,7 +120,7 @@ class MethodCFGEncoder(nn.Module):
                     lambda: tgnn.GatedGraphConv(
                         out_channels=self.encoder_params.cfg_node_encoding_dim,
                         num_layers=8),
-                    # repeats=self.nr_gnn_layers, share=False, repeat_key='gnn_layer_idx'),
+                    repeats=self.nr_gnn_layers, share=False, repeat_key='gnn_layer_idx'),
                 repeats=range(0, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
             self.control_flow_edge_types_embeddings = nn.Embedding(
                 num_embeddings=len(code_task_vocabs.pdg_control_flow_edge_types),
@@ -358,7 +358,7 @@ class MethodCFGEncoder(nn.Module):
                     encoded_cfg_nodes = self.dropout_layer(self.activation_layer(self.cfg_gnn(
                         x=encoded_cfg_nodes,
                         edge_index=code_task_input.pdg.cfg_control_flow_graph.edge_index,  # edge_weight=edge_weight,
-                        layer_idx=layer_idx)))  # , gnn_layer_idx=gnn_layer_idx
+                        gnn_layer_idx=gnn_layer_idx, layer_idx=layer_idx)))
                 # TODO: should we have normalization here?
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths-ngrams':
                 raise NotImplementedError  # TODO: impl
