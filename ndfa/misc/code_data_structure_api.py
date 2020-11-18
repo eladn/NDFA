@@ -585,6 +585,7 @@ class SerToken:
     kind: SerTokenKind
     position_range_in_code_snippet_str: SerIndexRange
     position_range_in_file: SerPositionRange
+    ast_leaves_indices: Optional[List[int]] = None
     identifier_idx: Optional[int] = None
     operator: Optional[SerTokenOperatorKind] = None
     separator: Optional[SerTokenSeparatorKind] = None
@@ -597,18 +598,20 @@ class SerToken:
         kind = SerTokenKind(obj.get("kind"))
         position_range_in_code_snippet_str = SerIndexRange.from_dict(obj.get("positionRangeInCodeSnippetStr"))
         position_range_in_file = SerPositionRange.from_dict(obj.get("positionRangeInFile"))
+        ast_leaves_indices = from_union([lambda x: from_list(from_int, x), from_none], obj.get("astLeavesIndices"))
         identifier_idx = from_union([from_int, from_none], obj.get("identifierIdx"))
         operator = from_union([SerTokenOperatorKind, from_none], obj.get("operator"))
         separator = from_union([SerTokenSeparatorKind, from_none], obj.get("separator"))
         symbol_idx = from_union([from_int, from_none], obj.get("symbolIdx"))
         text = from_union([from_str, from_none], obj.get("text"))
-        return SerToken(kind, position_range_in_code_snippet_str, position_range_in_file, identifier_idx, operator, separator, symbol_idx, text)
+        return SerToken(kind, position_range_in_code_snippet_str, position_range_in_file, ast_leaves_indices, identifier_idx, operator, separator, symbol_idx, text)
 
     def to_dict(self) -> dict:
         result: dict = {}
         result["kind"] = to_enum(SerTokenKind, self.kind)
         result["positionRangeInCodeSnippetStr"] = to_class(SerIndexRange, self.position_range_in_code_snippet_str)
         result["positionRangeInFile"] = to_class(SerPositionRange, self.position_range_in_file)
+        result["astLeavesIndices"] = from_union([lambda x: from_list(from_int, x), from_none], self.ast_leaves_indices)
         result["identifierIdx"] = from_union([from_int, from_none], self.identifier_idx)
         result["operator"] = from_union([lambda x: to_enum(SerTokenOperatorKind, x), from_none], self.operator)
         result["separator"] = from_union([lambda x: to_enum(SerTokenSeparatorKind, x), from_none], self.separator)
