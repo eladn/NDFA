@@ -359,7 +359,8 @@ class MethodCFGEncoder(nn.Module):
                         x=encoded_cfg_nodes,
                         edge_index=code_task_input.pdg.cfg_control_flow_graph.edge_index,  # edge_weight=edge_weight,
                         gnn_layer_idx=gnn_layer_idx, layer_idx=layer_idx)))
-                # TODO: should we have normalization here?
+                    if self.use_norm:
+                        encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, layer_idx=layer_idx, usage_point=1)
             elif self.encoder_params.encoder_type == 'set-of-control-flow-paths-ngrams':
                 raise NotImplementedError  # TODO: impl
             elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
