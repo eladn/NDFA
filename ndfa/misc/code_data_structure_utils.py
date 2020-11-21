@@ -230,19 +230,28 @@ class ASTPaths:
     leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
     nodes_depth: Dict[ASTNodeIdxType, int]
+    subtree_indices_range: Tuple[ASTNodeIdxType, ASTNodeIdxType]
 
 
 def get_all_ast_paths(
-        method_ast: SerMethodAST, sub_ast_root_node_idx: ASTNodeIdxType = 0) -> ASTPaths:
+        method_ast: SerMethodAST,
+        sub_ast_root_node_idx: ASTNodeIdxType = 0,
+        verify_preorder_indexing: bool = False) -> ASTPaths:
     all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
     nodes_depth: Dict[ASTNodeIdxType, int] = {}
+    if verify_preorder_indexing:
+        # just a sanity-check to ensure the indexing method (pre-order).
+        # pre-order indexing is later assumed for calculating the field `subtree_indices_range`.
+        all_subtree_indices: Set[ASTNodeIdxType] = set()
 
     def aux_recursive_ast_traversal(
             current_node_idx: ASTNodeIdxType, depth: int = 0) \
             -> List[Tuple[ASTLeaf2InnerNodePathNode, ...]]:
         nodes_depth[current_node_idx] = depth
+        if verify_preorder_indexing:
+            all_subtree_indices.add(current_node_idx)
         if len(method_ast.nodes[current_node_idx].children_idxs) == 0:  # leaf
             leaves_sequence.append(current_node_idx)
             return [()]
@@ -290,9 +299,14 @@ def get_all_ast_paths(
         path + (ASTLeaf2InnerNodePathNode(ast_node_idx=sub_ast_root_node_idx, child_place_in_parent=None),)
         for path in aux_recursive_ast_traversal(current_node_idx=sub_ast_root_node_idx)]
 
+    subtree_indices_range = (sub_ast_root_node_idx, leaves_sequence[-1])
+    if verify_preorder_indexing:
+        assert all_subtree_indices == set(range(subtree_indices_range[0], subtree_indices_range[1] + 1))
+
     return ASTPaths(
         leaf_to_leaf_paths=all_ast_leaf_to_leaf_paths,
         leaves_pair_common_ancestor=leaves_pair_common_ancestor,
         leaf_to_root_paths=all_ast_leaf_to_root_paths,
         leaves_sequence=tuple(leaves_sequence),
-        nodes_depth=nodes_depth)
+        nodes_depth=nodes_depth,
+        subtree_indices_range=subtree_indices_range)
