@@ -15,7 +15,8 @@ from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 __all__ = [
     'get_pdg_node_tokenized_expression', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call',
-    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths']
+    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
+    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType']
 
 
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
@@ -228,6 +229,7 @@ class ASTPaths:
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType]
     leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
+    nodes_depth: Dict[ASTNodeIdxType, int]
 
 
 def get_all_ast_paths(
@@ -235,14 +237,18 @@ def get_all_ast_paths(
     all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
+    nodes_depth: Dict[ASTNodeIdxType, int] = {}
 
-    def aux_recursive_ast_traversal(current_node_idx: ASTNodeIdxType) -> List[Tuple[ASTLeaf2InnerNodePathNode, ...]]:
+    def aux_recursive_ast_traversal(
+            current_node_idx: ASTNodeIdxType, depth: int = 0) \
+            -> List[Tuple[ASTLeaf2InnerNodePathNode, ...]]:
+        nodes_depth[current_node_idx] = depth
         if len(method_ast.nodes[current_node_idx].children_idxs) == 0:  # leaf
             leaves_sequence.append(current_node_idx)
             return [()]
 
         inner_upward_paths_from_leaves_to_children = [
-            aux_recursive_ast_traversal(child_node_idx)
+            aux_recursive_ast_traversal(child_node_idx, depth=depth + 1)
             for child_node_idx in method_ast.nodes[current_node_idx].children_idxs]
         for left_child_place in range(len(inner_upward_paths_from_leaves_to_children)):
             for right_child_place in range(left_child_place + 1, len(inner_upward_paths_from_leaves_to_children)):
@@ -288,4 +294,5 @@ def get_all_ast_paths(
         leaf_to_leaf_paths=all_ast_leaf_to_leaf_paths,
         leaves_pair_common_ancestor=leaves_pair_common_ancestor,
         leaf_to_root_paths=all_ast_leaf_to_root_paths,
-        leaves_sequence=tuple(leaves_sequence))
+        leaves_sequence=tuple(leaves_sequence),
+        nodes_depth=nodes_depth)
