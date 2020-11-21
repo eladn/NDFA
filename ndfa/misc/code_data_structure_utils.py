@@ -1,11 +1,12 @@
 import json
 import argparse
+import itertools
 import dataclasses
 import numpy as np
 from enum import Enum
 from functools import reduce
 from typing_extensions import Protocol
-from typing import List, Dict, Tuple, Set, Optional, Any, Union, NamedTuple
+from typing import List, Dict, Tuple, Set, Optional, Any, Union
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
     SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType
@@ -14,7 +15,7 @@ from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 __all__ = [
     'get_pdg_node_tokenized_expression', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call',
-    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_leaf_to_leaf_paths_and_leaf_to_root_paths']
+    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths']
 
 
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
@@ -200,13 +201,18 @@ def get_all_pdg_simple_paths(
     return paths
 
 
-class ASTLeaf2InnerNodePathNode(NamedTuple):
-    ast_node_idx: int
+ASTNodeIdxType = int
+
+
+@dataclasses.dataclass(frozen=True)
+class ASTLeaf2InnerNodePathNode:
+    ast_node_idx: ASTNodeIdxType
     child_place_in_parent: Optional[int]
 
 
-class ASTLeaf2LeafPathNode(NamedTuple):
-    ast_node_idx: int
+@dataclasses.dataclass(frozen=True)
+class ASTLeaf2LeafPathNode:
+    ast_node_idx: ASTNodeIdxType
     child_place_in_parent: Optional[int]
     direction: 'Direction'
 
@@ -216,13 +222,23 @@ class ASTLeaf2LeafPathNode(NamedTuple):
         COMMON = 'COMMON'
 
 
-def get_all_ast_leaf_to_leaf_paths_and_leaf_to_root_paths(
-        method_ast: SerMethodAST, sub_ast_root_node_idx: int = 0) -> \
-        Tuple[List[Tuple[ASTLeaf2LeafPathNode, ...]], List[Tuple[ASTLeaf2InnerNodePathNode, ...]]]:
-    all_ast_leaf_to_leaf_paths: List[Tuple[ASTLeaf2LeafPathNode, ...]] = []
+@dataclasses.dataclass(frozen=True)
+class ASTPaths:
+    leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]]
+    leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType]
+    leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]]
+    leaves_sequence: Tuple[ASTNodeIdxType, ...]
 
-    def aux_recursive_ast_traversal(current_node_idx: int) -> List[Tuple[ASTLeaf2InnerNodePathNode, ...]]:
+
+def get_all_ast_paths(
+        method_ast: SerMethodAST, sub_ast_root_node_idx: ASTNodeIdxType = 0) -> ASTPaths:
+    all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
+    leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
+    leaves_sequence: List[ASTNodeIdxType] = []
+
+    def aux_recursive_ast_traversal(current_node_idx: ASTNodeIdxType) -> List[Tuple[ASTLeaf2InnerNodePathNode, ...]]:
         if len(method_ast.nodes[current_node_idx].children_idxs) == 0:  # leaf
+            leaves_sequence.append(current_node_idx)
             return [()]
 
         inner_upward_paths_from_leaves_to_children = [
@@ -234,12 +250,29 @@ def get_all_ast_leaf_to_leaf_paths_and_leaf_to_root_paths(
                 ret_from_right_child = inner_upward_paths_from_leaves_to_children[right_child_place]
                 for left_path in ret_from_left_child:
                     for right_path in ret_from_right_child:
-                        all_ast_leaf_to_leaf_paths.append(
-                            tuple(ASTLeaf2LeafPathNode(ast_node_idx=left_path_node.ast_node_idx, child_place_in_parent=left_path_node.child_place_in_parent, direction=ASTLeaf2LeafPathNode.Direction.UP) for left_path_node in left_path) +
-                            (ASTLeaf2LeafPathNode(ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[left_child_place], child_place_in_parent=left_child_place, direction=ASTLeaf2LeafPathNode.Direction.UP),
-                             ASTLeaf2LeafPathNode(ast_node_idx=current_node_idx, child_place_in_parent=None, direction=ASTLeaf2LeafPathNode.Direction.COMMON),
-                             ASTLeaf2LeafPathNode(ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[right_child_place], child_place_in_parent=right_child_place, direction=ASTLeaf2LeafPathNode.Direction.DOWN)) +
-                            tuple(ASTLeaf2LeafPathNode(ast_node_idx=right_path_node.ast_node_idx, child_place_in_parent=right_path_node.child_place_in_parent, direction=ASTLeaf2LeafPathNode.Direction.DOWN) for right_path_node in reversed(right_path)))
+                        left_path += (ASTLeaf2InnerNodePathNode(
+                            ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[left_child_place],
+                            child_place_in_parent=left_child_place),)
+                        right_path += (ASTLeaf2InnerNodePathNode(
+                            ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[right_child_place],
+                            child_place_in_parent=right_child_place),)
+                        leaves_pair_key = (left_path[0].ast_node_idx, right_path[0].ast_node_idx)
+                        all_ast_leaf_to_leaf_paths[leaves_pair_key] = tuple(itertools.chain(
+                            (ASTLeaf2LeafPathNode(
+                                ast_node_idx=left_path_node.ast_node_idx,
+                                child_place_in_parent=left_path_node.child_place_in_parent,
+                                direction=ASTLeaf2LeafPathNode.Direction.UP)
+                             for left_path_node in left_path),
+                            (ASTLeaf2LeafPathNode(
+                                ast_node_idx=current_node_idx,
+                                child_place_in_parent=None,
+                                direction=ASTLeaf2LeafPathNode.Direction.COMMON),),
+                            (ASTLeaf2LeafPathNode(
+                                ast_node_idx=right_path_node.ast_node_idx,
+                                child_place_in_parent=right_path_node.child_place_in_parent,
+                                direction=ASTLeaf2LeafPathNode.Direction.DOWN)
+                             for right_path_node in reversed(right_path))))
+                        leaves_pair_common_ancestor[leaves_pair_key] = current_node_idx
         return [
             path + (ASTLeaf2InnerNodePathNode(ast_node_idx=child_idx, child_place_in_parent=child_place),)
             for child_place, (inner_upward_paths_from_leaves_to_child, child_idx) in
@@ -251,4 +284,8 @@ def get_all_ast_leaf_to_leaf_paths_and_leaf_to_root_paths(
         path + (ASTLeaf2InnerNodePathNode(ast_node_idx=sub_ast_root_node_idx, child_place_in_parent=None),)
         for path in aux_recursive_ast_traversal(current_node_idx=sub_ast_root_node_idx)]
 
-    return all_ast_leaf_to_leaf_paths, all_ast_leaf_to_root_paths
+    return ASTPaths(
+        leaf_to_leaf_paths=all_ast_leaf_to_leaf_paths,
+        leaves_pair_common_ancestor=leaves_pair_common_ancestor,
+        leaf_to_root_paths=all_ast_leaf_to_root_paths,
+        leaves_sequence=tuple(leaves_sequence))
