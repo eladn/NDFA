@@ -13,13 +13,14 @@ __all__ = ['Vocabulary']
 
 
 class Vocabulary:
-    def __init__(self, name: str, all_words_sorted_by_idx: List[str], params,
+    def __init__(self, name: str, all_words_sorted_by_idx: List[str],
+                 params: Optional[dict] = None,
                  special_words_sorted_by_idx: Collection[str] = ()):
         self.name = name
         self.special_words = tuple(special_words_sorted_by_idx)
         self.idx2word = self.special_words + tuple(all_words_sorted_by_idx)
         self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
-        self.params = params
+        self.params = {} if params is None else params
 
     def __len__(self):
         return len(self.idx2word)
@@ -42,9 +43,12 @@ class Vocabulary:
             min_word_freq: Optional[int] = None, max_vocab_size_wo_specials: Optional[int] = None,
             carpus_generator: Optional[Callable[[], Iterable[str]]] = None) -> 'Vocabulary':
         # TODO: get a `VocabProperties` confclass instead of params `min_word_freq`, `max_vocab_size`.
-        vocabulary_params = dict(min_word_freq=min_word_freq, max_vocab_size_wo_specials=max_vocab_size_wo_specials,
-                                 nr_special_words=len(special_words_sorted_by_idx))
-        vocabulary_params_as_str = '_'.join(f'{key}={val}' for key, val in vocabulary_params.items() if val is not None)
+        vocabulary_params = dict(
+            min_word_freq=min_word_freq,
+            max_vocab_size_wo_specials=max_vocab_size_wo_specials,
+            nr_special_words=len(special_words_sorted_by_idx))
+        vocabulary_params_as_str = '_'.join(
+            f'{key}={val}' for key, val in vocabulary_params.items() if val is not None)
         vocabulary_filename = f'vocab_{vocab_name}_{vocabulary_params_as_str}.pkl'
         vocabulary_file_path = os.path.join(preprocessed_data_dir_path, vocabulary_filename)
         if os.path.isfile(vocabulary_file_path):
