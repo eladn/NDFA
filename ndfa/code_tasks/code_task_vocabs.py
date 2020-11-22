@@ -1,7 +1,7 @@
 from typing import NamedTuple, Optional
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
-from ndfa.misc.code_data_structure_api import SerTokenKind, SerToken
+from ndfa.misc.code_data_structure_api import SerTokenKind, SerToken, SerASTNodeType
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -16,6 +16,10 @@ class CodeTaskVocabs(NamedTuple):
     pdg_node_control_kinds: Vocabulary
     tokens_kinds: Vocabulary
     pdg_control_flow_edge_types: Vocabulary
+    ast_node_types: Vocabulary
+    primitive_types: Vocabulary
+    modifiers: Vocabulary
+    ast_traversal_orientation: Vocabulary
     symbols_special_words: Vocabulary
     expressions_special_words: Vocabulary
     identifiers_special_words: Vocabulary
@@ -81,6 +85,42 @@ class CodeTaskVocabs(NamedTuple):
             special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
             carpus_generator=pdg_control_flow_edge_types_carpus_generator)
 
+        ast_node_types_carpus_generator = None if raw_train_data_path is None else lambda: (
+            ast_node.type.value
+            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for ast_node in example.method_ast.nodes)
+        ast_node_types_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_types',
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            carpus_generator=ast_node_types_carpus_generator)
+
+        primitive_types_carpus_generator = None if raw_train_data_path is None else lambda: (
+            ast_node.type_name
+            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for ast_node in example.method_ast.nodes
+            if ast_node.type == SerASTNodeType.PRIMITIVE_TYPE and ast_node.type_name is not None)
+        primitive_types_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='primitive_types',
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            carpus_generator=primitive_types_carpus_generator)
+
+        modifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
+            ast_node.modifier
+            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for ast_node in example.method_ast.nodes
+            if ast_node.modifier is not None)
+        modifiers_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='modifiers',
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            carpus_generator=modifiers_carpus_generator)
+
+        ast_traversal_orientation_vocab = Vocabulary(
+            name='ast_traversal_orientations',
+            all_words_sorted_by_idx=['DIR=UP', 'DIR=DOWN', 'DIR=COMMON'] +
+                                    ['child_place=UNK'] +
+                                    [f'child_place={place}' for place in range(4)],
+            special_words_sorted_by_idx=('<PAD>',))
+
         symbols_special_words_vocab = Vocabulary(
             name='symbols-specials', all_words_sorted_by_idx=[], params=(),
             special_words_sorted_by_idx=('<PAD>', '<SOS>', '<EOS>'))
@@ -101,6 +141,10 @@ class CodeTaskVocabs(NamedTuple):
             pdg_node_control_kinds=pdg_node_control_kinds_vocab,
             tokens_kinds=tokens_kinds_vocab,
             pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
+            ast_node_types=ast_node_types_vocab,
+            primitive_types=primitive_types_vocab,
+            modifiers=modifiers_vocab,
+            ast_traversal_orientation=ast_traversal_orientation_vocab,
             symbols_special_words=symbols_special_words_vocab,
             expressions_special_words=expressions_special_words_vocab,
             identifiers_special_words=identifiers_special_words_vocab)
