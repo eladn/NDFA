@@ -227,7 +227,7 @@ class ASTLeaf2LeafPathNode:
 class ASTPaths:
     leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]]
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType]
-    leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]]
+    leaf_to_root_paths: Dict[ASTNodeIdxType, Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
     nodes_depth: Dict[ASTNodeIdxType, int]
     subtree_indices_range: Tuple[ASTNodeIdxType, ASTNodeIdxType]
@@ -298,6 +298,9 @@ def get_all_ast_paths(
     all_ast_leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]] = [
         path + (ASTLeaf2InnerNodePathNode(ast_node_idx=sub_ast_root_node_idx, child_place_in_parent=None),)
         for path in aux_recursive_ast_traversal(current_node_idx=sub_ast_root_node_idx)]
+
+    all_ast_leaf_to_root_paths: Dict[ASTNodeIdxType, Tuple[ASTLeaf2InnerNodePathNode, ...]] = {
+        path[0].ast_node_idx: path for path in all_ast_leaf_to_root_paths}
 
     subtree_indices_range = (sub_ast_root_node_idx, leaves_sequence[-1])
     if verify_preorder_indexing:
