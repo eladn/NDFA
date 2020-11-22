@@ -12,7 +12,8 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
 __all__ = ['MethodCodeInputPaddedTensors',
            'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
            'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
-           'PDGInputTensors', 'IdentifiersInputTensors']
+           'PDGInputTensors', 'MethodASTInputTensors', 'SubASTInputTensors', 'IdentifiersInputTensors',
+           'PDGExpressionsSubASTInputTensors']
 
 
 # TODO: this is an old impl - REMOVE!
@@ -41,7 +42,9 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     identifier_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_identifier_tokens_in_all_expressions_in_batch,)
     symbol_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbol_occurrences_in_all_expressions_in_batch,)
     is_symbol_mask: BatchFlattenedSeq  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    sequence_permuter: BatchFlattenedSeqShuffler  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    sequence_shuffler: BatchFlattenedSeqShuffler  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    token_to_ast_leaf_mapping_ast_node_idx: BatchedFlattenedIndicesFlattenedTensor
+    token_to_ast_leaf_mapping_token_idx: BatchedFlattenedIndicesFlattenedTensor
 
 
 @dataclasses.dataclass
@@ -70,6 +73,7 @@ class PDGInputTensors(TensorsDataClass):
     cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = None  # (nr_cfg_nodes_in_batch, )
     cfg_nodes_tokenized_expressions: Optional[CodeExpressionTokensSequenceInputTensors] = None
     # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = None
+    cfg_nodes_expressions_ast: Optional['PDGExpressionsSubASTInputTensors'] = None
 
     # cfg_edges: Optional[torch.LongTensor] = None
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
@@ -92,6 +96,37 @@ class IdentifiersInputTensors(TensorsDataClass):
 
 
 @dataclasses.dataclass
+class SubASTInputTensors(TensorsDataClass):
+    ast_leaf_to_leaf_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq
+    ast_leaf_to_leaf_paths_child_place: BatchFlattenedSeq
+    ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq
+    ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq
+    ast_leaf_to_root_paths_child_place: BatchFlattenedSeq
+
+
+@dataclasses.dataclass
+class MethodASTInputTensors(SubASTInputTensors):
+    ast_node_types: BatchFlattenedTensor
+
+    ast_nodes_with_identifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
+    ast_nodes_with_identifier_leaf_identifier_idx: BatchedFlattenedIndicesFlattenedTensor
+
+    ast_nodes_with_symbol_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
+    ast_nodes_with_symbol_leaf_symbol_idx: BatchedFlattenedIndicesFlattenedTensor
+
+    ast_nodes_with_primitive_type_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
+    ast_nodes_with_primitive_type_leaf_primitive_type: BatchFlattenedTensor
+
+    ast_nodes_with_modifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
+    ast_nodes_with_modifier_leaf_modifier: BatchFlattenedTensor
+
+
+@dataclasses.dataclass
+class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
+    ast_root_index_per_pdg_node: BatchedFlattenedIndicesFlattenedTensor
+
+
+@dataclasses.dataclass
 class MethodCodeInputTensors(TensorsDataClass):
     method_hash: str
 
@@ -100,3 +135,4 @@ class MethodCodeInputTensors(TensorsDataClass):
 
     method_tokenized_code: Optional[CodeExpressionTokensSequenceInputTensors] = None
     pdg: Optional[PDGInputTensors] = None
+    ast: Optional[MethodASTInputTensors] = None

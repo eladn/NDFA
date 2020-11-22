@@ -524,7 +524,7 @@ class ExpressionUpdater(nn.Module):
                 expressions_input: CodeExpressionTokensSequenceInputTensors):
         input_to_seq_encoder = previous_expression_encodings
         if self.shuffle_expressions:
-            input_to_seq_encoder = expressions_input.sequence_permuter.shuffle(input_to_seq_encoder)
+            input_to_seq_encoder = expressions_input.sequence_shuffler.shuffle(input_to_seq_encoder)
 
         updated_expression_encodings = self.sequence_encoder(
             sequence_input=input_to_seq_encoder,
@@ -533,7 +533,7 @@ class ExpressionUpdater(nn.Module):
 
         if self.shuffle_expressions:
             updated_expression_encodings = \
-                expressions_input.sequence_permuter.unshuffle(updated_expression_encodings)
+                expressions_input.sequence_shuffler.unshuffle(updated_expression_encodings)
 
         return updated_expression_encodings
 

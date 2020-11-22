@@ -1,4 +1,4 @@
-from . import cfg_dataset
+from . import ast_paths_encoder
 from . import cfg_node_encoder
 from . import cfg_paths_encoder
 from . import code_task_input
@@ -10,7 +10,7 @@ from . import symbols_decoder
 from . import symbols_encoder
 
 __all__ = \
-    cfg_dataset.__all__ + \
+    ast_paths_encoder.__all__ + \
     cfg_node_encoder.__all__ + \
     cfg_paths_encoder.__all__ + \
     code_task_input.__all__ + \

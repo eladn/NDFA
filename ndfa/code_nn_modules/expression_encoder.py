@@ -109,13 +109,13 @@ class ExpressionEncoder(nn.Module):
 
         if self.shuffle_expressions:
             final_token_seqs_encodings_projected = \
-                expressions_input.sequence_permuter.shuffle(final_token_seqs_encodings_projected)
+                expressions_input.sequence_shuffler.shuffle(final_token_seqs_encodings_projected)
 
         expressions_encodings = self.sequence_encoder(
             sequence_input=final_token_seqs_encodings_projected,
             lengths=expressions_input.token_type.sequences_lengths, batch_first=True).sequence
 
         if self.shuffle_expressions:
-            expressions_encodings = expressions_input.sequence_permuter.unshuffle(expressions_encodings)
+            expressions_encodings = expressions_input.sequence_shuffler.unshuffle(expressions_encodings)
 
         return expressions_encodings
