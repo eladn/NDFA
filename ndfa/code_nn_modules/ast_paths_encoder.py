@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import dataclasses
 from typing import Optional
 from collections import namedtuple
 
@@ -9,10 +10,17 @@ from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
 from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
-from ndfa.code_nn_modules.code_task_input import MethodASTInputTensors, SubASTInputTensors
+from ndfa.code_nn_modules.code_task_input import MethodASTInputTensors
 
 
-__all__ = ['ASTPathsEncoder']
+__all__ = ['ASTPathsEncoder', 'EncodedASTPaths']
+
+
+@dataclasses.dataclass
+class EncodedASTPaths:
+    ast_node_encodings: torch.Tensor
+    ast_paths_nodes_occurrences_encodings: torch.Tensor
+    ast_paths_traversal_orientation_encodings: torch.Tensor
 
 
 EncodingsUpdater = namedtuple('EncodingsUpdater', ['new_embeddings', 'element_indices', 'linear_projection_layer'])
@@ -106,7 +114,7 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_vertical_direction: Optional[torch.LongTensor] = None,
             ast_paths_last_states_for_nodes: Optional[torch.Tensor] = None,
             ast_paths_last_states_for_traversal_order: Optional[torch.Tensor] = None,
-            identifiers_encodings: Optional[torch.Tensor] = None):
+            identifiers_encodings: Optional[torch.Tensor] = None) -> EncodedASTPaths:
         if self.is_first_encoder_layer:
             nr_ast_nodes = method_ast_input.ast_nodes_types.size(0)
             ast_nodes_types_embeddings = self.ast_node_type_embedding_layer(method_ast_input.ast_nodes_types)
@@ -169,4 +177,7 @@ class ASTPathsEncoder(nn.Module):
             indices=ast_paths_traversal_orientation_encodings[ast_paths_mask],
             dim_size=nr_ast_nodes, attn_key=ast_nodes_representation_previous_states)
 
-        return new_node_representations, ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings
+        return EncodedASTPaths(
+            ast_node_encodings=new_node_representations,
+            ast_paths_nodes_occurrences_encodings=ast_paths_nodes_encodings,
+            ast_paths_traversal_orientation_encodings=ast_paths_traversal_orientation_encodings)
