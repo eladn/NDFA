@@ -50,15 +50,19 @@ class IdentifierEncoderParams:
 @confclass
 class ASTEncoderParams:
     encoder_type: str = confparam(
-        default='set-of-paths',
-        choices=('set-of-paths', 'tree'),
+        default='paths-folded',
+        choices=('set-of-paths', 'tree', 'paths-folded'),
         description="Representation type of the AST (specific architecture of the AST code encoder).")
+
+    paths_sequence_encoder_params: SequenceEncoderParams = confparam(
+        default_factory=SequenceEncoderParams,
+        arg_prefix='paths_sequence_encoder')
 
 
 @confclass
 class CodeExpressionEncoderParams:
     encoder_type: str = confparam(
-        default='linear-seq',
+        default='ast',
         choices=('linear-seq', 'ast'),
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
@@ -135,8 +139,8 @@ class MethodCFGEncoderParams:
 @confclass
 class MethodCodeEncoderParams:
     method_encoder_type: str = confparam(
-        default='method-cfg',
-        choices=('method-linear-seq', 'method-ast', 'method-cfg'),
+        default='method-cfg-v2',
+        choices=('method-linear-seq', 'method-ast', 'method-cfg', 'method-cfg-v2'),
         description="Representation type of the code "
                     "(main architecture of the method-code-encoder).")
     # relevant only if `method_encoder_type == 'method-cfg'`

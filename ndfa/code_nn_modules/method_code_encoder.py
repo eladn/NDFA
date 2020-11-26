@@ -10,6 +10,7 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ndfa.code_nn_modules.method_cfg_encoder import MethodCFGEncoder, EncodedMethodCFG
+from ndfa.code_nn_modules.method_cfg_encoder_v2 import MethodCFGEncoderV2, EncodedMethodCFGV2
 from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 
@@ -42,6 +43,16 @@ class MethodCodeEncoder(nn.Module):
         # TODO: use `encoder_params.method_encoder_type` in forward()!
         if self.encoder_params.method_encoder_type == 'method-cfg':
             self.method_cfg_encoder = MethodCFGEncoder(
+                code_task_vocabs=code_task_vocabs,
+                encoder_params=self.encoder_params.method_cfg_encoder,
+                identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
+                symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
+                use_symbols_occurrences_for_symbols_encodings=
+                self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
+                shuffle_expressions=shuffle_expressions,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+        elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
+            self.method_cfg_encoder_v2 = MethodCFGEncoderV2(
                 code_task_vocabs=code_task_vocabs,
                 encoder_params=self.encoder_params.method_cfg_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
@@ -96,6 +107,19 @@ class MethodCodeEncoder(nn.Module):
         encoded_cfg_nodes_after_bridge = None
         if self.encoder_params.method_encoder_type == 'method-cfg':
             encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
+                code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
+            unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
+                encoded_method_cfg.encoded_cfg_nodes)
+            encoded_symbols = encoded_method_cfg.encoded_symbols
+            encoded_cfg_nodes_after_bridge = unflattened_cfg_nodes_encodings
+            if len(self.encoder_decoder_bridge_dense_layers) > 0:
+                encoded_cfg_nodes_after_bridge = functools.reduce(
+                    lambda last_res, cur_layer: self.dropout_layer(self.activation_layer(cur_layer(last_res))),
+                    self.encoder_decoder_bridge_dense_layers,
+                    encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
+                    .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
+        elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
+            encoded_method_cfg: EncodedMethodCFGV2 = self.method_cfg_encoder_v2(
                 code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
             unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
                 encoded_method_cfg.encoded_cfg_nodes)

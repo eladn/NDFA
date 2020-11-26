@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
-from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
+from ndfa.ndfa_model_hyper_parameters import ASTEncoderParams
 from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
@@ -48,7 +48,7 @@ class ASTPathsEncoder(nn.Module):
             identifier_encoding_dim: int,
             primitive_type_embedding_dim: int,
             modifier_embedding_dim: int,
-            ast_paths_sequence_encoder_params: SequenceEncoderParams,
+            encoder_params: ASTEncoderParams,
             is_first_encoder_layer: bool = True,
             ast_node_type_vocab: Optional[Vocabulary] = None,
             primitive_types_vocab: Optional[Vocabulary] = None,
@@ -56,6 +56,7 @@ class ASTPathsEncoder(nn.Module):
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
+        self.encoder_params = encoder_params
         self.ast_node_embedding_dim = ast_node_embedding_dim
         self.is_first_encoder_layer = is_first_encoder_layer
         if self.is_first_encoder_layer:
@@ -98,7 +99,7 @@ class ASTPathsEncoder(nn.Module):
         self.nodes_representation_path_folder = ScatterCombiner(
             encoding_dim=self.ast_node_embedding_dim, combining_method='sum')
         self.path_sequence_encoder = SequenceEncoder(
-            encoder_params=ast_paths_sequence_encoder_params,
+            encoder_params=self.encoder_params.paths_sequence_encoder_params,
             input_dim=self.ast_node_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
