@@ -808,7 +808,8 @@ def preprocess_code_task_dataset(
         model_hps: NDFAModelHyperParams, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
-        raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None, nr_processes: int = 4):
+        raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
+        nr_processes: int = 4, pp_override: bool = False):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
@@ -821,7 +822,8 @@ def preprocess_code_task_dataset(
         # TODO: aggregate limit exceed statistics and print in the end.
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
-            max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500)
+            max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,
+            override=pp_override)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
             for pp_example in pool.imap_unordered(

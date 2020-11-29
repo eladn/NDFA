@@ -60,6 +60,11 @@ class ModelExecutionParams:
         description="Number of processes to use for preprocessing.",
         arg_names=['--pp-nr-processes'])
 
+    pp_override: bool = confparam(
+        default=False,
+        description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
+        arg_names=['--pp-override'])
+
     raw_train_data_path: Optional[str] = confparam(
         default=None,
         description="Path to raw train dataset.",

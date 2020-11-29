@@ -92,7 +92,8 @@ def main():
             raw_train_data_path=exec_params.raw_train_data_path,
             raw_validation_data_path=exec_params.raw_validation_data_path,
             raw_test_data_path=exec_params.raw_test_data_path,
-            pp_nr_processes=exec_params.pp_nr_processes)
+            pp_nr_processes=exec_params.pp_nr_processes,
+            pp_override=exec_params.pp_override)
 
     model = task.build_model(
         model_hps=exec_params.experiment_setting.model_hyper_params,
