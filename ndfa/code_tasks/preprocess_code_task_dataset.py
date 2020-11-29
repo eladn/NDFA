@@ -509,8 +509,8 @@ def preprocess_code_task_example(
                 for path in sub_ast_paths.leaf_to_root_paths.values()]),
         ast_root_index_per_pdg_node=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
-                pdg_node.ast_node_idx if pdg_node.ast_node_idx is not None else -1
-                for pdg_node in method_pdg.pdg_nodes]),
+                pdg_node.ast_node_idx
+                for pdg_node in method_pdg.pdg_nodes if pdg_node.code_sub_token_range_ref is not None]),
             tgt_indexing_group='ast_nodes'))
 
     cfg_control_flow_graph = TGData(
