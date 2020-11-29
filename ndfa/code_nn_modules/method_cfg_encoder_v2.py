@@ -47,7 +47,8 @@ class MethodCFGEncoderV2(nn.Module):
 
         # TODO: export the combiners to CodeExpressionEncoder!
         self.code_expression_encoder = CodeExpressionEncoder(
-            encoder_params=self.encoder_params.cfg_node_expression_encoder, code_task_vocabs=code_task_vocabs,
+            encoder_params=self.encoder_params.cfg_node_expression_encoder,
+            code_task_vocabs=code_task_vocabs, identifier_embedding_dim=self.identifier_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             self.expression_combiner = SequenceCombiner(

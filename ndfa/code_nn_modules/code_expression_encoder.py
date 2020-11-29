@@ -17,9 +17,11 @@ class CodeExpressionEncoder(nn.Module):
     def __init__(
             self, encoder_params: CodeExpressionEncoderParams,
             code_task_vocabs: CodeTaskVocabs,
+            identifier_embedding_dim: int,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
+        self.identifier_embedding_dim = identifier_embedding_dim
         if self.encoder_params.encoder_type == 'tokens-seq':
             self.code_expression_linear_seq_encoder = CodeExpressionTokensSequenceEncoder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
