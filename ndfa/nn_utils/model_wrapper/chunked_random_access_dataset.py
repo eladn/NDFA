@@ -60,15 +60,21 @@ class ChunkedRandomAccessDatasetWriter:
                 self.cur_chunk_idx += 1
                 self.close_last_written_chunk()
             self.cur_chunk_filepath = self._get_chunk_filepath(self.cur_chunk_idx)
-            if os.path.isfile(self.cur_chunk_filepath):
+            cur_chunk_files_found_in_pp_dir = [
+                filename for filename in os.listdir(os.path.dirname(self.cur_chunk_filepath))
+                if filename.startswith(os.path.basename(self.cur_chunk_filepath))]
+            if len(cur_chunk_files_found_in_pp_dir) > 0:
                 if self.cur_chunk_idx == 0 and not self.override:
                     raise ValueError(
-                        f'Preprocessed file `{self.cur_chunk_filepath}` already exists. '
+                        f'Preprocessed files `{cur_chunk_files_found_in_pp_dir}` already exists '
+                        f'in dir `{os.path.dirname(self.cur_chunk_filepath)}`. '
                         f'Please either specify `--pp-override` argument, choose another `--pp-data`, '
                         f'or manually delete it.')
                 else:
-                    warn(f'Overwriting existing preprocessed file `{self.cur_chunk_filepath}`.')
-                    os.remove(self.cur_chunk_filepath)
+                    warn(f'Overwriting existing preprocessed files {cur_chunk_files_found_in_pp_dir} '
+                         f'in dir `{os.path.dirname(self.cur_chunk_filepath)}`.')
+                    for filename in cur_chunk_files_found_in_pp_dir:
+                        os.remove(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
             self.cur_chunk_file = dbm.open(self.cur_chunk_filepath, 'c')
             self.cur_chunk_size_in_bytes = 0
             self.cur_chunk_nr_examples = 0
