@@ -11,7 +11,7 @@ from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.identifier_encoder import IdentifierEncoder
 from ndfa.code_nn_modules.method_cfg_encoder import MethodCFGEncoder, EncodedMethodCFG
 from ndfa.code_nn_modules.method_cfg_encoder_v2 import MethodCFGEncoderV2, EncodedMethodCFGV2
-from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
+from ndfa.code_nn_modules.code_expression_tokens_sequence_encoder import CodeExpressionTokensSequenceEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 
 
@@ -62,7 +62,7 @@ class MethodCodeEncoder(nn.Module):
                 shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'method-linear-seq':
-            self.linear_seq_method_code_encoder = ExpressionEncoder(
+            self.linear_seq_method_code_encoder = CodeExpressionTokensSequenceEncoder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
                 expressions_special_words_vocab=code_task_vocabs.expressions_special_words,

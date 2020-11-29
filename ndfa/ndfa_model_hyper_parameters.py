@@ -63,7 +63,7 @@ class ASTEncoderParams:
 class CodeExpressionEncoderParams:
     encoder_type: str = confparam(
         default='ast',
-        choices=('linear-seq', 'ast'),
+        choices=('tokens-seq', 'ast'),
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 
@@ -97,6 +97,9 @@ class CodeExpressionEncoderParams:
     sequence_encoder: SequenceEncoderParams = confparam(
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence-encoder')
+
+    shuffle_expressions: bool = confparam(
+        default=False)
 
 
 @confclass

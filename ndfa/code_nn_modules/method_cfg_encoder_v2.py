@@ -8,7 +8,6 @@ from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
     CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
-from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder, EncodedCFGPaths
@@ -23,7 +22,7 @@ from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
-from ndfa.code_nn_modules.ast_paths_encoder import ASTPathsEncoder, EncodedASTPaths
+from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -46,17 +45,11 @@ class MethodCFGEncoderV2(nn.Module):
         self.symbol_embedding_dim = symbol_embedding_dim
         self.encoder_params = encoder_params
 
-        # TODO: export to CodeExpressionEncoder!
-        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'linear-seq':
-            self.expression_encoder = ExpressionEncoder(
-                kos_tokens_vocab=code_task_vocabs.kos_tokens,
-                tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
-                expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
-                identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
-                encoder_params=self.encoder_params.cfg_node_expression_encoder,
-                identifier_embedding_dim=self.identifier_embedding_dim,
-                shuffle_expressions=shuffle_expressions,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+        # TODO: export the combiners to CodeExpressionEncoder!
+        self.code_expression_encoder = CodeExpressionEncoder(
+            encoder_params=self.encoder_params.cfg_node_expression_encoder, code_task_vocabs=code_task_vocabs,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             self.expression_combiner = SequenceCombiner(
                 encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                 combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
@@ -66,20 +59,7 @@ class MethodCFGEncoderV2(nn.Module):
             # TODO: plug-in these params from HPs
             ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim
             self.ast_node_embedding_dim = ast_node_embedding_dim
-            self.primitive_type_embedding_dim = self.ast_node_embedding_dim
-            self.modifier_embedding_dim = self.ast_node_embedding_dim
-            self.ast_paths_encoder = ASTPathsEncoder(
-                ast_node_embedding_dim=self.ast_node_embedding_dim,
-                identifier_encoding_dim=self.identifier_embedding_dim,
-                primitive_type_embedding_dim=self.primitive_type_embedding_dim,
-                modifier_embedding_dim=self.modifier_embedding_dim,
-                encoder_params=self.encoder_params.cfg_node_expression_encoder.ast_encoder,
-                is_first_encoder_layer=True,
-                ast_node_type_vocab=code_task_vocabs.ast_node_types,
-                primitive_types_vocab=code_task_vocabs.primitive_types,
-                modifiers_vocab=code_task_vocabs.modifiers,
-                ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            # TODO: AST expressions combiner
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.expression_encoder_type}`.')
 
@@ -190,20 +170,22 @@ class MethodCFGEncoderV2(nn.Module):
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFGV2:
         encoded_cfg_paths, encoded_cfg_paths_ngrams = None, None
 
+        encoded_code_expressions = self.code_expression_encoder(
+            tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+            method_ast_input=code_task_input.ast,
+            sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast,
+            encoded_identifiers=encoded_identifiers)
         if self.expression_encoder_type == 'linear_sequence':
-            encoded_expressions = self.expression_encoder(
-                expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
-                encoded_identifiers=encoded_identifiers)
+            encoded_tokenized_expressions = encoded_code_expressions
             if self.use_norm:
-                encoded_expressions = self.expressions_norm(encoded_expressions, usage_point=1)
+                encoded_tokenized_expressions = self.expressions_norm(encoded_tokenized_expressions, usage_point=1)
             combined_expressions = self.expression_combiner(
-                sequence_encodings=encoded_expressions,
+                sequence_encodings=encoded_tokenized_expressions,
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
             if self.use_norm:
                 combined_expressions = self.combined_expressions_norm(combined_expressions)
         elif self.expression_encoder_type == 'ast_paths_folded':
-            encoded_sub_asts_paths: EncodedASTPaths = self.ast_paths_encoder(
-                ...)  # TODO: impl
+            encoded_sub_asts_paths = encoded_code_expressions
             if self.use_norm:
                 encoded_sub_asts_paths.ast_node_encodings = self.expressions_norm(
                     encoded_sub_asts_paths.ast_node_encodings)

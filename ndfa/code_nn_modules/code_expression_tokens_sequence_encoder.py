@@ -10,20 +10,19 @@ from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
-__all__ = ['ExpressionEncoder']
+__all__ = ['CodeExpressionTokensSequenceEncoder']
 
 
-class ExpressionEncoder(nn.Module):
+class CodeExpressionTokensSequenceEncoder(nn.Module):
     def __init__(self, kos_tokens_vocab: Vocabulary,
                  tokens_kinds_vocab: Vocabulary,
                  expressions_special_words_vocab: Vocabulary,
                  identifiers_special_words_vocab: Vocabulary,
                  encoder_params: CodeExpressionEncoderParams,
                  identifier_embedding_dim: int, nr_out_linear_layers: int = 1,
-                 shuffle_expressions: bool = False,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_out_linear_layers >= 1
-        super(ExpressionEncoder, self).__init__()
+        super(CodeExpressionTokensSequenceEncoder, self).__init__()
         self.encoder_params = encoder_params
         self.activation_layer = get_activation_layer(activation_fn)()
         self.kos_tokens_vocab = kos_tokens_vocab
@@ -62,7 +61,6 @@ class ExpressionEncoder(nn.Module):
             input_dim=self.encoder_params.token_encoding_dim,
             hidden_dim=self.encoder_params.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.shuffle_expressions = shuffle_expressions
 
     def forward(self, expressions_input: CodeExpressionTokensSequenceInputTensors,
                 encoded_identifiers: torch.Tensor):
@@ -107,7 +105,7 @@ class ExpressionEncoder(nn.Module):
             final_token_seqs_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_token_seqs_encodings_projected)))
 
-        if self.shuffle_expressions:
+        if self.encoder_params.shuffle_expressions:
             final_token_seqs_encodings_projected = \
                 expressions_input.sequence_shuffler.shuffle(final_token_seqs_encodings_projected)
 
@@ -115,7 +113,7 @@ class ExpressionEncoder(nn.Module):
             sequence_input=final_token_seqs_encodings_projected,
             lengths=expressions_input.token_type.sequences_lengths, batch_first=True).sequence
 
-        if self.shuffle_expressions:
+        if self.encoder_params.shuffle_expressions:
             expressions_encodings = expressions_input.sequence_shuffler.unshuffle(expressions_encodings)
 
         return expressions_encodings

@@ -11,6 +11,7 @@ from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.code_nn_modules.code_task_input import MethodASTInputTensors
+from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq
 
 
 __all__ = ['ASTPathsEncoder', 'EncodedASTPaths']
@@ -106,9 +107,7 @@ class ASTPathsEncoder(nn.Module):
 
     def forward(
             self,
-            ast_paths_node_indices: torch.LongTensor,
-            ast_paths_lengths: torch.LongTensor,
-            ast_paths_mask: torch.LongTensor,
+            ast_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq,
             method_ast_input: Optional[MethodASTInputTensors] = None,
             ast_nodes_representation_previous_states: Optional[torch.Tensor] = None,
             ast_paths_child_place: Optional[torch.LongTensor] = None,
@@ -166,11 +165,12 @@ class ASTPathsEncoder(nn.Module):
         ast_paths_embeddings_input = weave_tensors(tensors=[
             ast_paths_node_occurrences_encodings_inputs,
             ast_paths_traversal_orientation_encodings_input], dim=1)
+        ast_paths_mask = ast_paths_node_indices.sequences_mask
         ast_paths_embeddings_input = ast_paths_embeddings_input.masked_fill(
             ~ast_paths_mask.unsqueeze(-1), 0)
         ast_paths_encoded = self.path_sequence_encoder(
             sequence_input=ast_paths_embeddings_input,
-            lengths=ast_paths_lengths * 2, batch_first=True)
+            lengths=ast_paths_node_indices.sequences_lengths * 2, batch_first=True)
         ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings = unweave_tensor(
             woven_tensor=ast_paths_encoded, dim=1, nr_target_tensors=2)
         new_node_representations = self.nodes_representation_path_folder(

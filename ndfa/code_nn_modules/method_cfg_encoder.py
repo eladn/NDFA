@@ -8,7 +8,7 @@ from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
     CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
-from ndfa.code_nn_modules.expression_encoder import ExpressionEncoder
+from ndfa.code_nn_modules.code_expression_tokens_sequence_encoder import CodeExpressionTokensSequenceEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_paths_encoder import CFGPathEncoder, EncodedCFGPaths
@@ -48,7 +48,7 @@ class MethodCFGEncoder(nn.Module):
         self.identifier_embedding_dim = identifier_embedding_dim
         self.symbol_embedding_dim = symbol_embedding_dim
         self.encoder_params = encoder_params
-        self.first_expression_encoder = ExpressionEncoder(
+        self.first_expression_encoder = CodeExpressionTokensSequenceEncoder(
             kos_tokens_vocab=code_task_vocabs.kos_tokens,
             tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
             expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
