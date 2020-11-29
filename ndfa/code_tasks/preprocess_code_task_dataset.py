@@ -350,18 +350,36 @@ def preprocess_code_task_example(
     #     print()
     #     # exit()
 
-    # TODO: make it a limitation!
-    assert all(
-        pdg_node.ast_node_idx is not None for pdg_node in method_pdg.pdg_nodes
-        if pdg_node.code_sub_token_range_ref is not None)
+    # assert all(
+    #     pdg_node.ast_node_idx is not None for pdg_node in method_pdg.pdg_nodes
+    #     if pdg_node.code_sub_token_range_ref is not None)
 
     assert all(
         (pdg_node.control_kind == SerPDGNodeControlKind.METHOD_ENTRY) ^ (pdg_node.ast_node_idx != 0)
         for pdg_node in method_pdg.pdg_nodes)
-    assert all(
-        (method_ast.nodes[child_node_idx].type != SerASTNodeType.BLOCK_STMT) ^
-        (child_place == len(method_ast.nodes[0].children_idxs) - 1)
-        for child_place, child_node_idx in enumerate(method_ast.nodes[0].children_idxs))
+
+    nr_pdg_nodes_with_code_expression_and_wo_sub_ast = sum(
+        int(pdg_node.ast_node_idx is None)
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.code_sub_token_range_ref is not None)
+    last_method_decl_child_is_block_stmt = \
+        method_ast.nodes[method_ast.nodes[0].children_idxs[-1]].type == SerASTNodeType.BLOCK_STMT
+    nr_non_last_method_decl_children_which_are_block_stmt = sum(
+        int(method_ast.nodes[child_node_idx].type == SerASTNodeType.BLOCK_STMT)
+        for child_node_idx in method_ast.nodes[0].children_idxs[:-1])
+    PreprocessLimitation.enforce_limitations(limitations=[
+        PreprocessLimitation(
+            object_name='nr_pdg_nodes_with_code_expression_and_wo_sub_ast',
+            value=nr_pdg_nodes_with_code_expression_and_wo_sub_ast,
+            min_val=0, max_val=0),
+        PreprocessLimitation(
+            object_name='last_method_decl_child_is_block_stmt',
+            value=int(last_method_decl_child_is_block_stmt),
+            min_val=1, max_val=1),
+        PreprocessLimitation(
+            object_name='nr_non_last_method_decl_children_which_are_block_stmt',
+            value=nr_non_last_method_decl_children_which_are_block_stmt,
+            min_val=0, max_val=0)])
 
     method_ast_paths: ASTPaths = get_all_ast_paths(
         method_ast=method_ast)  # TODO: ignore all subtree of log ast node (make the node itself a leaf)
