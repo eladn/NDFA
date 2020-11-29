@@ -236,11 +236,14 @@ class ASTPaths:
 def get_all_ast_paths(
         method_ast: SerMethodAST,
         sub_ast_root_node_idx: ASTNodeIdxType = 0,
+        subtrees_to_ignore: Optional[Set[int]] = None,
         verify_preorder_indexing: bool = False) -> ASTPaths:
     all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
     nodes_depth: Dict[ASTNodeIdxType, int] = {}
+    if subtrees_to_ignore is None:
+        subtrees_to_ignore = set()
     if verify_preorder_indexing:
         # just a sanity-check to ensure the indexing method (pre-order).
         # pre-order indexing is later assumed for calculating the field `subtree_indices_range`.
@@ -252,13 +255,17 @@ def get_all_ast_paths(
         nodes_depth[current_node_idx] = depth
         if verify_preorder_indexing:
             all_subtree_indices.add(current_node_idx)
-        if len(method_ast.nodes[current_node_idx].children_idxs) == 0:  # leaf
+        current_node_children_idxs = [
+            child_node_idx
+            for child_node_idx in method_ast.nodes[current_node_idx].children_idxs
+            if child_node_idx not in subtrees_to_ignore]
+        if len(current_node_children_idxs) == 0:  # leaf
             leaves_sequence.append(current_node_idx)
             return [()]
 
         inner_upward_paths_from_leaves_to_children = [
             aux_recursive_ast_traversal(child_node_idx, depth=depth + 1)
-            for child_node_idx in method_ast.nodes[current_node_idx].children_idxs]
+            for child_node_idx in current_node_children_idxs]
         for left_child_place in range(len(inner_upward_paths_from_leaves_to_children)):
             for right_child_place in range(left_child_place + 1, len(inner_upward_paths_from_leaves_to_children)):
                 ret_from_left_child = inner_upward_paths_from_leaves_to_children[left_child_place]
@@ -266,10 +273,10 @@ def get_all_ast_paths(
                 for left_path in ret_from_left_child:
                     for right_path in ret_from_right_child:
                         left_path += (ASTLeaf2InnerNodePathNode(
-                            ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[left_child_place],
+                            ast_node_idx=current_node_children_idxs[left_child_place],
                             child_place_in_parent=left_child_place),)
                         right_path += (ASTLeaf2InnerNodePathNode(
-                            ast_node_idx=method_ast.nodes[current_node_idx].children_idxs[right_child_place],
+                            ast_node_idx=current_node_children_idxs[right_child_place],
                             child_place_in_parent=right_child_place),)
                         leaves_pair_key = (left_path[0].ast_node_idx, right_path[0].ast_node_idx)
                         all_ast_leaf_to_leaf_paths[leaves_pair_key] = tuple(itertools.chain(
@@ -292,7 +299,7 @@ def get_all_ast_paths(
             path + (ASTLeaf2InnerNodePathNode(ast_node_idx=child_idx, child_place_in_parent=child_place),)
             for child_place, (inner_upward_paths_from_leaves_to_child, child_idx) in
             enumerate(zip(inner_upward_paths_from_leaves_to_children,
-                          method_ast.nodes[current_node_idx].children_idxs))
+                          current_node_children_idxs))
             for path in inner_upward_paths_from_leaves_to_child]
 
     all_ast_leaf_to_root_paths: List[Tuple[ASTLeaf2InnerNodePathNode, ...]] = [

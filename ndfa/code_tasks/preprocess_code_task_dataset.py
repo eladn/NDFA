@@ -15,7 +15,7 @@ from torch_geometric.data import Data as TGData
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, \
-    SerASTNodeType
+    SerASTNodeType, SerPDGNodeControlKind
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths, \
     get_all_ast_paths, ASTPaths
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
@@ -355,12 +355,24 @@ def preprocess_code_task_example(
         pdg_node.ast_node_idx is not None for pdg_node in method_pdg.pdg_nodes
         if pdg_node.code_sub_token_range_ref is not None)
 
-    method_ast_paths: ASTPaths = get_all_ast_paths(method_ast=method_ast)
+    assert all(
+        (pdg_node.control_kind == SerPDGNodeControlKind.METHOD_ENTRY) ^ (pdg_node.ast_node_idx != 0)
+        for pdg_node in method_pdg.pdg_nodes)
+    assert all(
+        (method_ast.nodes[child_node_idx].type != SerASTNodeType.BLOCK_STMT) ^
+        (child_place == len(method_ast.nodes[0].children_idxs) - 1)
+        for child_place, child_node_idx in enumerate(method_ast.nodes[0].children_idxs))
+
+    method_ast_paths: ASTPaths = get_all_ast_paths(
+        method_ast=method_ast)  # TODO: ignore all subtree of log ast node (make the node itself a leaf)
     ast_paths_per_pdg_node: Dict[int, ASTPaths] = {
         pdg_node.idx: get_all_ast_paths(
-            method_ast=method_ast, sub_ast_root_node_idx=pdg_node.ast_node_idx)
+            method_ast=method_ast, sub_ast_root_node_idx=pdg_node.ast_node_idx,
+            subtrees_to_ignore={method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]}
+            if pdg_node.control_kind == SerPDGNodeControlKind.METHOD_ENTRY else None)
         for pdg_node in method_pdg.pdg_nodes
-        if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None}
+        if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None and
+        pdg_node.idx not in pdg_nodes_to_mask}
 
     ast = MethodASTInputTensors(
         ast_node_types=BatchFlattenedTensor(
@@ -416,7 +428,7 @@ def preprocess_code_task_example(
                 ast_node.type_name is not None]),
             tgt_indexing_group='ast_nodes'),
         ast_nodes_with_primitive_type_leaf_primitive_type=BatchFlattenedTensor(tensor=torch.LongTensor([
-            code_task_vocabs.primitive_types.get_word_idx(ast_node.type_name)
+            code_task_vocabs.primitive_types.get_word_idx_or_unk(ast_node.type_name)
             for ast_node in method_ast.nodes
             if len(ast_node.children_idxs) == 0 and
             ast_node.type == SerASTNodeType.PRIMITIVE_TYPE and
