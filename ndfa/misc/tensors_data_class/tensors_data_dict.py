@@ -40,6 +40,12 @@ class TensorsDataDict(TensorsDataClass, Mapping[DictKeyT, DictValueT]):
     def get_all_fields(self) -> Tuple[str, ...]:
         return tuple((set(self._dict.keys()) | set(super(TensorsDataDict, self).get_all_fields())) - {'_dict'})
 
+    def get_field_names_by_group(self, group: str = 'all') -> Tuple[str, ...]:
+        if group == 'data':
+            return tuple(self._dict.keys())
+        else:
+            return super(TensorsDataDict, self).get_field_names_by_group()
+
     @classmethod
     def _collate_first_pass(cls, inputs: List['TensorsDataDict'], collate_data: CollateData) -> 'TensorsDataDict':
         assert all(isinstance(inp, TensorsDataDict) for inp in inputs)
