@@ -93,10 +93,15 @@ class ChunkedRandomAccessDatasetWriter:
         # Remove old extra file chunks
         for chunk_idx_to_remove in itertools.count(start=self.cur_chunk_idx + 1):
             chunk_filepath = self._get_chunk_filepath(chunk_idx_to_remove)
-            if not os.path.isfile(chunk_filepath):
+            chunk_files_found_in_pp_dir = [
+                filename for filename in os.listdir(os.path.dirname(chunk_filepath))
+                if filename.startswith(os.path.basename(chunk_filepath))]
+            if len(chunk_files_found_in_pp_dir) == 0:
                 break
-            warn(f'Removing existing preprocessed file `{chunk_filepath}`.')
-            os.remove(chunk_filepath)
+            warn(f'Removing existing preprocessed files {chunk_files_found_in_pp_dir} '
+                 f'in dir `{os.path.dirname(chunk_filepath)}`.')
+            for filename in chunk_files_found_in_pp_dir:
+                os.remove(os.path.join(os.path.dirname(chunk_filepath), filename))
 
 
 class ChunkedRandomAccessDataset(Dataset):
