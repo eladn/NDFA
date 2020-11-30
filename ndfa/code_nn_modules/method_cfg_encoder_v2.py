@@ -61,6 +61,9 @@ class MethodCFGEncoderV2(nn.Module):
             ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim
             self.ast_node_embedding_dim = ast_node_embedding_dim
             # TODO: AST expressions combiner
+            self.ast_combiner = nn.Linear(
+                in_features=self.ast_node_embedding_dim,
+                out_features=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.expression_encoder_type}`.')
 
@@ -176,7 +179,7 @@ class MethodCFGEncoderV2(nn.Module):
             method_ast_input=code_task_input.ast,
             sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast,
             encoded_identifiers=encoded_identifiers)
-        if self.expression_encoder_type == 'linear_sequence':
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             encoded_tokenized_expressions = encoded_code_expressions
             if self.use_norm:
                 encoded_tokenized_expressions = self.expressions_norm(encoded_tokenized_expressions, usage_point=1)
@@ -185,14 +188,15 @@ class MethodCFGEncoderV2(nn.Module):
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
             if self.use_norm:
                 combined_expressions = self.combined_expressions_norm(combined_expressions)
-        elif self.expression_encoder_type == 'ast_paths_folded':
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             encoded_sub_asts_paths = encoded_code_expressions
             if self.use_norm:
                 encoded_sub_asts_paths.ast_node_encodings = self.expressions_norm(
-                    encoded_sub_asts_paths.ast_node_encodings)
+                    encoded_sub_asts_paths.ast_node_encodings, usage_point=1)
             # TODO: use a smarter combiner here (like we did for the expressions)
             combined_expressions = encoded_sub_asts_paths.ast_node_encodings[
-                code_task_input.pdg.cfg_nodes_expressions_ast.ast_root_index_per_pdg_node]
+                code_task_input.pdg.cfg_nodes_expressions_ast.ast_root_index_per_pdg_node.indices]
+            combined_expressions = self.ast_combiner(combined_expressions)  # TODO: replace this; its temporal
             # if self.use_norm:
             #     combined_expressions = self.combined_expressions_norm(combined_expressions)
         else:
