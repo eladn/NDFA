@@ -4,6 +4,7 @@ import dataclasses
 from typing import Optional
 from collections import namedtuple
 
+from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.ndfa_model_hyper_parameters import ASTEncoderParams
@@ -11,7 +12,7 @@ from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.code_nn_modules.code_task_input import MethodASTInputTensors
-from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq
+from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeq
 
 
 __all__ = ['ASTPathsEncoder', 'EncodedASTPaths']
@@ -37,7 +38,7 @@ def apply_disjoint_updates_to_encodings_tensor(
             original_encodings[updater.element_indices], updater.new_embeddings], dim=1))
         for updater in updaters], dim=0)
     all_element_indices_to_update = torch.cat([updater.element_indices for updater in updaters], dim=0)
-    all_element_indices_to_update = all_element_indices_to_update.unsqueeze(-1).extend(updated_encodings.shape)
+    all_element_indices_to_update = all_element_indices_to_update.unsqueeze(-1).expand(updated_encodings.shape)
     return original_encodings.scatter(
         dim=0, index=all_element_indices_to_update, src=updated_encodings)
 
@@ -81,11 +82,11 @@ class ASTPathsEncoder(nn.Module):
                 padding_idx=self.modifiers_vocab.get_word_idx('<PAD>'))
             self.identifier_encoding_dim = identifier_encoding_dim
             self.identifier_leaf_linear_projection_layer = nn.Linear(
-                in_features=self.identifier_encoding_dim, out_features=self.ast_node_embedding_dim)
+                in_features=self.identifier_encoding_dim + self.ast_node_embedding_dim, out_features=self.ast_node_embedding_dim)
             self.primitive_type_leaf_linear_projection_layer = nn.Linear(
-                in_features=self.primitive_type_embedding_dim, out_features=self.ast_node_embedding_dim)
+                in_features=self.primitive_type_embedding_dim + self.ast_node_embedding_dim, out_features=self.ast_node_embedding_dim)
             self.modifier_leaf_linear_projection_layer = nn.Linear(
-                in_features=self.modifier_embedding_dim, out_features=self.ast_node_embedding_dim)
+                in_features=self.modifier_embedding_dim + self.ast_node_embedding_dim, out_features=self.ast_node_embedding_dim)
             self.ast_traversal_orientation_embedding_layer = nn.Embedding(
                 num_embeddings=len(self.ast_traversal_orientation_vocab),
                 embedding_dim=self.ast_node_embedding_dim,
@@ -110,50 +111,50 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq,
             method_ast_input: Optional[MethodASTInputTensors] = None,
             ast_nodes_representation_previous_states: Optional[torch.Tensor] = None,
-            ast_paths_child_place: Optional[torch.LongTensor] = None,
-            ast_paths_vertical_direction: Optional[torch.LongTensor] = None,
+            ast_paths_child_place: Optional[BatchFlattenedSeq] = None,
+            ast_paths_vertical_direction: Optional[BatchFlattenedSeq] = None,
             ast_paths_last_states_for_nodes: Optional[torch.Tensor] = None,
             ast_paths_last_states_for_traversal_order: Optional[torch.Tensor] = None,
             identifiers_encodings: Optional[torch.Tensor] = None) -> EncodedASTPaths:
         if self.is_first_encoder_layer:
-            nr_ast_nodes = method_ast_input.ast_nodes_types.size(0)
-            ast_nodes_types_embeddings = self.ast_node_type_embedding_layer(method_ast_input.ast_nodes_types)
+            nr_ast_nodes = method_ast_input.ast_node_types.tensor.size(0)
+            ast_nodes_types_embeddings = self.ast_node_type_embedding_layer(method_ast_input.ast_node_types.tensor)
 
             ast_nodes_with_identifier_leaf_identifier_embeddings =\
-                identifiers_encodings[method_ast_input.ast_nodes_with_identifier_leaf_identifier_idx]
+                identifiers_encodings[method_ast_input.ast_nodes_with_identifier_leaf_identifier_idx.indices]
             ast_nodes_with_primitive_type_leaf_primitive_type_embeddings = self.primitive_types_embedding_layer(
-                method_ast_input.ast_nodes_with_primitive_type_leaf_primitive_type)
+                method_ast_input.ast_nodes_with_primitive_type_leaf_primitive_type.tensor)
             ast_nodes_with_modifier_leaf_modifier_embeddings = self.modifiers_embedding_layer(
-                method_ast_input.ast_nodes_with_modifier_leaf_modifier)
+                method_ast_input.ast_nodes_with_modifier_leaf_modifier.tensor)
 
             ast_nodes_embeddings = apply_disjoint_updates_to_encodings_tensor(
                 ast_nodes_types_embeddings,
                 EncodingsUpdater(
                     new_embeddings=ast_nodes_with_identifier_leaf_identifier_embeddings,
-                    element_indices=method_ast_input.ast_nodes_with_identifier_leaf_nodes_indices,
+                    element_indices=method_ast_input.ast_nodes_with_identifier_leaf_nodes_indices.indices,
                     linear_projection_layer=self.identifier_leaf_linear_projection_layer),
                 EncodingsUpdater(
                     new_embeddings=ast_nodes_with_primitive_type_leaf_primitive_type_embeddings,
-                    element_indices=method_ast_input.ast_nodes_with_primitive_type_leaf_nodes_indices,
+                    element_indices=method_ast_input.ast_nodes_with_primitive_type_leaf_nodes_indices.indices,
                     linear_projection_layer=self.primitive_type_leaf_linear_projection_layer),
                 EncodingsUpdater(
                     new_embeddings=ast_nodes_with_modifier_leaf_modifier_embeddings,
-                    element_indices=method_ast_input.ast_nodes_with_modifier_leaf_nodes_indices,
+                    element_indices=method_ast_input.ast_nodes_with_modifier_leaf_nodes_indices.indices,
                     linear_projection_layer=self.modifier_leaf_linear_projection_layer))
             ast_nodes_embeddings = self.dropout_layer(ast_nodes_embeddings)
 
             ast_paths_child_place_embeddings = \
-                self.ast_traversal_orientation_embedding_layer(ast_paths_child_place)
+                self.ast_traversal_orientation_embedding_layer(ast_paths_child_place.sequences)
             if ast_paths_vertical_direction is None:
                 ast_paths_traversal_orientation_encodings_input = ast_paths_child_place_embeddings
             else:
                 ast_paths_vertical_direction_embeddings = \
-                    self.ast_traversal_orientation_embedding_layer(ast_paths_vertical_direction)
+                    self.ast_traversal_orientation_embedding_layer(ast_paths_vertical_direction.sequences)
                 ast_paths_traversal_orientation_encodings_input = \
                     self.ast_traversal_orientation_linear_projection_layer(torch.cat([
                         ast_paths_child_place_embeddings,
                         ast_paths_vertical_direction_embeddings], dim=-1))
-            ast_paths_node_occurrences_encodings_inputs = ast_nodes_embeddings[ast_paths_node_indices]
+            ast_paths_node_occurrences_encodings_inputs = ast_nodes_embeddings[ast_paths_node_indices.sequences]
         else:
             nr_ast_nodes = ast_nodes_representation_previous_states.size(0)
             # update nodes occurrences (in the path) with the last nodes representation using an update gate.
@@ -166,17 +167,20 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_node_occurrences_encodings_inputs,
             ast_paths_traversal_orientation_encodings_input], dim=1)
         ast_paths_mask = ast_paths_node_indices.sequences_mask
+        ast_paths_with_edges_mask = seq_lengths_to_mask(
+            seq_lengths=ast_paths_node_indices.sequences_lengths * 2,
+            max_seq_len=2 * ast_paths_node_indices.sequences.size(1))
         ast_paths_embeddings_input = ast_paths_embeddings_input.masked_fill(
-            ~ast_paths_mask.unsqueeze(-1), 0)
+            ~ast_paths_with_edges_mask.unsqueeze(-1), 0)
         ast_paths_encoded = self.path_sequence_encoder(
             sequence_input=ast_paths_embeddings_input,
-            lengths=ast_paths_node_indices.sequences_lengths * 2, batch_first=True)
+            lengths=ast_paths_node_indices.sequences_lengths * 2, batch_first=True).sequence
         ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings = unweave_tensor(
             woven_tensor=ast_paths_encoded, dim=1, nr_target_tensors=2)
         new_node_representations = self.nodes_representation_path_folder(
             scattered_input=ast_paths_nodes_encodings[ast_paths_mask],
-            indices=ast_paths_traversal_orientation_encodings[ast_paths_mask],
-            dim_size=nr_ast_nodes, attn_key=ast_nodes_representation_previous_states)
+            indices=ast_paths_node_indices.sequences[ast_paths_mask],
+            dim_size=nr_ast_nodes, attn_keys=ast_nodes_representation_previous_states)
 
         return EncodedASTPaths(
             ast_node_encodings=new_node_representations,
