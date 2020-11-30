@@ -75,13 +75,15 @@ class ChunkedRandomAccessDatasetWriter:
                          f'in dir `{os.path.dirname(self.cur_chunk_filepath)}`.')
                     for filename in cur_chunk_files_found_in_pp_dir:
                         os.remove(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
-            self.cur_chunk_file = dbm.open(self.cur_chunk_filepath, 'c')
+            self.cur_chunk_file = dbm.open(self.cur_chunk_filepath, 'n')
             self.cur_chunk_size_in_bytes = 0
             self.cur_chunk_nr_examples = 0
         return self.cur_chunk_file
 
     def close_last_written_chunk(self):
         assert self.cur_chunk_nr_examples > 0
+        print(f'Closing chunk #{self.cur_chunk_idx} with {self.cur_chunk_nr_examples:,} examples '
+              f'and total size of {self.cur_chunk_size_in_bytes:,} bytes.')
         self.cur_chunk_file[b'len'] = int(self.cur_chunk_nr_examples).to_bytes(8, 'little')
         self.cur_chunk_file.close()
         self.cur_chunk_file = None
