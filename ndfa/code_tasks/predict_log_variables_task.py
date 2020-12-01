@@ -220,6 +220,9 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         if self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg':
             encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
+        elif self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg-v2':
+            encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
+            encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
         elif self.model_hps.method_code_encoder.method_encoder_type == 'method-linear-seq':
             encoder_outputs = encoded_code.encoded_method_as_single_tokens_seq
             encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
