@@ -6,7 +6,7 @@ from torch_geometric import nn as tgnn
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
-    CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors
+    CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors, PDGExpressionsSubASTInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
@@ -56,6 +56,10 @@ class MethodCFGEncoderV2(nn.Module):
                 combined_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
                 combiner_params=self.encoder_params.cfg_node_expression_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.expression_context_adder = SeqContextAdder(
+                main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                ctx_dim=self.encoder_params.cfg_node_encoding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             # TODO: plug-in these params from HPs
             ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim
@@ -64,6 +68,9 @@ class MethodCFGEncoderV2(nn.Module):
             self.ast_combiner = nn.Linear(
                 in_features=self.ast_node_embedding_dim,
                 out_features=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim)
+            self.macro_context_adder_to_sub_ast = MacroContextAdderToSubAST(
+                ast_node_encoding_dim=ast_node_embedding_dim,
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.expression_encoder_type}`.')
 
@@ -129,10 +136,6 @@ class MethodCFGEncoderV2(nn.Module):
                 sequence_type=cfg_single_path_sequence_type,
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.expression_context_adder = SeqContextAdder(
-            main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-            ctx_dim=self.encoder_params.cfg_node_encoding_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.symbols_encoder = SymbolsEncoder(
             symbol_embedding_dim=self.symbol_embedding_dim,
@@ -281,7 +284,11 @@ class MethodCFGEncoderV2(nn.Module):
                 encoded_expressions_with_context = self.expressions_norm(
                     encoded_expressions_with_context, usage_point=2)
         elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
-            raise NotImplementedError  # TODO: implement!!!
+            encoded_ast_nodes = self.macro_context_adder_to_sub_ast(
+                previous_ast_nodes_encodings=encoded_ast_nodes,
+                new_cfg_nodes_encodings=encoded_cfg_nodes,
+                cfg_expressions_sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast)
+            # cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices
             # TODO: use `code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_*`
         else:
             assert False
@@ -309,6 +316,31 @@ class MethodCFGEncoderV2(nn.Module):
             encoded_identifiers=encoded_identifiers,
             encoded_cfg_nodes=encoded_cfg_nodes,
             encoded_symbols=encoded_symbols)
+
+
+class MacroContextAdderToSubAST(nn.Module):
+    def __init__(self, ast_node_encoding_dim: int, cfg_node_encoding_dim: int,
+                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+        super(MacroContextAdderToSubAST, self).__init__()
+        self.ast_node_encoding_dim = ast_node_encoding_dim
+        self.cfg_node_encoding_dim = cfg_node_encoding_dim
+        self.gate = Gate(state_dim=self.ast_node_encoding_dim, update_dim=self.cfg_node_encoding_dim,
+                         dropout_rate=dropout_rate, activation_fn=activation_fn)
+
+    def forward(
+            self, previous_ast_nodes_encodings: torch.Tensor,
+            new_cfg_nodes_encodings: torch.Tensor,
+            cfg_expressions_sub_ast_input: PDGExpressionsSubASTInputTensors):
+        updates = self.gate(
+            previous_state=previous_ast_nodes_encodings[
+                cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices],
+            state_update=new_cfg_nodes_encodings[
+                cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices])
+        return previous_ast_nodes_encodings.scatter(
+            dim=0,
+            index=cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices
+                .unsqueeze(-1).expand(updates.shape),
+            src=updates)
 
 
 class CFGSinglePathEncoder(nn.Module):
