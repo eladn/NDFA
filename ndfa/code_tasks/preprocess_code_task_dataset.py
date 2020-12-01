@@ -705,8 +705,8 @@ def preprocess_code_task_example(
         sequence_shuffler=BatchFlattenedSeqShuffler(
             lengths=tuple(len(seq) for seq in method_tokenized_code_token_type.sequences),
             initial_seed_salt='method_tokenized_code_seq_permuter'),
-        token_to_ast_leaf_mapping_ast_node_idx=None,  # TODO
-        token_to_ast_leaf_mapping_token_idx=None)  # TODO
+        token_idx_to_ast_leaf_idx_mapping_key=None,  # TODO
+        token_idx_to_ast_leaf_idx_mapping_value=None)  # TODO
     assert method_tokenized_code.symbol_index.indices.size(0) == \
            method_tokenized_code.is_symbol_mask.sequences[0].to(torch.long).sum().item()
 

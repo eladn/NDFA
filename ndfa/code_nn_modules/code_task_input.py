@@ -43,8 +43,8 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     symbol_index: BatchedFlattenedIndicesFlattenedTensor  # (nr_symbol_occurrences_in_all_expressions_in_batch,)
     is_symbol_mask: BatchFlattenedSeq  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
     sequence_shuffler: BatchFlattenedSeqShuffler  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    token_to_ast_leaf_mapping_ast_node_idx: BatchedFlattenedIndicesFlattenedTensor
-    token_to_ast_leaf_mapping_token_idx: BatchedFlattenedIndicesFlattenedTensor
+    token_idx_to_ast_leaf_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
+    token_idx_to_ast_leaf_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
 
 
 @dataclasses.dataclass
