@@ -282,8 +282,8 @@ def preprocess_code_task_example(
         sequence_shuffler=BatchFlattenedSeqShuffler(
             lengths=tuple(len(seq) for seq in cfg_nodes_tokenized_expressions_token_type.sequences),
             initial_seed_salt='cfg_nodes_tokenized_expressions_seq_shuffler'),
-        token_to_ast_leaf_mapping_ast_node_idx=None,  # TODO
-        token_to_ast_leaf_mapping_token_idx=None)  # TODO
+        token_idx_to_ast_leaf_idx_mapping_key=None,  # TODO
+        token_idx_to_ast_leaf_idx_mapping_value=None)  # TODO
     assert \
         cfg_nodes_tokenized_expressions.symbol_index.indices.size(0) == \
         sum(seq.to(torch.long).sum().item() for seq in cfg_nodes_tokenized_expressions.is_symbol_mask.sequences)
@@ -442,6 +442,7 @@ def preprocess_code_task_example(
         for pdg_node_idx, ast_node_indices in pdg_node_to_ast_node_indices.items()
         for ast_node_idx in ast_node_indices}
 
+    pp_method_ast = False  # TODO: make it a preprocess parameter
     ast = MethodASTInputTensors(
         ast_node_types=BatchFlattenedTensor(
             torch.LongTensor([
@@ -513,11 +514,11 @@ def preprocess_code_task_example(
             for ast_node in method_ast.nodes
             if len(ast_node.children_idxs) == 0 and ast_node.modifier is not None])),
 
-        ast_leaf_to_leaf_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
+        ast_leaf_to_leaf_paths_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for path in method_ast_paths.leaf_to_leaf_paths.values()],
             tgt_indexing_group='ast_nodes'),
-        ast_leaf_to_leaf_paths_child_place=BatchFlattenedSeq(
+        ast_leaf_to_leaf_paths_child_place=None if not pp_method_ast else BatchFlattenedSeq(
             sequences=[
                 torch.LongTensor([
                     code_task_vocabs.ast_traversal_orientation.get_word_idx(
@@ -525,18 +526,18 @@ def preprocess_code_task_example(
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
                 for path in method_ast_paths.leaf_to_leaf_paths.values()]),
-        ast_leaf_to_leaf_paths_vertical_direction=BatchFlattenedSeq(
+        ast_leaf_to_leaf_paths_vertical_direction=None if not pp_method_ast else BatchFlattenedSeq(
             sequences=[
                 torch.LongTensor([
                     code_task_vocabs.ast_traversal_orientation.get_word_idx(
                         f'DIR={path_node.direction.value}')
                     for path_node in path])
                 for path in method_ast_paths.leaf_to_leaf_paths.values()]),
-        ast_leaf_to_root_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
+        ast_leaf_to_root_paths_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for path in method_ast_paths.leaf_to_root_paths.values()],
             tgt_indexing_group='ast_nodes'),
-        ast_leaf_to_root_paths_child_place=BatchFlattenedSeq(
+        ast_leaf_to_root_paths_child_place=None if not pp_method_ast else BatchFlattenedSeq(
             sequences=[
                 torch.LongTensor([
                     code_task_vocabs.ast_traversal_orientation.get_word_idx(
