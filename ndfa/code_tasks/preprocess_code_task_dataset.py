@@ -591,13 +591,13 @@ def preprocess_code_task_example(
             indices=torch.LongTensor([
                 pdg_node.idx
                 for pdg_node in method_pdg.pdg_nodes
-                if pdg_node.code_sub_token_range_ref]),
+                if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask]),
             tgt_indexing_group='cfg_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.ast_node_idx
                 for pdg_node in method_pdg.pdg_nodes
-                if pdg_node.code_sub_token_range_ref]),
+                if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask]),
             tgt_indexing_group='ast_nodes'),
         ast_node_idx_to_pdg_node_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.keys())),
