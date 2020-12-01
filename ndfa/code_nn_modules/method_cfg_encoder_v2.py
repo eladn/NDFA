@@ -198,7 +198,7 @@ class MethodCFGEncoderV2(nn.Module):
                     encoded_sub_asts_paths.ast_node_encodings, usage_point=1)
             # TODO: use a smarter combiner here (like we did for the expressions)
             combined_expressions = encoded_sub_asts_paths.ast_node_encodings[
-                code_task_input.pdg.cfg_nodes_expressions_ast.ast_root_index_per_pdg_node.indices]
+                code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices]
             combined_expressions = self.ast_combiner(combined_expressions)  # TODO: replace this; its temporal
             # if self.use_norm:
             #     combined_expressions = self.combined_expressions_norm(combined_expressions)
@@ -268,6 +268,7 @@ class MethodCFGEncoderV2(nn.Module):
         else:
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
+        # Add CFG-node macro context to its own sub-AST.
         if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
             # FIXME: notice there is a skip-connection built-in here that is not conditioned
@@ -281,6 +282,7 @@ class MethodCFGEncoderV2(nn.Module):
                     encoded_expressions_with_context, usage_point=2)
         elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             raise NotImplementedError  # TODO: implement!!!
+            # TODO: use `code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_*`
         else:
             assert False
 

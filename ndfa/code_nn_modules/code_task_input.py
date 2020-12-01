@@ -123,7 +123,10 @@ class MethodASTInputTensors(SubASTInputTensors):
 
 @dataclasses.dataclass
 class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
-    ast_root_index_per_pdg_node: BatchedFlattenedIndicesFlattenedTensor
+    pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
+    pdg_node_idx_to_sub_ast_root_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
+    ast_node_idx_to_pdg_node_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
+    ast_node_idx_to_pdg_node_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
 
 
 @dataclasses.dataclass

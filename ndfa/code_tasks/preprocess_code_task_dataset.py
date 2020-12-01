@@ -200,6 +200,17 @@ def preprocess_code_task_example(
         identifier_sub_parts_hashings=identifiers_sub_parts_hashings,
         sub_parts_obfuscation=sub_parts_obfuscation)
 
+    # Note:
+    # For pdg-nodes of control kind CATCH_CLAUSE_ENTRY / METHOD_ENTRY, their sub-AST should be trimmed.
+    # The last child of the root is a of type block-stmt and should not be considered as a part of this sub-AST.
+    # The tokenized expression ref of these pdg-nodes is already trimmed correctly in the raw extracted data.
+
+    assert all(not pdg_node.has_expression or pdg_node.code_sub_token_range_ref is not None
+               for pdg_node in method_pdg.pdg_nodes)
+    assert all(pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY,
+                                         SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY}
+               for pdg_node in method_pdg.pdg_nodes
+               if not pdg_node.has_expression and pdg_node.code_sub_token_range_ref is not None)
     _counter = itertools.count()
     pdg_node_idx_to_expression_idx_mapping = {
         pdg_node.idx: next(_counter)
@@ -322,10 +333,10 @@ def preprocess_code_task_example(
         if len(ngrams) > 0}
 
     control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths for node_idx, _ in path}
-    node_idxs_not_in_any_cfg_path = (set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set) - {0}
+    cfg_node_idxs_not_in_any_cfg_path = (set(node.idx for node in method_pdg.pdg_nodes) - control_flow_paths_node_idxs_set) - {0}
     # TODO: replace with assert! after we fix the <try..catch..finally> control-flow edges in the JavaExtractor.
     PreprocessLimitation.enforce_limitations(limitations=[PreprocessLimitation(
-        object_name='#node_idxs_not_in_any_cfg_path', value=len(node_idxs_not_in_any_cfg_path),
+        object_name='#cfg_node_idxs_not_in_any_cfg_path', value=len(cfg_node_idxs_not_in_any_cfg_path),
         max_val=0)])
 
     # FOR DEBUG:
@@ -367,6 +378,15 @@ def preprocess_code_task_example(
     nr_non_last_method_decl_children_which_are_block_stmt = sum(
         int(method_ast.nodes[child_node_idx].type == SerASTNodeType.BLOCK_STMT)
         for child_node_idx in method_ast.nodes[0].children_idxs[:-1])
+    last_catch_clause_entry_child_is_block_stmt = all(
+        method_ast.nodes[method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]].type == SerASTNodeType.BLOCK_STMT
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.control_kind == SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY)
+    nr_non_last_catch_clause_entry_children_which_are_block_stmt = sum(
+        int(method_ast.nodes[child_node_idx].type == SerASTNodeType.BLOCK_STMT)
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.control_kind == SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY
+        for child_node_idx in method_ast.nodes[pdg_node.ast_node_idx].children_idxs[:-1])
     PreprocessLimitation.enforce_limitations(limitations=[
         PreprocessLimitation(
             object_name='nr_pdg_nodes_with_code_expression_and_wo_sub_ast',
@@ -379,6 +399,14 @@ def preprocess_code_task_example(
         PreprocessLimitation(
             object_name='nr_non_last_method_decl_children_which_are_block_stmt',
             value=nr_non_last_method_decl_children_which_are_block_stmt,
+            min_val=0, max_val=0),
+        PreprocessLimitation(
+            object_name='last_catch_clause_entry_child_is_block_stmt',
+            value=int(last_catch_clause_entry_child_is_block_stmt),
+            min_val=1, max_val=1),
+        PreprocessLimitation(
+            object_name='nr_non_last_catch_clause_entry_children_which_are_block_stmt',
+            value=nr_non_last_catch_clause_entry_children_which_are_block_stmt,
             min_val=0, max_val=0)])
 
     method_ast_paths: ASTPaths = get_all_ast_paths(
@@ -387,10 +415,32 @@ def preprocess_code_task_example(
         pdg_node.idx: get_all_ast_paths(
             method_ast=method_ast, sub_ast_root_node_idx=pdg_node.ast_node_idx,
             subtrees_to_ignore={method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]}
-            if pdg_node.control_kind == SerPDGNodeControlKind.METHOD_ENTRY else None)
+            if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY} else None)
         for pdg_node in method_pdg.pdg_nodes
-        if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None and
+        if pdg_node.ast_node_idx is not None and
+        pdg_node.code_sub_token_range_ref is not None and
         pdg_node.idx not in pdg_nodes_to_mask}
+
+    assert all(
+        method_ast.nodes[method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]].type == SerASTNodeType.BLOCK_STMT
+        for pdg_node in method_pdg.pdg_nodes
+        if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY})
+    pdg_node_to_ast_node_indices = {
+        pdg_node_idx: set(
+            range(
+                ast_paths.subtree_indices_range[0],
+                method_ast.nodes[method_pdg.pdg_nodes[pdg_node_idx].ast_node_idx].children_idxs[-1] - 1 + 1)
+            if method_pdg.pdg_nodes[pdg_node_idx].control_kind in
+               {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY} else
+            range(ast_paths.subtree_indices_range[0], ast_paths.subtree_indices_range[1] + 1))
+        for pdg_node_idx, ast_paths in ast_paths_per_pdg_node.items()}
+
+    # No ast node that belongs to more than one pdg nodes
+    assert all(len(s1 & s2) == 0 for s1, s2 in itertools.combinations(pdg_node_to_ast_node_indices.values(), r=2))
+    ast_node_idx_to_pdg_node = {
+        ast_node_idx: pdg_node_idx
+        for pdg_node_idx, ast_node_indices in pdg_node_to_ast_node_indices.items()
+        for ast_node_idx in ast_node_indices}
 
     ast = MethodASTInputTensors(
         ast_node_types=BatchFlattenedTensor(
@@ -537,11 +587,24 @@ def preprocess_code_task_example(
                     for path_node in path])
                 for sub_ast_paths in ast_paths_per_pdg_node.values()
                 for path in sub_ast_paths.leaf_to_root_paths.values()]),
-        ast_root_index_per_pdg_node=BatchedFlattenedIndicesFlattenedTensor(
+        pdg_node_idx_to_sub_ast_root_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node.idx
+                for pdg_node in method_pdg.pdg_nodes
+                if pdg_node.code_sub_token_range_ref]),
+            tgt_indexing_group='cfg_nodes'),
+        pdg_node_idx_to_sub_ast_root_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.ast_node_idx
-                for pdg_node in method_pdg.pdg_nodes if pdg_node.code_sub_token_range_ref is not None]),
-            tgt_indexing_group='ast_nodes'))
+                for pdg_node in method_pdg.pdg_nodes
+                if pdg_node.code_sub_token_range_ref]),
+            tgt_indexing_group='ast_nodes'),
+        ast_node_idx_to_pdg_node_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.keys())),
+            tgt_indexing_group='ast_nodes'),
+        ast_node_idx_to_pdg_node_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.values())),
+            tgt_indexing_group='cfg_nodes'))
 
     cfg_control_flow_graph = TGData(
         edge_index=torch.LongTensor(
