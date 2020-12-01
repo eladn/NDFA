@@ -173,6 +173,8 @@ class MethodCFGEncoderV2(nn.Module):
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_identifiers: torch.Tensor) -> EncodedMethodCFGV2:
         encoded_cfg_paths, encoded_cfg_paths_ngrams = None, None
+        encoded_ast_nodes = None
+        encoded_expressions_with_context = None
 
         encoded_code_expressions = self.code_expression_encoder(
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
@@ -190,6 +192,7 @@ class MethodCFGEncoderV2(nn.Module):
                 combined_expressions = self.combined_expressions_norm(combined_expressions)
         elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             encoded_sub_asts_paths = encoded_code_expressions
+            encoded_ast_nodes = encoded_sub_asts_paths.ast_node_encodings
             if self.use_norm:
                 encoded_sub_asts_paths.ast_node_encodings = self.expressions_norm(
                     encoded_sub_asts_paths.ast_node_encodings, usage_point=1)
@@ -265,16 +268,21 @@ class MethodCFGEncoderV2(nn.Module):
         else:
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
-        # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
-        # FIXME: notice there is a skip-connection built-in here that is not conditioned
-        #  by the flag `self.use_skip_connections`.
-        encoded_expressions_with_context = self.expression_context_adder(
-            sequence=encoded_expressions,
-            sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
-            context=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor])
-        if self.use_norm:
-            encoded_expressions_with_context = self.expressions_norm(
-                encoded_expressions_with_context, usage_point=2)
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+            # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
+            # FIXME: notice there is a skip-connection built-in here that is not conditioned
+            #  by the flag `self.use_skip_connections`.
+            encoded_expressions_with_context = self.expression_context_adder(
+                sequence=encoded_code_expressions,
+                sequence_mask=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_mask,
+                context=encoded_cfg_nodes[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor])
+            if self.use_norm:
+                encoded_expressions_with_context = self.expressions_norm(
+                    encoded_expressions_with_context, usage_point=2)
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+            raise NotImplementedError  # TODO: implement!!!
+        else:
+            assert False
 
         # TODO: do we want to apply this?
         # encoded_cfg_nodes = self.cfg_node_encoding_mixer_with_expression_encoding(
@@ -289,7 +297,11 @@ class MethodCFGEncoderV2(nn.Module):
             symbols=code_task_input.symbols,
             encoded_expressions=encoded_expressions_with_context
             if self.use_symbols_occurrences_for_symbols_encodings else None,
-            tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions)
+            tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+            encoded_ast_nodes=encoded_ast_nodes
+            if self.use_symbols_occurrences_for_symbols_encodings else None,
+            ast_nodes_with_symbol_leaf_nodes_indices=code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices,
+            ast_nodes_with_symbol_leaf_symbol_idx=code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.indices)
 
         return EncodedMethodCFGV2(
             encoded_identifiers=encoded_identifiers,
