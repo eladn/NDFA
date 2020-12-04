@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from collections import namedtuple
 
 
-__all__ = ['get_activation_layer', 'get_activation_fn', 'seq_lengths_to_mask']
+__all__ = [
+    'get_activation_layer', 'get_activation_fn', 'seq_lengths_to_mask',
+    'EncodingsUpdater', 'apply_disjoint_updates_to_encodings_tensor']
 
 
 def get_activation_layer(activation_str: str):
@@ -33,3 +36,21 @@ def seq_lengths_to_mask(seq_lengths: torch.LongTensor, max_seq_len: int, batch_f
         .unsqueeze(0).expand(batch_size, max_seq_len)
     mask = (batched_ranges <= seq_lengths.unsqueeze(-1).expand(batch_size, max_seq_len))
     return mask
+
+
+EncodingsUpdater = namedtuple('EncodingsUpdater', ['new_embeddings', 'element_indices', 'linear_projection_layer'])
+
+
+def apply_disjoint_updates_to_encodings_tensor(
+        original_encodings: torch.Tensor, *updaters: EncodingsUpdater):
+    assert original_encodings.ndim == 2
+    assert all(updater.new_embeddings.ndim == 2 for updater in updaters)
+    assert all(updater.element_indices.ndim == 1 for updater in updaters)
+    updated_encodings = torch.cat([
+        updater.linear_projection_layer(torch.cat([
+            original_encodings[updater.element_indices], updater.new_embeddings], dim=1))
+        for updater in updaters], dim=0)
+    all_element_indices_to_update = torch.cat([updater.element_indices for updater in updaters], dim=0)
+    all_element_indices_to_update = all_element_indices_to_update.unsqueeze(-1).expand(updated_encodings.shape)
+    return original_encodings.scatter(
+        dim=0, index=all_element_indices_to_update, src=updated_encodings)

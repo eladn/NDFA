@@ -1,3 +1,4 @@
+from . import ast_nodes_embedder
 from . import ast_paths_encoder
 from . import cfg_node_encoder
 from . import cfg_paths_encoder
@@ -12,6 +13,7 @@ from . import symbols_decoder
 from . import symbols_encoder
 
 __all__ = \
+    ast_nodes_embedder.__all__ + \
     ast_paths_encoder.__all__ + \
     cfg_node_encoder.__all__ + \
     cfg_paths_encoder.__all__ + \
