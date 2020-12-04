@@ -229,6 +229,7 @@ class ASTPaths:
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType]
     leaf_to_root_paths: Dict[ASTNodeIdxType, Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
+    siblings_sequences: List[Tuple[ASTNodeIdxType, ...]]
     nodes_depth: Dict[ASTNodeIdxType, int]
     subtree_indices_range: Tuple[ASTNodeIdxType, ASTNodeIdxType]
 
@@ -241,6 +242,7 @@ def get_all_ast_paths(
     all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
+    siblings_sequences: List[Tuple[ASTNodeIdxType, ...]] = []
     nodes_depth: Dict[ASTNodeIdxType, int] = {}
     if subtrees_to_ignore is None:
         subtrees_to_ignore = set()
@@ -255,13 +257,16 @@ def get_all_ast_paths(
         nodes_depth[current_node_idx] = depth
         if verify_preorder_indexing:
             all_subtree_indices.add(current_node_idx)
-        current_node_children_idxs = [
+        current_node_children_idxs = tuple(
             child_node_idx
             for child_node_idx in method_ast.nodes[current_node_idx].children_idxs
-            if child_node_idx not in subtrees_to_ignore]
+            if child_node_idx not in subtrees_to_ignore)
         if len(current_node_children_idxs) == 0:  # leaf
             leaves_sequence.append(current_node_idx)
             return [()]
+
+        if len(current_node_children_idxs) > 1:
+            siblings_sequences.append(current_node_children_idxs)
 
         inner_upward_paths_from_leaves_to_children = [
             aux_recursive_ast_traversal(child_node_idx, depth=depth + 1)
@@ -318,5 +323,6 @@ def get_all_ast_paths(
         leaves_pair_common_ancestor=leaves_pair_common_ancestor,
         leaf_to_root_paths=all_ast_leaf_to_root_paths,
         leaves_sequence=tuple(leaves_sequence),
+        siblings_sequences=siblings_sequences,
         nodes_depth=nodes_depth,
         subtree_indices_range=subtree_indices_range)
