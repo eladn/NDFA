@@ -23,6 +23,7 @@ from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
+from ndfa.code_nn_modules.cfg_node_sub_ast_expression_combiner import CFGSubASTExpressionCombiner
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -37,8 +38,7 @@ class EncodedMethodCFGV2(NamedTuple):
 class MethodCFGEncoderV2(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
-                 use_symbols_occurrences_for_symbols_encodings: bool,
-                 use_norm: bool = True, shuffle_expressions: bool = False,
+                 use_symbols_occurrences_for_symbols_encodings: bool, use_norm: bool = True,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCFGEncoderV2, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -64,8 +64,11 @@ class MethodCFGEncoderV2(nn.Module):
             # TODO: plug-in these params from HPs
             ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim
             self.ast_node_embedding_dim = ast_node_embedding_dim
-            # TODO: AST expressions combiner
-            self.ast_combiner = nn.Linear(
+            # TODO: remove the `ast_combiner_projection` and make the `CFGSubASTExpressionCombiner` do it internally.
+            self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(
+                ast_node_encoding_dim=self.ast_node_embedding_dim, combining_method='attn',
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.ast_combiner_projection = nn.Linear(
                 in_features=self.ast_node_embedding_dim,
                 out_features=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim)
             self.macro_context_adder_to_sub_ast = MacroContextAdderToSubAST(
@@ -202,7 +205,15 @@ class MethodCFGEncoderV2(nn.Module):
             # TODO: use a smarter combiner here (like we did for the expressions)
             combined_expressions = encoded_sub_asts_paths.ast_node_encodings[
                 code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices]
-            combined_expressions = self.ast_combiner(combined_expressions)  # TODO: replace this; its temporal
+            combined_expressions = self.sub_ast_expression_combiner(
+                ast_nodes_encodings=encoded_ast_nodes,
+                ast_node_idx_to_pdg_node_idx_mapping_key=code_task_input.pdg.cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_key.indices,
+                ast_node_idx_to_pdg_node_idx_mapping_value=code_task_input.pdg.cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_value.indices,
+                pdg_node_idx_to_sub_ast_root_idx_mapping_key=code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices,
+                pdg_node_idx_to_sub_ast_root_idx_mapping_value=code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices,
+                nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor.size(0))
+            combined_expressions = combined_expressions[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor]  # TODO: solve this problem in a more elegant way.
+            combined_expressions = self.ast_combiner_projection(combined_expressions)  # TODO: replace this; its temporal
             # if self.use_norm:
             #     combined_expressions = self.combined_expressions_norm(combined_expressions)
         else:
@@ -692,7 +703,7 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
             state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-    def forward(self, encoded_cfg_node_occurrences_in_paths: torch.tensor,
+    def forward(self, encoded_cfg_node_occurrences_in_paths: torch.Tensor,
                 cfg_paths_mask: torch.BoolTensor,
                 cfg_paths_node_indices: torch.LongTensor,
                 previous_cfg_nodes_encodings: torch.Tensor,

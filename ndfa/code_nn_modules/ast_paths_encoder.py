@@ -10,7 +10,6 @@ from ndfa.ndfa_model_hyper_parameters import ASTEncoderParams
 from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
-from ndfa.code_nn_modules.code_task_input import MethodASTInputTensors
 from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeq
 
 

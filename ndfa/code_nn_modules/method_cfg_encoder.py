@@ -41,7 +41,7 @@ class MethodCFGEncoder(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu',
                  nr_layers: int = 2, use_skip_connections: bool = False,
                  use_norm: bool = True, share_weights_between_layers: bool = False,
-                 symbols_occurrences_fusion: bool = True, shuffle_expressions: bool = False):
+                 symbols_occurrences_fusion: bool = True):
         super(MethodCFGEncoder, self).__init__()
         assert nr_layers >= 1
         self.nr_layers = nr_layers
@@ -55,13 +55,12 @@ class MethodCFGEncoder(nn.Module):
             identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
             identifier_embedding_dim=self.identifier_embedding_dim,
-            shuffle_expressions=shuffle_expressions,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.expression_updater = ModuleRepeater(
             lambda: ExpressionUpdater(
                 sequence_encoder_params=self.encoder_params.cfg_node_expression_encoder.sequence_encoder,
                 token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-                shuffle_expressions=shuffle_expressions,
+                shuffle_expressions=self.encoder_params.cfg_node_expression_encoder.shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             repeats=range(1, nr_layers), share=share_weights_between_layers, repeat_key='layer_idx')
         self.expression_combiner = ModuleRepeater(

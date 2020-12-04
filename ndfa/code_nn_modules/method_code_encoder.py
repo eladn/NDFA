@@ -49,7 +49,6 @@ class MethodCodeEncoder(nn.Module):
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 use_symbols_occurrences_for_symbols_encodings=
                 self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
-                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
             self.method_cfg_encoder_v2 = MethodCFGEncoderV2(
@@ -59,7 +58,6 @@ class MethodCodeEncoder(nn.Module):
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 use_symbols_occurrences_for_symbols_encodings=
                 self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
-                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'method-linear-seq':
             self.linear_seq_method_code_encoder = CodeExpressionTokensSequenceEncoder(
