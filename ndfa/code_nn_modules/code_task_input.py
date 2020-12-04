@@ -102,6 +102,8 @@ class SubASTInputTensors(TensorsDataClass):
     ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq
     ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq
     ast_leaf_to_root_paths_child_place: BatchFlattenedSeq
+    ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq
+    siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq
 
 
 @dataclasses.dataclass

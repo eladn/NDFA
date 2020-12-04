@@ -544,7 +544,15 @@ def preprocess_code_task_example(
                         'child_place=UNK' if path_node.child_place_in_parent is None else
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
-                for path in method_ast_paths.leaf_to_root_paths.values()]))
+                for path in method_ast_paths.leaf_to_root_paths.values()]),
+        ast_leaves_sequence_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[torch.LongTensor(method_ast_paths.leaves_sequence)],
+            tgt_indexing_group='ast_nodes'),
+        siblings_sequences_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[
+                torch.LongTensor(siblings_sequence)
+                for siblings_sequence in method_ast_paths.siblings_sequences],
+            tgt_indexing_group='ast_nodes'))
 
     assert all(len(s1 & s2) == 0 for s1, s2 in itertools.combinations([
         set(ast.ast_nodes_with_identifier_leaf_nodes_indices.indices.tolist()),
@@ -588,6 +596,17 @@ def preprocess_code_task_example(
                     for path_node in path])
                 for sub_ast_paths in ast_paths_per_pdg_node.values()
                 for path in sub_ast_paths.leaf_to_root_paths.values()]),
+        ast_leaves_sequence_node_indices=BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[
+                torch.LongTensor(sub_ast_paths.leaves_sequence)
+                for sub_ast_paths in ast_paths_per_pdg_node.values()],
+            tgt_indexing_group='ast_nodes'),
+        siblings_sequences_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[
+                torch.LongTensor(siblings_sequence)
+                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for siblings_sequence in sub_ast_paths.siblings_sequences],
+            tgt_indexing_group='ast_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.idx
