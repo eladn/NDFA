@@ -105,6 +105,36 @@ class SubASTInputTensors(TensorsDataClass):
     ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq
     siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq
 
+    def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
+        if path_type == 'leaf_to_leaf':
+            return self.ast_leaf_to_leaf_paths_node_indices
+        elif path_type == 'leaf_to_root':
+            return self.ast_leaf_to_root_paths_node_indices
+        elif path_type == 'leaves_sequence':
+            return self.ast_leaves_sequence_node_indices
+        elif path_type == 'siblings_sequences':
+            return self.siblings_sequences_node_indices
+        else:
+            raise ValueError(f'Unsupported path type `{path_type}`.')
+
+    def get_ast_paths_child_place(self, path_type: str) -> Optional[BatchFlattenedSeq]:
+        if path_type == 'leaf_to_leaf':
+            return self.ast_leaf_to_leaf_paths_child_place
+        elif path_type == 'leaf_to_root':
+            return self.ast_leaf_to_root_paths_child_place
+        elif path_type in {'leaves_sequence', 'siblings_sequences'}:
+            return None
+        else:
+            raise ValueError(f'Unsupported path type `{path_type}`.')
+
+    def get_ast_paths_vertical_direction(self, path_type: str) -> Optional[BatchFlattenedSeq]:
+        if path_type == 'leaf_to_leaf':
+            return self.ast_leaf_to_leaf_paths_vertical_direction
+        elif path_type in {'leaf_to_root', 'leaves_sequence', 'siblings_sequences'}:
+            return None
+        else:
+            raise ValueError(f'Unsupported path type `{path_type}`.')
+
 
 @dataclasses.dataclass
 class MethodASTInputTensors(SubASTInputTensors):

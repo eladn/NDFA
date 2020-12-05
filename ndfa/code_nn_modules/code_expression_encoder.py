@@ -73,12 +73,9 @@ class CodeExpressionEncoder(nn.Module):
                 identifiers_encodings=encoded_identifiers)
             return self.ast_paths_encoder(
                 ast_nodes_encodings=ast_nodes_embeddings,
-                ast_paths_node_indices=sub_ast_input.ast_leaf_to_leaf_paths_node_indices
-                if self.ast_paths_type == 'leaf_to_leaf' else sub_ast_input.ast_leaf_to_root_paths_node_indices,
-                ast_paths_child_place=sub_ast_input.ast_leaf_to_leaf_paths_child_place
-                if self.ast_paths_type == 'leaf_to_leaf' else sub_ast_input.ast_leaf_to_root_paths_child_place,
-                ast_paths_vertical_direction=sub_ast_input.ast_leaf_to_leaf_paths_vertical_direction
-                if self.ast_paths_type == 'leaf_to_leaf' else None,
+                ast_paths_node_indices=sub_ast_input.get_ast_paths_node_indices(self.ast_paths_type),
+                ast_paths_child_place=sub_ast_input.get_ast_paths_child_place(self.ast_paths_type),
+                ast_paths_vertical_direction=sub_ast_input.get_ast_paths_vertical_direction(self.ast_paths_type),
                 ast_paths_last_states_for_nodes=None,  # TODO
                 ast_paths_last_states_for_traversal_order=None)  # TODO
         else:
