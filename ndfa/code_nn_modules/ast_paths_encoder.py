@@ -65,18 +65,20 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_last_states_for_nodes: Optional[torch.Tensor] = None,
             ast_paths_last_states_for_traversal_order: Optional[torch.Tensor] = None) -> EncodedASTPaths:
         nr_ast_nodes = ast_nodes_encodings.size(0)
+        ast_paths_traversal_orientation_encodings_input = None
         if self.is_first_encoder_layer:
-            ast_paths_child_place_embeddings = \
-                self.ast_traversal_orientation_embedding_layer(ast_paths_child_place.sequences)
-            if ast_paths_vertical_direction is None:
-                ast_paths_traversal_orientation_encodings_input = ast_paths_child_place_embeddings
-            else:
-                ast_paths_vertical_direction_embeddings = \
-                    self.ast_traversal_orientation_embedding_layer(ast_paths_vertical_direction.sequences)
-                ast_paths_traversal_orientation_encodings_input = \
-                    self.ast_traversal_orientation_linear_projection_layer(torch.cat([
-                        ast_paths_child_place_embeddings,
-                        ast_paths_vertical_direction_embeddings], dim=-1))
+            if ast_paths_child_place is not None:
+                ast_paths_child_place_embeddings = \
+                    self.ast_traversal_orientation_embedding_layer(ast_paths_child_place.sequences)
+                if ast_paths_vertical_direction is None:
+                    ast_paths_traversal_orientation_encodings_input = ast_paths_child_place_embeddings
+                else:
+                    ast_paths_vertical_direction_embeddings = \
+                        self.ast_traversal_orientation_embedding_layer(ast_paths_vertical_direction.sequences)
+                    ast_paths_traversal_orientation_encodings_input = \
+                        self.ast_traversal_orientation_linear_projection_layer(torch.cat([
+                            ast_paths_child_place_embeddings,
+                            ast_paths_vertical_direction_embeddings], dim=-1))
             ast_paths_node_occurrences_encodings_inputs = ast_nodes_encodings[ast_paths_node_indices.sequences]
         else:
             # update nodes occurrences (in the path) with the last nodes representation using an update gate.
@@ -85,20 +87,32 @@ class ASTPathsEncoder(nn.Module):
                 state_update=ast_nodes_encodings)
             ast_paths_traversal_orientation_encodings_input = ast_paths_last_states_for_traversal_order
 
-        ast_paths_embeddings_input = weave_tensors(tensors=[
-            ast_paths_node_occurrences_encodings_inputs,
-            ast_paths_traversal_orientation_encodings_input], dim=1)
-        ast_paths_mask = ast_paths_node_indices.sequences_mask
-        ast_paths_with_edges_mask = seq_lengths_to_mask(
-            seq_lengths=ast_paths_node_indices.sequences_lengths * 2,
-            max_seq_len=2 * ast_paths_node_indices.sequences.size(1))
-        ast_paths_embeddings_input = ast_paths_embeddings_input.masked_fill(
-            ~ast_paths_with_edges_mask.unsqueeze(-1), 0)
+        if ast_paths_traversal_orientation_encodings_input is None:
+            ast_paths_embeddings_input = ast_paths_node_occurrences_encodings_inputs
+            ast_paths_lengths = ast_paths_node_indices.sequences_lengths
+        else:
+            ast_paths_embeddings_input = weave_tensors(tensors=[
+                ast_paths_node_occurrences_encodings_inputs,
+                ast_paths_traversal_orientation_encodings_input], dim=1)
+            ast_paths_with_edges_mask = seq_lengths_to_mask(
+                seq_lengths=ast_paths_node_indices.sequences_lengths * 2,
+                max_seq_len=2 * ast_paths_node_indices.sequences.size(1))
+            ast_paths_embeddings_input = ast_paths_embeddings_input.masked_fill(
+                ~ast_paths_with_edges_mask.unsqueeze(-1), 0)
+            ast_paths_lengths = ast_paths_node_indices.sequences_lengths * 2
+
         ast_paths_encoded = self.path_sequence_encoder(
             sequence_input=ast_paths_embeddings_input,
-            lengths=ast_paths_node_indices.sequences_lengths * 2, batch_first=True).sequence
-        ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings = unweave_tensor(
-            woven_tensor=ast_paths_encoded, dim=1, nr_target_tensors=2)
+            lengths=ast_paths_lengths, batch_first=True).sequence
+
+        if ast_paths_traversal_orientation_encodings_input is None:
+            ast_paths_nodes_encodings = ast_paths_encoded
+            ast_paths_traversal_orientation_encodings = None
+        else:
+            ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings = unweave_tensor(
+                woven_tensor=ast_paths_encoded, dim=1, nr_target_tensors=2)
+
+        ast_paths_mask = ast_paths_node_indices.sequences_mask
         new_ast_nodes_encodings = self.nodes_representation_path_folder(
             scattered_input=ast_paths_nodes_encodings[ast_paths_mask],
             indices=ast_paths_node_indices.sequences[ast_paths_mask],
