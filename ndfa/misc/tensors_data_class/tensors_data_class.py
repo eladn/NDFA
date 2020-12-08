@@ -7,6 +7,11 @@ try:
 except ImportError:
     TorchGeometricData, TorchGeometricBatch = None, None
 
+try:
+    import dgl
+except ImportError:
+    dgl = None
+
 from .misc import compose_fns, CollateData, CollatableValuesTuple, MapFn
 
 
@@ -232,6 +237,9 @@ class TensorsDataClass:
                     any(len(elem) > 0 and isinstance(elem[0], TorchGeometricData) for elem in values_as_tuple):
                 flattened = tuple(values_as_tuple for elem in values_as_tuple for datum in elem)
                 return TorchGeometricBatch.from_data_list(flattened, [])
+        if dgl is not None:
+            if isinstance(values_as_tuple[0], dgl.DGLGraph):
+                return dgl.batch(list(values_as_tuple))
         # TODO: consider canceling native dict handling! (raise ValueError to use `TensorDataDict` instead)
         if isinstance(values_as_tuple[0], dict):
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
