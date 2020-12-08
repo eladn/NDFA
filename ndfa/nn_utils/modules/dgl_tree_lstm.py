@@ -70,7 +70,10 @@ class TreeLSTM(nn.Module):
         cell = TreeLSTMCell if cell_type == 'nary' else ChildSumTreeLSTMCell
         self.cell = cell(self.node_embedding_size, self.hidden_size)
 
-    def forward(self, nodes_embeddings: torch.Tensor, tree: dgl.DGLGraph, h: torch.Tensor, c: torch.Tensor):
+    def forward(self, nodes_embeddings: torch.Tensor,
+                tree: dgl.DGLGraph,
+                h: torch.Tensor, c: torch.Tensor,
+                direction: str = 'root_to_leaves'):
         """Compute tree-lstm prediction given a batch.
         Parameters
         ----------
@@ -82,7 +85,11 @@ class TreeLSTM(nn.Module):
             Initial hidden state.
         c : Tensor
             Initial cell state.
+        direction : str
+            Message passing direction over the tree.
+            Either `root_to_leaves` or `leaves_to_root`.
         """
+        assert direction in {'root_to_leaves', 'leaves_to_root'}
         # feed embedding
         tree.ndata['iou'] = self.cell.W_iou(nodes_embeddings)  # * batch.mask.float().unsqueeze(-1)
         tree.ndata['h'] = h
@@ -91,6 +98,7 @@ class TreeLSTM(nn.Module):
         dgl.prop_nodes_topo(
             graph=tree, message_func=self.cell.message_func,
             reduce_func=self.cell.reduce_func,
+            reverse=(direction == 'leaves_to_root'),
             apply_node_func=self.cell.apply_node_func)
         h = self.dropout(tree.ndata.pop('h'))
         return h
