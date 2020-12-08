@@ -6,7 +6,7 @@ import numpy as np
 from enum import Enum
 from functools import reduce
 from typing_extensions import Protocol
-from typing import List, Dict, Tuple, Set, Optional, Any, Union
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Iterable
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
     SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType
@@ -17,7 +17,7 @@ __all__ = [
     'get_pdg_node_tokenized_expression', 'get_ast_node_tokenized_expression', 'get_ast_node_expression_str',
     'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call', 'traverse_pdg',
     'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
-    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'print_ast']
+    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'traverse_ast', 'ast_node_to_str', 'print_ast']
 
 
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
@@ -350,31 +350,54 @@ def get_all_ast_paths(
         subtree_indices_range=subtree_indices_range)
 
 
+def traverse_ast(
+        method_ast: SerMethodAST,
+        root_sub_ast_node_idx: ASTNodeIdxType,
+        subtrees_to_ignore: Optional[Set[int]] = None) -> Iterable[Tuple[SerASTNode, int, str]]:
+    if subtrees_to_ignore is None:
+        subtrees_to_ignore = set()
+    assert root_sub_ast_node_idx not in subtrees_to_ignore
+    assert root_sub_ast_node_idx < len(method_ast.nodes)
+    traversal_stack = [(root_sub_ast_node_idx, 0, 'pre')]
+
+    while len(traversal_stack) > 0:
+        current_ast_node_idx, current_node_depth, pre_or_post = traversal_stack.pop()
+        current_ast_node = method_ast.nodes[current_ast_node_idx]
+
+        if pre_or_post == 'pre':
+            yield current_ast_node, current_node_depth, 'pre'
+            traversal_stack.append((current_ast_node_idx, current_node_depth, 'post'))
+            for child_idx in reversed(current_ast_node.children_idxs):
+                if child_idx not in subtrees_to_ignore:
+                    traversal_stack.append((child_idx, current_node_depth + 1, 'pre'))
+        else:
+            assert pre_or_post == 'post'
+            yield current_ast_node, current_node_depth, 'post'
+
+
+def ast_node_to_str(method: SerMethod, ast_node: SerASTNode) -> str:
+    props = {'identifier': ast_node.identifier,
+             'name': ast_node.name,
+             'modifier': ast_node.modifier,
+             'type_name': ast_node.type_name}
+    if len(ast_node.children_idxs) == 0 and \
+            ast_node.code_sub_token_range_ref is not None and \
+            ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and \
+            method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].identifier_idx is not None:
+        props['token_identifier'] = method.code.tokenized[
+            ast_node.code_sub_token_range_ref.begin_token_idx].identifier_idx
+    props = {k: v for k, v in props.items() if v is not None}
+    props_str = ' -- '.join(f'{k}={v}' for k, v in props.items())
+    return f'{ast_node.type.value} [{ast_node.idx}]    {props_str}'
+
+
 def print_ast(method_ast: SerMethodAST,
               method: SerMethod,
               root_sub_ast_node_idx: ASTNodeIdxType,
               subtrees_to_ignore: Optional[Set[int]] = None):
-    if subtrees_to_ignore is None:
-        subtrees_to_ignore = set()
-
-    def aux_traversal(current_node_idx: ASTNodeIdxType, depth: int = 0):
-        if current_node_idx in subtrees_to_ignore:
-            return
-        current_node = method_ast.nodes[current_node_idx]
-        props = {'identifier': current_node.identifier,
-                 'name': current_node.name,
-                 'modifier': current_node.modifier,
-                 'type_name': current_node.type_name}
-        if len(current_node.children_idxs) == 0 and \
-                current_node.code_sub_token_range_ref is not None and \
-                current_node.code_sub_token_range_ref.begin_token_idx == current_node.code_sub_token_range_ref.end_token_idx and \
-                method.code.tokenized[current_node.code_sub_token_range_ref.begin_token_idx].identifier_idx is not None:
-            props['token_identifier'] = method.code.tokenized[
-                current_node.code_sub_token_range_ref.begin_token_idx].identifier_idx
-        props = {k: v for k, v in props.items() if v is not None}
-        props_str = ' -- '.join(f'{k}={v}' for k, v in props.items())
-        print(' ' * depth * 2 + f'{current_node.type.value}    {props_str}')
-        for child_idx in current_node.children_idxs:
-            aux_traversal(current_node_idx=child_idx, depth=depth + 1)
-
-    aux_traversal(root_sub_ast_node_idx)
+    for ast_node, depth, pop in traverse_ast(
+            method_ast=method_ast,
+            root_sub_ast_node_idx=root_sub_ast_node_idx,
+            subtrees_to_ignore=subtrees_to_ignore):
+        if pop == 'pre':
+            print('  ' * depth + ast_node_to_str(method=method, ast_node=ast_node))
