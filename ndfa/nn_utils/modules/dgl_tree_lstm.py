@@ -74,7 +74,7 @@ class TreeLSTM(nn.Module):
     def forward(self, nodes_embeddings: torch.Tensor,
                 tree: dgl.DGLGraph,
                 h: torch.Tensor, c: torch.Tensor,
-                direction: str = 'root_to_leaves'):
+                direction: str = 'leaves_to_root'):
         """Compute tree-lstm prediction given a batch.
         Parameters
         ----------
@@ -99,7 +99,7 @@ class TreeLSTM(nn.Module):
         dgl.prop_nodes_topo(
             graph=tree, message_func=self.cell.message_func,
             reduce_func=self.cell.reduce_func,
-            reverse=(direction == 'leaves_to_root'),
+            reverse=(direction == 'root_to_leaves'),
             apply_node_func=self.cell.apply_node_func)
         h = self.dropout_layer(tree.ndata.pop('h'))
         return h

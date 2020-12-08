@@ -60,8 +60,10 @@ class CodeExpressionEncoder(nn.Module):
                     ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
-                self.ast_treelstm = ASTTreeLSTMEncoder(
-                    ast_node_embedding_dim=self.ast_node_embedding_dim, dropout_rate=dropout_rate)
+                self.ast_treelstm_up = ASTTreeLSTMEncoder(
+                    ast_node_embedding_dim=self.ast_node_embedding_dim, direction='leaves_to_root', dropout_rate=dropout_rate)
+                self.ast_treelstm_down = ASTTreeLSTMEncoder(
+                    ast_node_embedding_dim=self.ast_node_embedding_dim, direction='root_to_leaves', dropout_rate=dropout_rate)
             else:
                 assert False
         else:
@@ -91,8 +93,12 @@ class CodeExpressionEncoder(nn.Module):
                     ast_paths_last_states_for_nodes=None,  # TODO
                     ast_paths_last_states_for_traversal_order=None)  # TODO
             elif self.encoder_params.encoder_type == 'ast_treelstm':
-                return self.ast_treelstm(
+                ast_nodes_encodings = self.ast_treelstm_up(
                     ast_nodes_embeddings=ast_nodes_embeddings,
                     ast_batch=sub_ast_input.dgl_tree)
+                ast_nodes_encodings = self.ast_treelstm_down(
+                    ast_nodes_embeddings=ast_nodes_encodings,
+                    ast_batch=sub_ast_input.dgl_tree)
+                return ast_nodes_encodings
         else:
             assert False

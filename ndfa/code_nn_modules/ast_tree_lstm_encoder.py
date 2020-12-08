@@ -9,11 +9,15 @@ __all__ = ['ASTTreeLSTMEncoder']
 
 
 class ASTTreeLSTMEncoder(nn.Module):
-    def __init__(self, ast_node_embedding_dim: int, dropout_rate: float = 0.3):
+    def __init__(self, ast_node_embedding_dim: int, direction: str = 'root_to_leaves', dropout_rate: float = 0.3):
         super(ASTTreeLSTMEncoder, self).__init__()
         self.ast_node_embedding_dim = ast_node_embedding_dim
+        assert direction in {'root_to_leaves', 'leaves_to_root'}
+        self.direction = direction
         self.tree_lstm = TreeLSTM(
-            node_embedding_size=ast_node_embedding_dim, cell_type='sum_children', dropout_rate=dropout_rate)
+            node_embedding_size=ast_node_embedding_dim,
+            cell_type='sum_children',
+            dropout_rate=dropout_rate)
 
     def forward(self, ast_nodes_embeddings: torch.Tensor, ast_batch: dgl.DGLGraph):
         assert ast_nodes_embeddings.ndim == 2
@@ -22,7 +26,7 @@ class ASTTreeLSTMEncoder(nn.Module):
         c = torch.zeros_like(ast_nodes_embeddings)
         new_node_encodings = self.tree_lstm(
             nodes_embeddings=ast_nodes_embeddings,
-            tree=ast_batch,
-            h=h, c=c)
+            tree=ast_batch, h=h, c=c,
+            direction=self.direction)
         assert new_node_encodings.shape == ast_nodes_embeddings.shape
         return new_node_encodings
