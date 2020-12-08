@@ -63,12 +63,13 @@ class ChildSumTreeLSTMCell(nn.Module):
 
 class TreeLSTM(nn.Module):
     def __init__(self, node_embedding_size: int, hidden_size: Optional[int] = None,
-                 cell_type='nary'):
+                 cell_type='nary', dropout_rate: float = 0.3):
         super(TreeLSTM, self).__init__()
         self.node_embedding_size = node_embedding_size
         self.hidden_size = self.node_embedding_size if hidden_size is None else hidden_size
         cell = TreeLSTMCell if cell_type == 'nary' else ChildSumTreeLSTMCell
         self.cell = cell(self.node_embedding_size, self.hidden_size)
+        self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(self, nodes_embeddings: torch.Tensor,
                 tree: dgl.DGLGraph,
@@ -100,5 +101,5 @@ class TreeLSTM(nn.Module):
             reduce_func=self.cell.reduce_func,
             reverse=(direction == 'leaves_to_root'),
             apply_node_func=self.cell.apply_node_func)
-        h = self.dropout(tree.ndata.pop('h'))
+        h = self.dropout_layer(tree.ndata.pop('h'))
         return h
