@@ -11,6 +11,7 @@ from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union
 from typing_extensions import Protocol
 from sklearn.feature_extraction.text import HashingVectorizer
 from torch_geometric.data import Data as TGData
+import dgl
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
@@ -409,8 +410,9 @@ def preprocess_code_task_example(
             value=nr_non_last_catch_clause_entry_children_which_are_block_stmt,
             min_val=0, max_val=0)])
 
-    method_ast_paths: ASTPaths = get_all_ast_paths(
-        method_ast=method_ast)  # TODO: ignore all subtree of log ast node (make the node itself a leaf)
+    pp_method_ast = False  # TODO: make it a preprocess parameter
+    # TODO: ignore all subtree of log ast node (make the node itself a leaf)
+    method_ast_paths: ASTPaths = get_all_ast_paths(method_ast=method_ast) if pp_method_ast else None
     ast_paths_per_pdg_node: Dict[int, ASTPaths] = {
         pdg_node.idx: get_all_ast_paths(
             method_ast=method_ast, sub_ast_root_node_idx=pdg_node.ast_node_idx,
@@ -420,6 +422,25 @@ def preprocess_code_task_example(
         if pdg_node.ast_node_idx is not None and
         pdg_node.code_sub_token_range_ref is not None and
         pdg_node.idx not in pdg_nodes_to_mask}
+
+    # FOR DEBUG:
+    # from ndfa.misc.code_data_structure_utils import print_ast, get_ast_node_expression_str
+    # for pdg_node_idx, paths in ast_paths_per_pdg_node.items():
+    #     # if len(paths.leaf_to_leaf_paths) > 0:
+    #     #     continue
+    #     pdg_node = method_pdg.pdg_nodes[pdg_node_idx]
+    #     root_sub_ast_node_idx = pdg_node.ast_node_idx
+    #     root_sub_ast_node = method_ast.nodes[root_sub_ast_node_idx]
+    #     if not any(len(method_ast.nodes[ast_node_idx].children_idxs) > 3 for ast_node_idx in range(paths.subtree_indices_range[0], paths.subtree_indices_range[1] + 1)):
+    #         continue
+    #     print('PDG node control kind:', pdg_node.control_kind.value)
+    #     print(get_ast_node_expression_str(method=method, ast_node=root_sub_ast_node).strip())
+    #     subtrees_to_ignore = {root_sub_ast_node.children_idxs[-1]} \
+    #         if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY} else None
+    #     print_ast(method=method, method_ast=method_ast,
+    #               root_sub_ast_node_idx=root_sub_ast_node_idx,
+    #               subtrees_to_ignore=subtrees_to_ignore)
+    #     print()
 
     assert all(
         method_ast.nodes[method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]].type == SerASTNodeType.BLOCK_STMT
@@ -442,7 +463,24 @@ def preprocess_code_task_example(
         for pdg_node_idx, ast_node_indices in pdg_node_to_ast_node_indices.items()
         for ast_node_idx in ast_node_indices}
 
-    pp_method_ast = False  # TODO: make it a preprocess parameter
+    dgl_ast_edges = torch.LongTensor(
+        [[ast_node.idx, child_node_idx]
+         for ast_node in method_ast.nodes
+         for child_node_idx in ast_node.children_idxs]).t().chunk(chunks=2, dim=0)
+    dgl_ast_edges = tuple(u.squeeze() for u in dgl_ast_edges)
+    dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
+    pdg_nodes_expressions_dgl_ast_node_indices = set(itertools.chain.from_iterable(
+        ast_paths.postorder_traversal_sequence for ast_paths in ast_paths_per_pdg_node.values()))
+    pdg_nodes_expressions_dgl_ast_edges = torch.LongTensor(
+        [[ast_node.idx, child_node_idx]
+         for ast_node in method_ast.nodes
+         for child_node_idx in ast_node.children_idxs
+         if ast_node.idx in pdg_nodes_expressions_dgl_ast_node_indices and
+         child_node_idx in pdg_nodes_expressions_dgl_ast_node_indices]).t().chunk(chunks=2, dim=0)
+    pdg_nodes_expressions_dgl_ast_edges = tuple(u.squeeze() for u in pdg_nodes_expressions_dgl_ast_edges)
+    pdg_nodes_expressions_dgl_ast = \
+        dgl.graph(data=pdg_nodes_expressions_dgl_ast_edges, num_nodes=len(method_ast.nodes))
+
     ast = MethodASTInputTensors(
         ast_node_types=BatchFlattenedTensor(
             torch.LongTensor([
@@ -552,7 +590,8 @@ def preprocess_code_task_example(
             sequences=[
                 torch.LongTensor(siblings_sequence)
                 for siblings_sequence in method_ast_paths.siblings_sequences],
-            tgt_indexing_group='ast_nodes'))
+            tgt_indexing_group='ast_nodes'),
+        dgl_tree=dgl_ast)
 
     assert all(len(s1 & s2) == 0 for s1, s2 in itertools.combinations([
         set(ast.ast_nodes_with_identifier_leaf_nodes_indices.indices.tolist()),
@@ -624,7 +663,8 @@ def preprocess_code_task_example(
             tgt_indexing_group='ast_nodes'),
         ast_node_idx_to_pdg_node_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.values())),
-            tgt_indexing_group='cfg_nodes'))
+            tgt_indexing_group='cfg_nodes'),
+        dgl_tree=pdg_nodes_expressions_dgl_ast)
 
     cfg_control_flow_graph = TGData(
         edge_index=torch.LongTensor(

@@ -2,6 +2,7 @@ import torch
 import dataclasses
 from typing import Optional
 from torch_geometric.data import Data as TGData
+import dgl
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
@@ -104,6 +105,7 @@ class SubASTInputTensors(TensorsDataClass):
     ast_leaf_to_root_paths_child_place: BatchFlattenedSeq
     ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq
     siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq
+    dgl_tree: dgl.DGLGraph
 
     def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
         if path_type == 'leaf_to_leaf':
