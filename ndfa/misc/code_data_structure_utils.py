@@ -281,6 +281,7 @@ def get_all_ast_paths(
             if child_node_idx not in subtrees_to_ignore)
         if len(current_node_children_idxs) == 0:  # leaf
             leaves_sequence.append(current_node_idx)
+            postorder_traversal_sequence.append(current_node_idx)
             return [()]
 
         if len(current_node_children_idxs) > 1:
