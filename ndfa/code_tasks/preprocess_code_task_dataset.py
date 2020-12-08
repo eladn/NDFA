@@ -462,12 +462,14 @@ def preprocess_code_task_example(
         ast_node_idx: pdg_node_idx
         for pdg_node_idx, ast_node_indices in pdg_node_to_ast_node_indices.items()
         for ast_node_idx in ast_node_indices}
+    assert len(ast_paths_per_pdg_node) > 0
+    assert all(len(ast_paths.postorder_traversal_sequence) > 0 for ast_paths in ast_paths_per_pdg_node.values())
 
     dgl_ast_edges = torch.LongTensor(
         [[ast_node.idx, child_node_idx]
          for ast_node in method_ast.nodes
          for child_node_idx in ast_node.children_idxs]).t().chunk(chunks=2, dim=0)
-    dgl_ast_edges = tuple(u.squeeze() for u in dgl_ast_edges)
+    dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
     dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
     pdg_nodes_expressions_dgl_ast_node_indices = set(itertools.chain.from_iterable(
         ast_paths.postorder_traversal_sequence for ast_paths in ast_paths_per_pdg_node.values()))
@@ -477,7 +479,7 @@ def preprocess_code_task_example(
          for child_node_idx in ast_node.children_idxs
          if ast_node.idx in pdg_nodes_expressions_dgl_ast_node_indices and
          child_node_idx in pdg_nodes_expressions_dgl_ast_node_indices]).t().chunk(chunks=2, dim=0)
-    pdg_nodes_expressions_dgl_ast_edges = tuple(u.squeeze() for u in pdg_nodes_expressions_dgl_ast_edges)
+    pdg_nodes_expressions_dgl_ast_edges = tuple(u.view(-1) for u in pdg_nodes_expressions_dgl_ast_edges)
     pdg_nodes_expressions_dgl_ast = \
         dgl.graph(data=pdg_nodes_expressions_dgl_ast_edges, num_nodes=len(method_ast.nodes))
 
