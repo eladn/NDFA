@@ -34,16 +34,18 @@ class ASTNodesEmbedder(nn.Module):
         self.ast_node_child_pos_vocab = ast_node_child_pos_vocab
         self.primitive_types_vocab = primitive_types_vocab
         self.modifiers_vocab = modifiers_vocab
+        self.ast_node_type_embedding_dim = self.ast_node_embedding_dim
         self.ast_node_type_embedding_layer = nn.Embedding(
             num_embeddings=len(self.ast_node_type_vocab),
-            embedding_dim=self.ast_node_embedding_dim,
+            embedding_dim=self.ast_node_type_embedding_dim,
             padding_idx=self.ast_node_type_vocab.get_word_idx('<PAD>'))
-        self.ast_node_major_type_embedding_dim = self.ast_node_embedding_dim
+        self.ast_node_major_type_embedding_dim = int(self.ast_node_type_embedding_dim * (2 / 3))
         self.ast_node_major_type_embedding_layer = nn.Embedding(
             num_embeddings=len(self.ast_node_major_type_vocab),
             embedding_dim=self.ast_node_major_type_embedding_dim,
             padding_idx=self.ast_node_major_type_vocab.get_word_idx('<PAD>'))
-        self.ast_node_minor_type_embedding_dim = self.ast_node_major_type_embedding_dim // 2
+        self.ast_node_minor_type_embedding_dim = \
+            self.ast_node_type_embedding_dim - self.ast_node_major_type_embedding_dim
         self.ast_node_minor_type_embedding_layer = nn.Embedding(
             num_embeddings=len(self.ast_node_minor_type_vocab),
             embedding_dim=self.ast_node_minor_type_embedding_dim,
@@ -59,8 +61,7 @@ class ASTNodesEmbedder(nn.Module):
             embedding_dim=self.ast_node_child_pos_embedding_dim,
             padding_idx=self.ast_node_child_pos_vocab.get_word_idx('<PAD>'))
         self.ast_nodes_embedding_dim_wo_iptm = \
-            self.ast_node_major_type_embedding_dim + \
-            self.ast_node_minor_type_embedding_dim + \
+            self.ast_node_type_embedding_dim + \
             self.ast_node_nr_children_embedding_dim + \
             self.ast_node_child_pos_embedding_dim
         self.ast_nodes_embeddings_projection_layer_wo_iptm = nn.Linear(
@@ -94,16 +95,20 @@ class ASTNodesEmbedder(nn.Module):
             self,
             method_ast_input: MethodASTInputTensors,
             identifiers_encodings: torch.Tensor) -> torch.Tensor:
-        # ast_nodes_types_embeddings = self.ast_node_type_embedding_layer(method_ast_input.ast_node_types.tensor)
-
         # `ast_nodes_embeddings_wo_iptm` involves the followings:
         #   (i+ii) major/minor type embeddings,
         #   (iii) #children embeddings
         #   (iv+v) child pos (ltr&rtl) embeddings.
+        ast_nodes_types_embeddings = self.ast_node_type_embedding_layer(
+            method_ast_input.ast_node_types.tensor)
         ast_nodes_major_types_embeddings = self.ast_node_major_type_embedding_layer(
             method_ast_input.ast_node_major_types.tensor)
         ast_nodes_minor_types_embeddings = self.ast_node_minor_type_embedding_layer(
             method_ast_input.ast_node_minor_types.tensor)
+        ast_nodes_types_embeddings = torch.where(
+            (method_ast_input.ast_node_minor_types.tensor == self.ast_node_minor_type_vocab.get_word_idx('<PAD>')).unsqueeze(-1),
+            ast_nodes_types_embeddings,
+            torch.cat([ast_nodes_major_types_embeddings, ast_nodes_minor_types_embeddings], dim=-1))
         ast_nodes_nr_children_embeddings = self.ast_node_nr_children_embedding_layer(
             method_ast_input.ast_node_nr_children.tensor)
         ast_nodes_child_ltr_position_embeddings = self.ast_node_child_pos_embedding_layer(
@@ -113,8 +118,7 @@ class ASTNodesEmbedder(nn.Module):
         ast_nodes_child_position_embeddings = \
             ast_nodes_child_ltr_position_embeddings + ast_nodes_child_rtl_position_embeddings
         ast_nodes_embeddings_wo_iptm = self.dropout_layer(torch.cat([
-            ast_nodes_major_types_embeddings,
-            ast_nodes_minor_types_embeddings,
+            ast_nodes_types_embeddings,
             ast_nodes_nr_children_embeddings,
             ast_nodes_child_position_embeddings], dim=-1))
 
