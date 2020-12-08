@@ -494,15 +494,15 @@ def preprocess_code_task_example(
          child_node_idx not in ast_node_indices_to_mask]).t().chunk(chunks=2, dim=0)
     dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
     dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
-    pdg_nodes_expressions_dgl_ast_node_indices = set(itertools.chain.from_iterable(
-        ast_paths.postorder_traversal_sequence for ast_paths in ast_paths_per_pdg_node.values()))
-    assert len(pdg_nodes_expressions_dgl_ast_node_indices & ast_node_indices_to_mask) == 0
+    assert all(
+        len(sub_ast_nodes & ast_node_indices_to_mask) == 0
+        for sub_ast_nodes in pdg_node_to_ast_node_indices.values())
     pdg_nodes_expressions_dgl_ast_edges = torch.LongTensor(
-        [[ast_node.idx, child_node_idx]
-         for ast_node in method_ast.nodes
-         for child_node_idx in ast_node.children_idxs
-         if ast_node.idx in pdg_nodes_expressions_dgl_ast_node_indices and
-         child_node_idx in pdg_nodes_expressions_dgl_ast_node_indices]).t().chunk(chunks=2, dim=0)
+        [[ast_node_idx, child_node_idx]
+         for sub_ast_nodes in pdg_node_to_ast_node_indices.values()
+         for ast_node_idx in sub_ast_nodes
+         for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
+         if child_node_idx in sub_ast_nodes]).t().chunk(chunks=2, dim=0)
     pdg_nodes_expressions_dgl_ast_edges = tuple(u.view(-1) for u in pdg_nodes_expressions_dgl_ast_edges)
     pdg_nodes_expressions_dgl_ast = \
         dgl.graph(data=pdg_nodes_expressions_dgl_ast_edges, num_nodes=len(method_ast.nodes))
