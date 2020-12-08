@@ -14,15 +14,30 @@ from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
 __all__ = [
-    'get_pdg_node_tokenized_expression', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call',
-    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
-    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType']
+    'get_pdg_node_tokenized_expression', 'get_ast_node_tokenized_expression', 'get_ast_node_expression_str',
+    'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call', 'traverse_pdg',
+    'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
+    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'print_ast']
 
 
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
     return method.code.tokenized[
         pdg_node.code_sub_token_range_ref.begin_token_idx:
         pdg_node.code_sub_token_range_ref.end_token_idx+1]
+
+
+def get_ast_node_tokenized_expression(method: SerMethod, ast_node: SerASTNode):
+    return method.code.tokenized[
+        ast_node.code_sub_token_range_ref.begin_token_idx:
+        ast_node.code_sub_token_range_ref.end_token_idx+1]
+
+
+def get_ast_node_expression_str(method: SerMethod, ast_node: SerASTNode):
+    return method.code.code_str[
+        method.code.tokenized[
+            ast_node.code_sub_token_range_ref.begin_token_idx].position_range_in_code_snippet_str.begin_idx:
+        method.code.tokenized[
+            ast_node.code_sub_token_range_ref.end_token_idx].position_range_in_code_snippet_str.end_idx + 1]
 
 
 def find_all_simple_names_in_sub_ast(ast_node: SerASTNode, method_ast: SerMethodAST) -> Set[str]:
@@ -229,6 +244,7 @@ class ASTPaths:
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType]
     leaf_to_root_paths: Dict[ASTNodeIdxType, Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
+    postorder_traversal_sequence: Tuple[ASTNodeIdxType, ...]
     siblings_sequences: List[Tuple[ASTNodeIdxType, ...]]
     nodes_depth: Dict[ASTNodeIdxType, int]
     subtree_indices_range: Tuple[ASTNodeIdxType, ASTNodeIdxType]
@@ -242,10 +258,12 @@ def get_all_ast_paths(
     all_ast_leaf_to_leaf_paths: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], Tuple[ASTLeaf2LeafPathNode, ...]] = {}
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
+    postorder_traversal_sequence: List[ASTNodeIdxType] = []
     siblings_sequences: List[Tuple[ASTNodeIdxType, ...]] = []
     nodes_depth: Dict[ASTNodeIdxType, int] = {}
     if subtrees_to_ignore is None:
         subtrees_to_ignore = set()
+    assert sub_ast_root_node_idx not in subtrees_to_ignore
     if verify_preorder_indexing:
         # just a sanity-check to ensure the indexing method (pre-order).
         # pre-order indexing is later assumed for calculating the field `subtree_indices_range`.
@@ -271,6 +289,8 @@ def get_all_ast_paths(
         inner_upward_paths_from_leaves_to_children = [
             aux_recursive_ast_traversal(child_node_idx, depth=depth + 1)
             for child_node_idx in current_node_children_idxs]
+        postorder_traversal_sequence.append(current_node_idx)
+
         for left_child_place in range(len(inner_upward_paths_from_leaves_to_children)):
             for right_child_place in range(left_child_place + 1, len(inner_upward_paths_from_leaves_to_children)):
                 ret_from_left_child = inner_upward_paths_from_leaves_to_children[left_child_place]
@@ -323,6 +343,37 @@ def get_all_ast_paths(
         leaves_pair_common_ancestor=leaves_pair_common_ancestor,
         leaf_to_root_paths=all_ast_leaf_to_root_paths,
         leaves_sequence=tuple(leaves_sequence),
+        postorder_traversal_sequence=tuple(postorder_traversal_sequence),
         siblings_sequences=siblings_sequences,
         nodes_depth=nodes_depth,
         subtree_indices_range=subtree_indices_range)
+
+
+def print_ast(method_ast: SerMethodAST,
+              method: SerMethod,
+              root_sub_ast_node_idx: ASTNodeIdxType,
+              subtrees_to_ignore: Optional[Set[int]] = None):
+    if subtrees_to_ignore is None:
+        subtrees_to_ignore = set()
+
+    def aux_traversal(current_node_idx: ASTNodeIdxType, depth: int = 0):
+        if current_node_idx in subtrees_to_ignore:
+            return
+        current_node = method_ast.nodes[current_node_idx]
+        props = {'identifier': current_node.identifier,
+                 'name': current_node.name,
+                 'modifier': current_node.modifier,
+                 'type_name': current_node.type_name}
+        if len(current_node.children_idxs) == 0 and \
+                current_node.code_sub_token_range_ref is not None and \
+                current_node.code_sub_token_range_ref.begin_token_idx == current_node.code_sub_token_range_ref.end_token_idx and \
+                method.code.tokenized[current_node.code_sub_token_range_ref.begin_token_idx].identifier_idx is not None:
+            props['token_identifier'] = method.code.tokenized[
+                current_node.code_sub_token_range_ref.begin_token_idx].identifier_idx
+        props = {k: v for k, v in props.items() if v is not None}
+        props_str = ' -- '.join(f'{k}={v}' for k, v in props.items())
+        print(' ' * depth * 2 + f'{current_node.type.value}    {props_str}')
+        for child_idx in current_node.children_idxs:
+            aux_traversal(current_node_idx=child_idx, depth=depth + 1)
+
+    aux_traversal(root_sub_ast_node_idx)
