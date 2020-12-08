@@ -44,6 +44,10 @@ class CodeExpressionEncoder(nn.Module):
                 primitive_type_embedding_dim=self.primitive_type_embedding_dim,
                 modifier_embedding_dim=self.modifier_embedding_dim,
                 ast_node_type_vocab=code_task_vocabs.ast_node_types,
+                ast_node_major_type_vocab=code_task_vocabs.ast_node_major_types,
+                ast_node_minor_type_vocab=code_task_vocabs.ast_node_minor_types,
+                ast_node_nr_children_vocab=code_task_vocabs.ast_node_nr_children,
+                ast_node_child_pos_vocab=code_task_vocabs.ast_node_child_pos,
                 primitive_types_vocab=code_task_vocabs.primitive_types,
                 modifiers_vocab=code_task_vocabs.modifiers,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)

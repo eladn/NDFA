@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import namedtuple
+from typing import Optional
 
 
 __all__ = [
@@ -42,7 +43,8 @@ EncodingsUpdater = namedtuple('EncodingsUpdater', ['new_embeddings', 'element_in
 
 
 def apply_disjoint_updates_to_encodings_tensor(
-        original_encodings: torch.Tensor, *updaters: EncodingsUpdater):
+        original_encodings: torch.Tensor, *updaters: EncodingsUpdater,
+        otherwise_linear: Optional[nn.Linear] = None):
     assert original_encodings.ndim == 2
     assert all(updater.new_embeddings.ndim == 2 for updater in updaters)
     assert all(updater.element_indices.ndim == 1 for updater in updaters)
@@ -52,5 +54,7 @@ def apply_disjoint_updates_to_encodings_tensor(
         for updater in updaters], dim=0)
     all_element_indices_to_update = torch.cat([updater.element_indices for updater in updaters], dim=0)
     all_element_indices_to_update = all_element_indices_to_update.unsqueeze(-1).expand(updated_encodings.shape)
+    if otherwise_linear is not None:
+        original_encodings = otherwise_linear(original_encodings)
     return original_encodings.scatter(
         dim=0, index=all_element_indices_to_update, src=updated_encodings)
