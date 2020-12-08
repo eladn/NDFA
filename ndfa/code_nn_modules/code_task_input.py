@@ -141,6 +141,8 @@ class SubASTInputTensors(TensorsDataClass):
 @dataclasses.dataclass
 class MethodASTInputTensors(SubASTInputTensors):
     ast_node_types: BatchFlattenedTensor
+    ast_node_major_types: BatchFlattenedTensor
+    ast_node_minor_types: BatchFlattenedTensor
 
     ast_nodes_with_identifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
     ast_nodes_with_identifier_leaf_identifier_idx: BatchedFlattenedIndicesFlattenedTensor

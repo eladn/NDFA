@@ -17,6 +17,8 @@ class CodeTaskVocabs(NamedTuple):
     tokens_kinds: Vocabulary
     pdg_control_flow_edge_types: Vocabulary
     ast_node_types: Vocabulary
+    ast_node_major_types: Vocabulary
+    ast_node_minor_types: Vocabulary
     primitive_types: Vocabulary
     modifiers: Vocabulary
     ast_traversal_orientation: Vocabulary
@@ -94,6 +96,25 @@ class CodeTaskVocabs(NamedTuple):
             special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
             carpus_generator=ast_node_types_carpus_generator)
 
+        ast_node_major_types_carpus_generator = None if raw_train_data_path is None else lambda: (
+            ast_node.type.value.split('_')[0]
+            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for ast_node in example.method_ast.nodes)
+        ast_node_major_types_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_major_types',
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            carpus_generator=ast_node_major_types_carpus_generator)
+
+        ast_node_minor_types_carpus_generator = None if raw_train_data_path is None else lambda: (
+            ast_node.type.value[ast_node.type.value.find('_') + 1:]
+            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for ast_node in example.method_ast.nodes
+            if '_' in ast_node.type.value)
+        ast_node_minor_types_vocab = Vocabulary.load_or_create(
+            preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_minor_types',
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            carpus_generator=ast_node_minor_types_carpus_generator)
+
         primitive_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.type_name
             for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
@@ -142,6 +163,8 @@ class CodeTaskVocabs(NamedTuple):
             tokens_kinds=tokens_kinds_vocab,
             pdg_control_flow_edge_types=pdg_control_flow_edge_types_vocab,
             ast_node_types=ast_node_types_vocab,
+            ast_node_major_types=ast_node_major_types_vocab,
+            ast_node_minor_types=ast_node_minor_types_vocab,
             primitive_types=primitive_types_vocab,
             modifiers=modifiers_vocab,
             ast_traversal_orientation=ast_traversal_orientation_vocab,

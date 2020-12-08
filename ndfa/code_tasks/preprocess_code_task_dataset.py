@@ -489,7 +489,9 @@ def preprocess_code_task_example(
     dgl_ast_edges = torch.LongTensor(
         [[ast_node.idx, child_node_idx]
          for ast_node in method_ast.nodes
-         for child_node_idx in ast_node.children_idxs]).t().chunk(chunks=2, dim=0)
+         for child_node_idx in ast_node.children_idxs
+         if ast_node.idx not in ast_node_indices_to_mask and
+         child_node_idx not in ast_node_indices_to_mask]).t().chunk(chunks=2, dim=0)
     dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
     dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
     pdg_nodes_expressions_dgl_ast_node_indices = set(itertools.chain.from_iterable(
@@ -510,6 +512,22 @@ def preprocess_code_task_example(
             torch.LongTensor([
                 code_task_vocabs.ast_node_types.get_word_idx_or_unk(
                     '<PAD>' if ast_node.idx in ast_node_indices_to_mask else ast_node.type.value)  # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
+                for ast_node in method_ast.nodes]),
+            self_indexing_group='ast_nodes'),
+        ast_node_major_types=BatchFlattenedTensor(
+            torch.LongTensor([
+                code_task_vocabs.ast_node_major_types.get_word_idx_or_unk(
+                    '<PAD>' if ast_node.idx in ast_node_indices_to_mask else ast_node.type.value.split('_')[0])
+                # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
+                for ast_node in method_ast.nodes]),
+            self_indexing_group='ast_nodes'),
+        ast_node_minor_types=BatchFlattenedTensor(
+            torch.LongTensor([
+                code_task_vocabs.ast_node_minor_types.get_word_idx_or_unk(
+                    '<PAD>'
+                    if ast_node.idx in ast_node_indices_to_mask or '_' not in ast_node.type.value else
+                    ast_node.type.value[ast_node.type.value.find('_') + 1:])
+                # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
                 for ast_node in method_ast.nodes]),
             self_indexing_group='ast_nodes'),
 
