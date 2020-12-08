@@ -22,6 +22,8 @@ class CodeTaskVocabs(NamedTuple):
     primitive_types: Vocabulary
     modifiers: Vocabulary
     ast_traversal_orientation: Vocabulary
+    ast_node_nr_children: Vocabulary
+    ast_node_child_pos: Vocabulary
     symbols_special_words: Vocabulary
     expressions_special_words: Vocabulary
     identifiers_special_words: Vocabulary
@@ -135,12 +137,25 @@ class CodeTaskVocabs(NamedTuple):
             special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
             carpus_generator=modifiers_carpus_generator)
 
+        MAX_AST_NODE_NR_CHILDREN_TO_COUNT = 5
         ast_traversal_orientation_vocab = Vocabulary(
             name='ast_traversal_orientations',
             all_words_sorted_by_idx=['DIR=UP', 'DIR=DOWN', 'DIR=COMMON'] +
                                     ['child_place=UNK'] +
-                                    [f'child_place={place}' for place in range(4)],
+                                    [f'child_place={place}' for place in range(MAX_AST_NODE_NR_CHILDREN_TO_COUNT)],
             special_words_sorted_by_idx=('<PAD>',))
+
+        ast_node_nr_children_vocab = Vocabulary(
+            name='ast_node_nr_children',
+            all_words_sorted_by_idx=[
+                f'{nr_children}' for nr_children in range(0, MAX_AST_NODE_NR_CHILDREN_TO_COUNT + 1)],
+            special_words_sorted_by_idx=('<PAD>', '<MORE>'))
+
+        ast_node_child_pos_vocab = Vocabulary(
+            name='ast_node_child_pos',
+            all_words_sorted_by_idx=[f'+{place}' for place in range(1, MAX_AST_NODE_NR_CHILDREN_TO_COUNT + 1)] +
+                                    [f'-{place}' for place in range(1, MAX_AST_NODE_NR_CHILDREN_TO_COUNT + 1)],
+            special_words_sorted_by_idx=('<PAD>', '<+MORE>', '<-MORE>', '<+ROOT>', '<-ROOT>'))
 
         symbols_special_words_vocab = Vocabulary(
             name='symbols-specials', all_words_sorted_by_idx=[], params=(),
@@ -168,6 +183,8 @@ class CodeTaskVocabs(NamedTuple):
             primitive_types=primitive_types_vocab,
             modifiers=modifiers_vocab,
             ast_traversal_orientation=ast_traversal_orientation_vocab,
+            ast_node_nr_children=ast_node_nr_children_vocab,
+            ast_node_child_pos=ast_node_child_pos_vocab,
             symbols_special_words=symbols_special_words_vocab,
             expressions_special_words=expressions_special_words_vocab,
             identifiers_special_words=identifiers_special_words_vocab)

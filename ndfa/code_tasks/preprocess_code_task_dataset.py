@@ -519,8 +519,7 @@ def preprocess_code_task_example(
                 code_task_vocabs.ast_node_major_types.get_word_idx_or_unk(
                     '<PAD>' if ast_node.idx in ast_node_indices_to_mask else ast_node.type.value.split('_')[0])
                 # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
-                for ast_node in method_ast.nodes]),
-            self_indexing_group='ast_nodes'),
+                for ast_node in method_ast.nodes])),
         ast_node_minor_types=BatchFlattenedTensor(
             torch.LongTensor([
                 code_task_vocabs.ast_node_minor_types.get_word_idx_or_unk(
@@ -528,8 +527,33 @@ def preprocess_code_task_example(
                     if ast_node.idx in ast_node_indices_to_mask or '_' not in ast_node.type.value else
                     ast_node.type.value[ast_node.type.value.find('_') + 1:])
                 # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
-                for ast_node in method_ast.nodes]),
-            self_indexing_group='ast_nodes'),
+                for ast_node in method_ast.nodes])),
+        ast_node_child_ltr_position=BatchFlattenedTensor(
+            torch.LongTensor([
+                code_task_vocabs.ast_node_child_pos.get_word_idx_or_unk(
+                    '<PAD>'
+                    if ast_node.idx in ast_node_indices_to_mask else
+                    '<+ROOT>'
+                    if ast_node.parent_node_idx is None or ast_node.child_place_at_parent is None else
+                    f'+{ast_node.child_place_at_parent + 1}', unk_word='<+MORE>')
+                for ast_node in method_ast.nodes])),
+        ast_node_child_rtl_position=BatchFlattenedTensor(
+            torch.LongTensor([
+                code_task_vocabs.ast_node_child_pos.get_word_idx_or_unk(
+                    '<PAD>'
+                    if ast_node.idx in ast_node_indices_to_mask else
+                    '<-ROOT>'
+                    if ast_node.parent_node_idx is None or ast_node.child_place_at_parent is None else
+                    f'-{len(method_ast.nodes[ast_node.parent_node_idx].children_idxs) - ast_node.child_place_at_parent}',
+                    unk_word='<-MORE>')
+                for ast_node in method_ast.nodes])),
+        ast_node_nr_children=BatchFlattenedTensor(
+            torch.LongTensor([
+                code_task_vocabs.ast_node_nr_children.get_word_idx_or_unk(
+                    '<PAD>'
+                    if ast_node.idx in ast_node_indices_to_mask else
+                    f'{len(ast_node.children_idxs)}', unk_word='<MORE>')
+                for ast_node in method_ast.nodes])),
 
         ast_nodes_with_identifier_leaf_nodes_indices=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([

@@ -143,6 +143,9 @@ class MethodASTInputTensors(SubASTInputTensors):
     ast_node_types: BatchFlattenedTensor
     ast_node_major_types: BatchFlattenedTensor
     ast_node_minor_types: BatchFlattenedTensor
+    ast_node_child_ltr_position: BatchFlattenedTensor
+    ast_node_child_rtl_position: BatchFlattenedTensor
+    ast_node_nr_children: BatchFlattenedTensor
 
     ast_nodes_with_identifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor
     ast_nodes_with_identifier_leaf_identifier_idx: BatchedFlattenedIndicesFlattenedTensor
