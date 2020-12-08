@@ -60,7 +60,7 @@ class MethodCFGEncoderV2(nn.Module):
                 main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
                 ctx_dim=self.encoder_params.cfg_node_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
             # TODO: plug-in these params from HPs
             ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim
             self.ast_node_embedding_dim = ast_node_embedding_dim
@@ -196,15 +196,15 @@ class MethodCFGEncoderV2(nn.Module):
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
             if self.use_norm:
                 combined_expressions = self.combined_expressions_norm(combined_expressions)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
-            encoded_sub_asts_paths = encoded_code_expressions
-            encoded_ast_nodes = encoded_sub_asts_paths.ast_node_encodings
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
+            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast_paths':
+                encoded_sub_asts_paths = encoded_code_expressions
+                encoded_ast_nodes = encoded_sub_asts_paths.ast_node_encodings
+            elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast_treelstm':
+                encoded_ast_nodes = encoded_code_expressions
             if self.use_norm:
-                encoded_sub_asts_paths.ast_node_encodings = self.expressions_norm(
-                    encoded_sub_asts_paths.ast_node_encodings, usage_point=1)
-            # TODO: use a smarter combiner here (like we did for the expressions)
-            combined_expressions = encoded_sub_asts_paths.ast_node_encodings[
-                code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices]
+                encoded_ast_nodes = self.expressions_norm(
+                    encoded_ast_nodes, usage_point=1)
             combined_expressions = self.sub_ast_expression_combiner(
                 ast_nodes_encodings=encoded_ast_nodes,
                 ast_node_idx_to_pdg_node_idx_mapping_key=code_task_input.pdg.cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_key.indices,
@@ -214,8 +214,8 @@ class MethodCFGEncoderV2(nn.Module):
                 nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor.size(0))
             combined_expressions = combined_expressions[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor]  # TODO: solve this problem in a more elegant way.
             combined_expressions = self.ast_combiner_projection(combined_expressions)  # TODO: replace this; its temporal
-            # if self.use_norm:
-            #     combined_expressions = self.combined_expressions_norm(combined_expressions)
+            if self.use_norm:
+                combined_expressions = self.combined_expressions_norm(combined_expressions)
         else:
             assert False
 
@@ -294,13 +294,11 @@ class MethodCFGEncoderV2(nn.Module):
             if self.use_norm:
                 encoded_expressions_with_context = self.expressions_norm(
                     encoded_expressions_with_context, usage_point=2)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
             encoded_ast_nodes = self.macro_context_adder_to_sub_ast(
                 previous_ast_nodes_encodings=encoded_ast_nodes,
                 new_cfg_nodes_encodings=encoded_cfg_nodes,
                 cfg_expressions_sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast)
-            # cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices
-            # TODO: use `code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_*`
         else:
             assert False
 

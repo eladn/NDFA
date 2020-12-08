@@ -62,12 +62,12 @@ class ASTEncoderParams:
 @confclass
 class CodeExpressionEncoderParams:
     encoder_type: str = confparam(
-        default='ast',
-        choices=('tokens-seq', 'ast'),
+        default='ast_treelstm',
+        choices=('tokens-seq', 'ast_paths', 'ast_treelstm'),
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 
-    # relevant only if `encoder_type == 'ast'`
+    # relevant only if `encoder_type == 'ast_paths'`
     ast_encoder: ASTEncoderParams = confparam(
         default_factory=ASTEncoderParams,
         description="Representation type of the AST of the expression "
