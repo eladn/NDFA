@@ -51,8 +51,6 @@ class MethodCFGEncoder(nn.Module):
         self.first_expression_encoder = CodeExpressionTokensSequenceEncoder(
             kos_tokens_vocab=code_task_vocabs.kos_tokens,
             tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
-            expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
-            identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
             identifier_embedding_dim=self.identifier_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)

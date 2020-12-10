@@ -27,8 +27,6 @@ class CodeExpressionEncoder(nn.Module):
             self.code_expression_linear_seq_encoder = CodeExpressionTokensSequenceEncoder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
-                expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
-                identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
                 encoder_params=self.encoder_params,
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -61,9 +59,11 @@ class CodeExpressionEncoder(nn.Module):
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
                 self.ast_treelstm_up = ASTTreeLSTMEncoder(
-                    ast_node_embedding_dim=self.ast_node_embedding_dim, direction='leaves_to_root', dropout_rate=dropout_rate)
+                    ast_node_embedding_dim=self.ast_node_embedding_dim,
+                    direction='leaves_to_root', dropout_rate=dropout_rate)
                 self.ast_treelstm_down = ASTTreeLSTMEncoder(
-                    ast_node_embedding_dim=self.ast_node_embedding_dim, direction='root_to_leaves', dropout_rate=dropout_rate)
+                    ast_node_embedding_dim=self.ast_node_embedding_dim,
+                    direction='root_to_leaves', dropout_rate=dropout_rate)
             else:
                 assert False
         else:

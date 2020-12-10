@@ -63,11 +63,8 @@ class MethodCodeEncoder(nn.Module):
             self.linear_seq_method_code_encoder = CodeExpressionTokensSequenceEncoder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
-                expressions_special_words_vocab=code_task_vocabs.expressions_special_words,
-                identifiers_special_words_vocab=code_task_vocabs.identifiers_special_words,
                 encoder_params=self.encoder_params.method_linear_seq_expression_encoder_type,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
-                shuffle_expressions=shuffle_expressions,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             self.symbols_encoder = SymbolsEncoder(
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
