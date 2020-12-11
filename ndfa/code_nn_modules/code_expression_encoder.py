@@ -93,12 +93,12 @@ class CodeExpressionEncoder(nn.Module):
                     ast_paths_last_states_for_nodes=None,  # TODO
                     ast_paths_last_states_for_traversal_order=None)  # TODO
             elif self.encoder_params.encoder_type == 'ast_treelstm':
-                ast_nodes_encodings = self.ast_treelstm_up(
+                ast_nodes_encodings_up = self.ast_treelstm_up(
                     ast_nodes_embeddings=ast_nodes_embeddings,
                     ast_batch=sub_ast_input.dgl_tree)
-                ast_nodes_encodings = self.ast_treelstm_down(
-                    ast_nodes_embeddings=ast_nodes_encodings,
+                ast_nodes_encodings_down = self.ast_treelstm_down(
+                    ast_nodes_embeddings=ast_nodes_embeddings,
                     ast_batch=sub_ast_input.dgl_tree)
-                return ast_nodes_encodings
+                return ast_nodes_encodings_up + ast_nodes_encodings_down
         else:
             assert False
