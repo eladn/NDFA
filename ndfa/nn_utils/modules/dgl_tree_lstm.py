@@ -91,6 +91,9 @@ class TreeLSTM(nn.Module):
             Either `root_to_leaves` or `leaves_to_root`.
         """
         assert direction in {'root_to_leaves', 'leaves_to_root'}
+        if direction == 'root_to_leaves':
+            u, v = tree.edges('uv')
+            tree = dgl.graph(data=(v, u), num_nodes=tree.num_nodes())
         # feed embedding
         tree.ndata['iou'] = self.cell.W_iou(nodes_embeddings)  # * batch.mask.float().unsqueeze(-1)
         tree.ndata['h'] = h
@@ -99,7 +102,7 @@ class TreeLSTM(nn.Module):
         dgl.prop_nodes_topo(
             graph=tree, message_func=self.cell.message_func,
             reduce_func=self.cell.reduce_func,
-            reverse=(direction == 'root_to_leaves'),
+            # reverse=(direction == 'root_to_leaves'),
             apply_node_func=self.cell.apply_node_func)
         h = self.dropout_layer(tree.ndata.pop('h'))
         return h
