@@ -46,7 +46,11 @@ class MethodCFGEncoderV2(nn.Module):
         self.encoder_params = encoder_params
 
         # TODO: export the combiners to CodeExpressionEncoder!
-        self.code_expression_encoder = CodeExpressionEncoder(
+        self.code_expression_encoder1 = CodeExpressionEncoder(
+            encoder_params=self.encoder_params.cfg_node_expression_encoder,
+            code_task_vocabs=code_task_vocabs, identifier_embedding_dim=self.identifier_embedding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.code_expression_encoder2 = CodeExpressionEncoder(
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
             code_task_vocabs=code_task_vocabs, identifier_embedding_dim=self.identifier_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -182,7 +186,7 @@ class MethodCFGEncoderV2(nn.Module):
         encoded_ast_nodes = None
         encoded_expressions_with_context = None
 
-        encoded_code_expressions = self.code_expression_encoder(
+        encoded_code_expressions = self.code_expression_encoder1(
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             method_ast_input=code_task_input.ast,
             sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast,
@@ -190,7 +194,8 @@ class MethodCFGEncoderV2(nn.Module):
         if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             encoded_tokenized_expressions = encoded_code_expressions
             if self.use_norm:
-                encoded_tokenized_expressions = self.expressions_norm(encoded_tokenized_expressions, usage_point=1)
+                encoded_tokenized_expressions = self.expressions_norm(
+                    encoded_tokenized_expressions, usage_point=1)
             combined_expressions = self.expression_combiner(
                 sequence_encodings=encoded_tokenized_expressions,
                 sequence_lengths=code_task_input.pdg.cfg_nodes_tokenized_expressions.token_type.sequences_lengths)
@@ -205,6 +210,7 @@ class MethodCFGEncoderV2(nn.Module):
             if self.use_norm:
                 encoded_ast_nodes = self.expressions_norm(
                     encoded_ast_nodes, usage_point=1)
+
             combined_expressions = self.sub_ast_expression_combiner(
                 ast_nodes_encodings=encoded_ast_nodes,
                 ast_node_idx_to_pdg_node_idx_mapping_key=code_task_input.pdg.cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_key.indices,
@@ -212,8 +218,12 @@ class MethodCFGEncoderV2(nn.Module):
                 pdg_node_idx_to_sub_ast_root_idx_mapping_key=code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices,
                 pdg_node_idx_to_sub_ast_root_idx_mapping_value=code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices,
                 nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor.size(0))
+            assert torch.all(
+                code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices
+                == torch.nonzero(code_task_input.pdg.cfg_nodes_has_expression_mask.tensor.long(), as_tuple=False)
+                .view(-1)).item()
             combined_expressions = combined_expressions[code_task_input.pdg.cfg_nodes_has_expression_mask.tensor]  # TODO: solve this problem in a more elegant way.
-            combined_expressions = self.ast_combiner_projection(combined_expressions)  # TODO: replace this; its temporal
+            combined_expressions = self.ast_combiner_projection(combined_expressions)  # TODO: replace this with reacher multi-head combiner; its temporal
             if self.use_norm:
                 combined_expressions = self.combined_expressions_norm(combined_expressions)
         else:
@@ -340,16 +350,16 @@ class MacroContextAdderToSubAST(nn.Module):
             self, previous_ast_nodes_encodings: torch.Tensor,
             new_cfg_nodes_encodings: torch.Tensor,
             cfg_expressions_sub_ast_input: PDGExpressionsSubASTInputTensors):
-        updates = self.gate(
+        ast_nodes_encodings_updates = self.gate(
             previous_state=previous_ast_nodes_encodings[
-                cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices],
+                cfg_expressions_sub_ast_input.ast_node_idx_to_pdg_node_idx_mapping_key.indices],
             state_update=new_cfg_nodes_encodings[
-                cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices])
+                cfg_expressions_sub_ast_input.ast_node_idx_to_pdg_node_idx_mapping_value.indices])
         return previous_ast_nodes_encodings.scatter(
             dim=0,
-            index=cfg_expressions_sub_ast_input.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices
-                .unsqueeze(-1).expand(updates.shape),
-            src=updates)
+            index=cfg_expressions_sub_ast_input.ast_node_idx_to_pdg_node_idx_mapping_key.indices
+                .unsqueeze(-1).expand(ast_nodes_encodings_updates.shape),
+            src=ast_nodes_encodings_updates)
 
 
 class CFGSinglePathEncoder(nn.Module):
