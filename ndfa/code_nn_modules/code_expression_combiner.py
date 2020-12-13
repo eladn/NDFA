@@ -31,12 +31,9 @@ class CodeExpressionCombiner(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type in {'ast_paths', 'ast_treelstm'}:
             self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(
-                ast_node_encoding_dim=self.ast_node_embedding_dim, combining_method='attn',
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
-            # TODO: remove the `ast_combiner_projection` and make the `CFGSubASTExpressionCombiner` do it internally.
-            self.ast_combiner_projection = nn.Linear(
-                in_features=self.ast_node_embedding_dim,
-                out_features=self.encoder_params.combined_expression_encoding_dim)
+                ast_node_encoding_dim=self.ast_node_embedding_dim,
+                combined_dim=self.encoder_params.combined_expression_encoding_dim,  # TODO!
+                combining_method='attn', dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.encoder_params.encoder_type}`.')
 
@@ -64,8 +61,6 @@ class CodeExpressionCombiner(nn.Module):
                 .view(-1)).item()
             combined_expressions = combined_expressions[
                 cfg_nodes_has_expression_mask]  # TODO: solve this problem in a more elegant way.
-            combined_expressions = self.ast_combiner_projection(
-                combined_expressions)  # TODO: replace this with richer multi-head combiner; its temporal
             return combined_expressions
         else:
             assert False

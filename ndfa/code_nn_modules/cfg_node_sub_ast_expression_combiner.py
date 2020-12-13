@@ -8,13 +8,15 @@ __all__ = ['CFGSubASTExpressionCombiner']
 
 
 class CFGSubASTExpressionCombiner(nn.Module):
-    def __init__(self, ast_node_encoding_dim: int, combining_method: str = 'attn',
+    def __init__(self, ast_node_encoding_dim: int, combined_dim: int, combining_method: str = 'attn',
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGSubASTExpressionCombiner, self).__init__()
+        self.combined_dim = combined_dim
         self.combining_method = combining_method
         self.ast_node_encoding_dim = ast_node_encoding_dim
         self.scatter_combiner_layer = ScatterCombiner(
-            encoding_dim=ast_node_encoding_dim, combining_method=combining_method)
+            encoding_dim=ast_node_encoding_dim, combining_method=combining_method,
+            nr_attn_heads=8, applied_attn_output_dim=combined_dim)
 
     def forward(self, ast_nodes_encodings: torch.Tensor,
                 ast_node_idx_to_pdg_node_idx_mapping_key: torch.LongTensor,
@@ -32,5 +34,5 @@ class CFGSubASTExpressionCombiner(nn.Module):
             indices=ast_node_idx_to_pdg_node_idx_mapping_value,
             dim_size=nr_cfg_nodes,
             attn_keys=attn_keys)
-        assert combined_sub_asts.size() == (nr_cfg_nodes, ast_nodes_encodings.size(1))
+        assert combined_sub_asts.size() == (nr_cfg_nodes, self.combined_dim)
         return combined_sub_asts
