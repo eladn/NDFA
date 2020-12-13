@@ -77,7 +77,7 @@ class ASTPathsEncoder(nn.Module):
             # update nodes occurrences (in the path) with the last nodes representation using an update gate.
             ast_paths_node_occurrences_encodings_inputs = self.nodes_occurrences_update_gate(
                 previous_state=ast_paths_last_states_for_nodes,
-                state_update=ast_nodes_encodings)
+                state_update=ast_nodes_encodings[ast_paths_node_indices.sequences])
             ast_paths_traversal_orientation_encodings_input = ast_paths_last_states_for_traversal_order
 
         if ast_paths_traversal_orientation_encodings_input is None:
