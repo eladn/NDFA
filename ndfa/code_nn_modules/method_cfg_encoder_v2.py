@@ -310,7 +310,9 @@ class MethodCFGEncoderV2(nn.Module):
                 previous_ast_nodes_encodings=encoded_code_expressions.ast_nodes,
                 new_cfg_nodes_encodings=encoded_cfg_nodes,
                 cfg_expressions_sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast)
-            # TODO: add norm here!
+            if self.use_norm:
+                encoded_code_expressions.ast_nodes = self.expressions_norm(
+                    encoded_code_expressions.ast_nodes, usage_point=2)
         else:
             assert False
 
