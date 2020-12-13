@@ -53,6 +53,7 @@ def apply_disjoint_updates_to_encodings_tensor(
             original_encodings[updater.element_indices], updater.new_embeddings], dim=1))
         for updater in updaters], dim=0)
     all_element_indices_to_update = torch.cat([updater.element_indices for updater in updaters], dim=0)
+    assert updated_encodings.size(0) == all_element_indices_to_update.size(0)
     all_element_indices_to_update = all_element_indices_to_update.unsqueeze(-1).expand(updated_encodings.shape)
     if otherwise_linear is not None:
         original_encodings = otherwise_linear(original_encodings)
