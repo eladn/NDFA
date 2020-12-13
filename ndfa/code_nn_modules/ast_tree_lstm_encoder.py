@@ -3,6 +3,7 @@ import torch.nn as nn
 import dgl
 
 from ndfa.nn_utils.modules.dgl_tree_lstm import TreeLSTM
+from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 
 
 __all__ = ['ASTTreeLSTMEncoder']
@@ -19,7 +20,7 @@ class ASTTreeLSTMEncoder(nn.Module):
             cell_type='sum_children',
             dropout_rate=dropout_rate)
 
-    def forward(self, ast_nodes_embeddings: torch.Tensor, ast_batch: dgl.DGLGraph):
+    def forward(self, ast_nodes_embeddings: torch.Tensor, ast_batch: dgl.DGLGraph) -> CodeExpressionEncodingsTensors:
         assert ast_nodes_embeddings.ndim == 2
         assert ast_nodes_embeddings.size(1) == self.ast_node_embedding_dim
         h = torch.zeros_like(ast_nodes_embeddings)
@@ -29,4 +30,4 @@ class ASTTreeLSTMEncoder(nn.Module):
             tree=ast_batch, h=h, c=c,
             direction=self.direction)
         assert new_node_encodings.shape == ast_nodes_embeddings.shape
-        return new_node_encodings
+        return CodeExpressionEncodingsTensors(ast_nodes=new_node_encodings)

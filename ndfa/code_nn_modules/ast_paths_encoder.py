@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import dataclasses
 from typing import Optional
 
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
@@ -11,16 +10,10 @@ from ndfa.nn_utils.modules.gate import Gate
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeq
+from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 
 
-__all__ = ['ASTPathsEncoder', 'EncodedASTPaths']
-
-
-@dataclasses.dataclass
-class EncodedASTPaths:
-    ast_node_encodings: torch.Tensor
-    ast_paths_nodes_occurrences_encodings: torch.Tensor
-    ast_paths_traversal_orientation_encodings: torch.Tensor
+__all__ = ['ASTPathsEncoder']
 
 
 class ASTPathsEncoder(nn.Module):
@@ -63,7 +56,7 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_child_place: Optional[BatchFlattenedSeq] = None,
             ast_paths_vertical_direction: Optional[BatchFlattenedSeq] = None,
             ast_paths_last_states_for_nodes: Optional[torch.Tensor] = None,
-            ast_paths_last_states_for_traversal_order: Optional[torch.Tensor] = None) -> EncodedASTPaths:
+            ast_paths_last_states_for_traversal_order: Optional[torch.Tensor] = None) -> CodeExpressionEncodingsTensors:
         nr_ast_nodes = ast_nodes_encodings.size(0)
         ast_paths_traversal_orientation_encodings_input = None
         if self.is_first_encoder_layer:
@@ -118,7 +111,7 @@ class ASTPathsEncoder(nn.Module):
             indices=ast_paths_node_indices.sequences[ast_paths_mask],
             dim_size=nr_ast_nodes, attn_keys=ast_nodes_encodings)
 
-        return EncodedASTPaths(
-            ast_node_encodings=new_ast_nodes_encodings,
-            ast_paths_nodes_occurrences_encodings=ast_paths_nodes_encodings,
-            ast_paths_traversal_orientation_encodings=ast_paths_traversal_orientation_encodings)
+        return CodeExpressionEncodingsTensors(
+            ast_nodes=new_ast_nodes_encodings,
+            ast_paths_nodes_occurrences=ast_paths_nodes_encodings,
+            ast_paths_traversal_orientation=ast_paths_traversal_orientation_encodings)
