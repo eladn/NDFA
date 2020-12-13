@@ -10,14 +10,18 @@ __all__ = ['ScatterCombiner']
 
 
 class ScatterCombiner(nn.Module):
-    def __init__(self, encoding_dim: int, combining_method: str = 'attn'):
+    def __init__(self, encoding_dim: int, combining_method: str = 'attn',
+                 nr_attn_heads: int = 1, applied_attn_output_dim: Optional[int] = None):
         super(ScatterCombiner, self).__init__()
         self.encoding_dim = encoding_dim
         self.combining_method = combining_method
         if combining_method not in {'mean', 'sum', 'attn'}:
             raise ValueError(f'Unsupported combining method `{combining_method}`.')
         if self.combining_method == 'attn':
-            self.scatter_attn_layer = ScatterAttention(values_dim=encoding_dim)
+            self.scatter_attn_layers = nn.ModuleList([
+                ScatterAttention(values_dim=encoding_dim) for _ in range(nr_attn_heads)])
+            self.applied_attn_linear_proj = None if applied_attn_output_dim is None else \
+                nn.Linear(in_features=nr_attn_heads * encoding_dim, out_features=applied_attn_output_dim)
 
     def forward(self, scattered_input: torch.Tensor, indices=torch.LongTensor,
                 dim_size: Optional[int] = None, attn_keys: Optional[torch.Tensor] = None):
@@ -32,12 +36,18 @@ class ScatterCombiner(nn.Module):
         elif self.combining_method == 'attn':
             assert attn_keys is not None
             assert dim_size is None or attn_keys.size(0) == dim_size
-            _, combined = self.scatter_attn_layer(
-                scattered_values=scattered_input, indices=indices,
-                attn_keys=attn_keys)
+            applied_attn = [
+                scatter_attn_layer(
+                    scattered_values=scattered_input,
+                    indices=indices, attn_keys=attn_keys)[1]
+                for scatter_attn_layer in self.scatter_attn_layers]
+            combined = torch.cat(applied_attn, dim=-1) if len(applied_attn) > 1 else applied_attn[0]
+            if self.applied_attn_linear_proj is not None:
+                combined = self.applied_attn_linear_proj(combined)
         else:
             raise ValueError(f'Unsupported combining method `{self.combining_method}`.')
         assert combined.ndim == 2
         assert dim_size is None or combined.size(0) == dim_size
-        assert combined.size(1) == scattered_input.size(1)
+        assert (self.combining_method == 'attn' and self.applied_attn_linear_proj is not None) or \
+               combined.size(1) == scattered_input.size(1)
         return combined
