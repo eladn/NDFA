@@ -9,30 +9,38 @@ from typing_extensions import Protocol
 from typing import List, Dict, Tuple, Set, Optional, Any, Union, Iterable
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
-    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType
+    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType, SerToken
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
 __all__ = [
-    'get_pdg_node_tokenized_expression', 'get_ast_node_tokenized_expression', 'get_ast_node_expression_str',
-    'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call', 'traverse_pdg',
-    'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
+    'get_pdg_node_tokenized_expression', 'get_pdg_node_expression_str', 'get_ast_node_tokenized_expression',
+    'get_ast_node_expression_str', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call',
+    'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
     'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'traverse_ast', 'ast_node_to_str', 'print_ast']
 
 
-def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode):
+def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode) -> List[SerToken]:
     return method.code.tokenized[
         pdg_node.code_sub_token_range_ref.begin_token_idx:
         pdg_node.code_sub_token_range_ref.end_token_idx+1]
 
 
-def get_ast_node_tokenized_expression(method: SerMethod, ast_node: SerASTNode):
+def get_pdg_node_expression_str(method: SerMethod, pdg_node: SerPDGNode) -> str:
+    return method.code.code_str[
+        method.code.tokenized[
+            pdg_node.code_sub_token_range_ref.begin_token_idx].position_range_in_code_snippet_str.begin_idx:
+        method.code.tokenized[
+            pdg_node.code_sub_token_range_ref.end_token_idx].position_range_in_code_snippet_str.end_idx + 1]
+
+
+def get_ast_node_tokenized_expression(method: SerMethod, ast_node: SerASTNode) -> List[SerToken]:
     return method.code.tokenized[
         ast_node.code_sub_token_range_ref.begin_token_idx:
         ast_node.code_sub_token_range_ref.end_token_idx+1]
 
 
-def get_ast_node_expression_str(method: SerMethod, ast_node: SerASTNode):
+def get_ast_node_expression_str(method: SerMethod, ast_node: SerASTNode) -> str:
     return method.code.code_str[
         method.code.tokenized[
             ast_node.code_sub_token_range_ref.begin_token_idx].position_range_in_code_snippet_str.begin_idx:
