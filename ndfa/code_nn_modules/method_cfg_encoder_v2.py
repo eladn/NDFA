@@ -224,6 +224,13 @@ class MethodCFGEncoderV2(nn.Module):
             encoded_identifiers=encoded_identifiers,
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             method_ast_input=code_task_input.ast)
+        if self.use_norm:
+            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+                embedded_code_expressions.token_seqs = self.expressions_norm(
+                    embedded_code_expressions.token_seqs, usage_point=0)
+            elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
+                embedded_code_expressions.ast_nodes = self.expressions_norm(
+                    embedded_code_expressions.ast_nodes, usage_point=0)
 
         encoded_code_expressions = self.apply_expression_encoder(
             code_task_input=code_task_input,
