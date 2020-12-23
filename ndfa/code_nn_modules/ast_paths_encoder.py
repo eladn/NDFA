@@ -42,7 +42,7 @@ class ASTPathsEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.nodes_representation_path_folder = ScatterCombiner(
-            encoding_dim=self.ast_node_embedding_dim, combining_method='sum')
+            encoding_dim=self.ast_node_embedding_dim, combining_method='attn')
         self.path_sequence_encoder = SequenceEncoder(
             encoder_params=self.encoder_params.paths_sequence_encoder_params,
             input_dim=self.ast_node_embedding_dim,
