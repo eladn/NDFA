@@ -16,7 +16,7 @@ class CFGSubASTExpressionCombiner(nn.Module):
         self.ast_node_encoding_dim = ast_node_encoding_dim
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=ast_node_encoding_dim, combining_method=combining_method,
-            nr_attn_heads=8, applied_attn_output_dim=combined_dim)
+            nr_attn_heads=4, applied_attn_output_dim=combined_dim)
 
     def forward(self, ast_nodes_encodings: torch.Tensor,
                 ast_node_idx_to_pdg_node_idx_mapping_key: torch.LongTensor,
