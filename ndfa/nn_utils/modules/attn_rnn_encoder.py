@@ -15,7 +15,7 @@ class AttnRNNEncoder(RNNEncoder):
             input_dim=input_dim, hidden_dim=hidden_dim, rnn_type=rnn_type,
             nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=rnn_bi_direction)
         self.attn_layer = Attention(
-            nr_features=self.hidden_dim, project_key=True, activation_fn=activation_fn)
+            in_embed_dim=self.hidden_dim, project_key=True, project_query=True, activation_fn=activation_fn)
 
     def forward(self, sequence_input: torch.Tensor,
                 mask: Optional[torch.Tensor] = None,
@@ -25,8 +25,10 @@ class AttnRNNEncoder(RNNEncoder):
             sequence_input=sequence_input, mask=mask, lengths=lengths,
             batch_first=batch_first, sorted_by_length=sorted_by_length)
 
+        # TODO: if the encoder is sequential and single ltr dir - use only the last word as query key
+        attn_query_from = rnn_outputs[:, 0, :] + last_hidden_out
         merged_rnn_outputs = self.attn_layer(
-            sequences=rnn_outputs, attn_key_from=last_hidden_out, mask=mask, lengths=lengths)
+            sequences=rnn_outputs, attn_query_from=attn_query_from, mask=mask, lengths=lengths)
         batch_size = rnn_outputs.size(0 if batch_first else 1)
         assert merged_rnn_outputs.size() == (batch_size, self.hidden_dim)
 

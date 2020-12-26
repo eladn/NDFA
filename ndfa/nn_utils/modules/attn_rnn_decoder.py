@@ -72,8 +72,8 @@ class AttnRNNDecoder(nn.Module):
         self.output_common_embedding_dropout_layer = None if embedding_dropout_rate is None else nn.Dropout(embedding_dropout_rate)
         self.out_linear_layer = nn.Linear(self.decoder_hidden_dim, self.decoder_output_dim)
         self.attention_over_encoder_outputs = Attention(
-            nr_features=self.encoder_output_dim, project_key=True, project_query=True,
-            key_in_features=self.decoder_hidden_dim + self.decoder_output_dim, activation_fn=activation_fn)
+            in_embed_dim=self.encoder_output_dim, project_key=True, project_query=True,
+            query_in_embed_dim=self.decoder_hidden_dim + self.decoder_output_dim, activation_fn=activation_fn)
         self.dyn_vocab_linear_projection = nn.Linear(1028, 256)  # TODO: plug-in HPs
         self.dyn_vocab_strategy = 'after_softmax'  # in {'before_softmax', 'after_softmax'}
 
@@ -148,9 +148,9 @@ class AttnRNNDecoder(nn.Module):
                     batched_encodings=output_vocab_example_based_encodings)
             assert prev_cell_encoding.size() == (batch_size, self.decoder_output_dim)
 
-            attn_key_from = torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1)
+            attn_query_from = torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1)
             attn_applied = self.attention_over_encoder_outputs(
-                sequences=encoder_outputs, attn_key_from=attn_key_from, mask=encoder_outputs_mask)
+                sequences=encoder_outputs, attn_query_from=attn_query_from, mask=encoder_outputs_mask)
             assert attn_applied.size() == (batch_size, self.encoder_output_dim)
 
             attn_applied_and_input_combine = torch.cat((prev_cell_encoding, attn_applied), dim=1)  # (batch_size, decoder_output_dim + encoder_output_dim)
