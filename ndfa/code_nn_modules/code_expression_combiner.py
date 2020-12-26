@@ -55,10 +55,11 @@ class CodeExpressionCombiner(nn.Module):
                 pdg_node_idx_to_sub_ast_root_idx_mapping_key=cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices,
                 pdg_node_idx_to_sub_ast_root_idx_mapping_value=cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices,
                 nr_cfg_nodes=cfg_nodes_has_expression_mask.size(0))
-            assert torch.all(
-                cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices
-                == torch.nonzero(cfg_nodes_has_expression_mask.long(), as_tuple=False)
-                .view(-1)).item()
+            # This assert is heavy because it blocks the computation (requires sync copy from gpu to cpu).
+            # assert torch.all(
+            #     cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices
+            #     == torch.nonzero(cfg_nodes_has_expression_mask.long(), as_tuple=False)
+            #     .view(-1)).item()
             combined_expressions = combined_expressions[
                 cfg_nodes_has_expression_mask]  # TODO: solve this problem in a more elegant way.
             return combined_expressions
