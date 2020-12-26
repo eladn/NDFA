@@ -23,13 +23,21 @@ class SequenceCombiner(nn.Module):
         self.combiner_params = combiner_params
         if self.combiner_params.method != 'attn':
             raise NotImplementedError  # TODO: impl!
-        assert self.combiner_params.nr_dim_reduction_layers >= 1
-        self.attn_layers = nn.ModuleList([
-            Attention(nr_features=self.encoding_dim,
-                      project_key=True, activation_fn=activation_fn)
-            for _ in range(self.combiner_params.nr_attn_heads)])
+        self.multihead_attn_layer = nn.MultiheadAttention(
+            embed_dim=self.encoding_dim,
+            num_heads=self.combiner_params.nr_attn_heads,
+            dropout=0.1)  # TODO: get dropout rate from HPs
+        # self.head_embed_dim = self.encoding_dim // self.combiner_params.nr_attn_heads
+        # assert self.head_embed_dim * self.combiner_params.nr_attn_heads == self.encoding_dim
+        # self.attn_layers = nn.ModuleList([
+        #     Attention(in_embed_dim=self.encoding_dim,
+        #               out_embed_dim=self.head_embed_dim,
+        #               project_key=True, project_query=True, project_values=True,
+        #               activation_fn=activation_fn)
+        #     for _ in range(self.combiner_params.nr_attn_heads)])
         assert encoding_dim * self.combiner_params.nr_attn_heads >= combined_dim
         attn_cat_dim = encoding_dim * self.combiner_params.nr_attn_heads
+        assert self.combiner_params.nr_dim_reduction_layers >= 1
         projection_dimensions = np.linspace(
             start=attn_cat_dim, stop=combined_dim,
             num=self.combiner_params.nr_dim_reduction_layers + 1, dtype=int)
@@ -51,7 +59,7 @@ class SequenceCombiner(nn.Module):
         if not batch_first:
             raise NotImplementedError
         assert sequence_mask is not None or sequence_lengths is not None
-        if sequence_mask is not None or sequence_lengths is None:
+        if sequence_mask is not None and sequence_lengths is None:
             raise NotImplementedError  # TODO: calc `sequence_lengths` from `sequence_mask`
         # sequence_encodings: (bsz, max_seq_len, encoding_dim)
         # sequence_lengths: (bsz, )
@@ -59,12 +67,18 @@ class SequenceCombiner(nn.Module):
         last_word_encoding = torch.gather(
             sequence_encodings, dim=1, index=last_word_indices).squeeze(1)
         first_word_encoding = sequence_encodings[:, 0, :]
-        attn_key_from = first_word_encoding + last_word_encoding
-        attn_heads = torch.cat([
-            attn_layer(sequences=sequence_encodings,
-                       attn_key_from=attn_key_from,
-                       mask=sequence_mask, lengths=sequence_lengths)
-            for attn_layer in self.attn_layers], dim=-1)
+        attn_query_from = (first_word_encoding + last_word_encoding).unsqueeze(0)
+        batch_size = sequence_encodings.size(0)
+        attn_heads = self.multihead_attn_layer(
+            query=attn_query_from,
+            key=sequence_encodings.transpose(0, 1),
+            value=sequence_encodings.transpose(0, 1),
+            key_padding_mask=None if sequence_mask is None else ~sequence_mask)[0].view(batch_size, self.encoding_dim)
+        # attn_heads = torch.cat([
+        #     attn_layer(sequences=sequence_encodings,
+        #                attn_query_from=attn_query_from,
+        #                mask=sequence_mask, lengths=sequence_lengths)
+        #     for attn_layer in self.attn_layers], dim=-1)
         projected = attn_heads
         for dim_reduction_projection_layer, layer_norm in zip(self.dim_reduction_projection_layers, self.layer_norms):
             projected = layer_norm(projected)
