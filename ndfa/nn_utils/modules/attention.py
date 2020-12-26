@@ -52,6 +52,9 @@ class Attention(nn.Module):
                     .flatten(0, 1).unsqueeze(dim=-1))  # (bsz * seq_len, nr_features, 1)
             assert attn_weights.size() == (batch_size * seq_len, 1, 1)
             attn_weights = attn_weights.view(batch_size, seq_len)
+            # scale attn_weights by 1/sqrt(d_v) as done by Attention Is All You Need
+            attn_weights_scale_factor = self.nr_features ** (-0.5)
+            attn_weights = attn_weights * attn_weights_scale_factor
 
         if mask is not None:
             attn_weights = attn_weights + torch.where(
