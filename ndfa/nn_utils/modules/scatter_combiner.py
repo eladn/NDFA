@@ -18,13 +18,23 @@ class ScatterCombiner(nn.Module):
         if combining_method not in {'mean', 'sum', 'attn'}:
             raise ValueError(f'Unsupported combining method `{combining_method}`.')
         if self.combining_method == 'attn':
+            head_embed_dim = encoding_dim // nr_attn_heads
+            assert head_embed_dim * nr_attn_heads == encoding_dim
+            if applied_attn_output_dim is None:
+                head_out_values_dim = head_embed_dim
+            else:
+                head_out_values_dim = applied_attn_output_dim // nr_attn_heads
+                assert head_out_values_dim * nr_attn_heads == applied_attn_output_dim
             self.scatter_attn_layers = nn.ModuleList([
-                ScatterAttention(values_dim=encoding_dim) for _ in range(nr_attn_heads)])
+                ScatterAttention(
+                    in_embed_dim=encoding_dim, qk_proj_dim=head_embed_dim,
+                    project_values=True, out_values_dim=head_out_values_dim)
+                for _ in range(nr_attn_heads)])
             self.applied_attn_linear_proj = None if applied_attn_output_dim is None else \
-                nn.Linear(in_features=nr_attn_heads * encoding_dim, out_features=applied_attn_output_dim)
+                nn.Linear(in_features=head_out_values_dim * nr_attn_heads, out_features=applied_attn_output_dim)
 
     def forward(self, scattered_input: torch.Tensor, indices=torch.LongTensor,
-                dim_size: Optional[int] = None, attn_keys: Optional[torch.Tensor] = None):
+                dim_size: Optional[int] = None, attn_queries: Optional[torch.Tensor] = None):
         if self.combining_method == 'mean':
             combined = scatter_mean(
                 src=scattered_input, index=indices,
@@ -34,12 +44,12 @@ class ScatterCombiner(nn.Module):
                 src=scattered_input, index=indices,
                 dim=0, dim_size=dim_size)
         elif self.combining_method == 'attn':
-            assert attn_keys is not None
-            assert dim_size is None or attn_keys.size(0) == dim_size
+            assert attn_queries is not None
+            assert dim_size is None or attn_queries.size(0) == dim_size
             applied_attn = [
                 scatter_attn_layer(
                     scattered_values=scattered_input,
-                    indices=indices, attn_keys=attn_keys)[1]
+                    indices=indices, queries=attn_queries)[1]
                 for scatter_attn_layer in self.scatter_attn_layers]
             combined = torch.cat(applied_attn, dim=-1) if len(applied_attn) > 1 else applied_attn[0]
             if self.applied_attn_linear_proj is not None:

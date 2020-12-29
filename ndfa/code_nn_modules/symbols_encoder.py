@@ -59,7 +59,7 @@ class SymbolsEncoder(nn.Module):
             symbols_occurrences_encodings = self.scatter_combiner(
                 scattered_input=encodings_of_symbols_occurrences,
                 indices=symbols_indices_of_symbols_occurrences,
-                dim_size=nr_symbols, attn_keys=symbols_identifiers_encodings)
+                dim_size=nr_symbols, attn_queries=symbols_identifiers_encodings)
 
             # symbols_occurrences_encodings = scatter_add(
             #     src=cfg_expr_tokens_encodings_of_symbols_occurrences,
