@@ -11,6 +11,8 @@ from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.misc.tensors_data_class import BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeq
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
+from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
 
 
 __all__ = ['ASTPathsEncoder']
@@ -46,6 +48,11 @@ class ASTPathsEncoder(nn.Module):
         self.path_sequence_encoder = SequenceEncoder(
             encoder_params=self.encoder_params.paths_sequence_encoder_params,
             input_dim=self.ast_node_embedding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.path_combiner = SequenceCombiner(
+            encoding_dim=self.ast_node_embedding_dim,
+            combined_dim=self.ast_node_embedding_dim,  # TODO: define a dedicated HP. it should be bigger.
+            combiner_params=SequenceCombinerParams(method='attn', nr_attn_heads=8),  # TODO: get from `ASTEncoderParams`
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
@@ -109,9 +116,16 @@ class ASTPathsEncoder(nn.Module):
         new_ast_nodes_encodings = self.nodes_representation_path_folder(
             scattered_input=ast_paths_nodes_encodings[ast_paths_mask],
             indices=ast_paths_node_indices.sequences[ast_paths_mask],
-            dim_size=nr_ast_nodes, attn_keys=ast_nodes_encodings)
+            dim_size=nr_ast_nodes, attn_queries=ast_nodes_encodings)
+
+        ast_paths_combined = self.path_combiner(
+            sequence_encodings=ast_paths_nodes_encodings,
+            sequence_mask=ast_paths_node_indices.sequences_mask,
+            sequence_lengths=ast_paths_node_indices.sequences_lengths,
+            batch_first=True)
 
         return CodeExpressionEncodingsTensors(
             ast_nodes=new_ast_nodes_encodings,
             ast_paths_nodes_occurrences=ast_paths_nodes_encodings,
-            ast_paths_traversal_orientation=ast_paths_traversal_orientation_encodings)
+            ast_paths_traversal_orientation=ast_paths_traversal_orientation_encodings,
+            ast_paths_combined=ast_paths_combined)
