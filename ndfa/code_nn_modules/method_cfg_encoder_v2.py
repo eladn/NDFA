@@ -68,12 +68,12 @@ class MethodCFGEncoderV2(nn.Module):
 
         self.code_expression_combiner1 = CodeExpressionCombiner(
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            tokenized_expression_combiner_params=self.encoder_params.cfg_node_expression_combiner,
+            tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
             ast_node_embedding_dim=self.ast_node_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.code_expression_combiner2 = CodeExpressionCombiner(
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            tokenized_expression_combiner_params=self.encoder_params.cfg_node_expression_combiner,
+            tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
             ast_node_embedding_dim=self.ast_node_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -475,38 +475,6 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
         return updated_expressions_encodings.view(orig_expressions_encodings_shape)
 
 
-class ExpressionUpdater(nn.Module):
-    def __init__(
-            self, sequence_encoder_params: SequenceEncoderParams,
-            token_encoding_dim: int, shuffle_expressions: bool = False,
-            dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(ExpressionUpdater, self).__init__()
-        self.token_encoding_dim = token_encoding_dim
-        self.sequence_encoder = SequenceEncoder(
-            encoder_params=sequence_encoder_params,
-            input_dim=self.token_encoding_dim,
-            hidden_dim=self.token_encoding_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.shuffle_expressions = shuffle_expressions
-
-    def forward(self, previous_expression_encodings: torch.Tensor,
-                expressions_input: CodeExpressionTokensSequenceInputTensors):
-        input_to_seq_encoder = previous_expression_encodings
-        if self.shuffle_expressions:
-            input_to_seq_encoder = expressions_input.sequence_shuffler.shuffle(input_to_seq_encoder)
-
-        updated_expression_encodings = self.sequence_encoder(
-            sequence_input=input_to_seq_encoder,
-            lengths=expressions_input.token_type.sequences_lengths,
-            batch_first=True).sequence
-
-        if self.shuffle_expressions:
-            updated_expression_encodings = \
-                expressions_input.sequence_shuffler.unshuffle(updated_expression_encodings)
-
-        return updated_expression_encodings
-
-
 class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
     def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
@@ -538,68 +506,6 @@ class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
         return previous_cfg_nodes_encodings.masked_scatter(
             cfg_nodes_has_expression_mask.unsqueeze(-1).expand(previous_cfg_nodes_encodings.size()),
             new_cfg_node_encodings_for_nodes_with_expressions)
-
-
-class CFGPathsUpdater(nn.Module):
-    def __init__(self, cfg_node_dim: int,
-                 cfg_paths_sequence_encoder_params: SequenceEncoderParams,
-                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(CFGPathsUpdater, self).__init__()
-        self.cfg_node_dim = cfg_node_dim
-        self.sequence_encoder_layer = SequenceEncoder(
-            encoder_params=cfg_paths_sequence_encoder_params,
-            input_dim=self.cfg_node_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
-
-        self.nodes_occurrences_encodings_gate = Gate(
-            state_dim=self.cfg_node_dim, update_dim=self.cfg_node_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
-
-    def forward(self,
-                previous_cfg_paths_encodings: EncodedCFGPaths,
-                updated_cfg_nodes_encodings: torch.Tensor,
-                cfg_paths_nodes_indices: torch.LongTensor,
-                cfg_paths_mask: torch.BoolTensor,
-                cfg_paths_lengths: torch.LongTensor) -> EncodedCFGPaths:
-        # Update encodings of cfg nodes occurrences in paths:
-        updated_cfg_nodes_encodings_per_node_occurrence_in_path = updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
-        assert updated_cfg_nodes_encodings_per_node_occurrence_in_path.shape == \
-               previous_cfg_paths_encodings.nodes_occurrences.shape
-
-        updated_cfg_paths_nodes_encodings = self.nodes_occurrences_encodings_gate(
-            previous_state=previous_cfg_paths_encodings.nodes_occurrences,
-            state_update=updated_cfg_nodes_encodings_per_node_occurrence_in_path)
-        updated_cfg_paths_nodes_encodings = updated_cfg_paths_nodes_encodings.masked_fill(
-            ~cfg_paths_mask.unsqueeze(-1).expand(updated_cfg_paths_nodes_encodings.size()), 0)
-
-        # OLD simple way to update encodings of cfg nodes occurrences in paths:
-        # cfg_paths_nodes_embeddings = \
-        #     previous_cfg_paths_encodings.nodes_occurrences + updated_cfg_nodes_encodings[cfg_paths_nodes_indices]
-
-        cfg_paths_edge_types_embeddings = previous_cfg_paths_encodings.edges_occurrences
-
-        # weave nodes & edge-types in each path
-        cfg_paths_interwoven_nodes_and_edge_types_embeddings = weave_tensors(
-            tensors=[updated_cfg_paths_nodes_encodings, cfg_paths_edge_types_embeddings], dim=1)
-        assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
-               (updated_cfg_paths_nodes_encodings.size(0),
-                2 * updated_cfg_paths_nodes_encodings.size(1),
-                self.cfg_node_dim)
-
-        paths_encodings = self.sequence_encoder_layer(
-            sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
-            lengths=cfg_paths_lengths * 2, batch_first=True).sequence
-        assert paths_encodings.shape == cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape
-
-        # separate nodes encodings and edge types embeddings from paths
-        nodes_occurrences_encodings, edges_occurrences_encodings = unweave_tensor(
-            woven_tensor=paths_encodings, dim=1, nr_target_tensors=2)
-        assert nodes_occurrences_encodings.shape == edges_occurrences_encodings.shape == \
-               updated_cfg_paths_nodes_encodings.shape
-
-        return EncodedCFGPaths(
-            nodes_occurrences=nodes_occurrences_encodings,
-            edges_occurrences=edges_occurrences_encodings)
 
 
 class CFGPathsNGramsEncoder(nn.Module):
@@ -744,7 +650,7 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
             scattered_input=encoded_cfg_node_occurrences_in_paths[cfg_paths_mask],
             indices=cfg_paths_node_indices[cfg_paths_mask],
             dim_size=nr_cfg_nodes,
-            attn_keys=previous_cfg_nodes_encodings)
+            attn_queries=previous_cfg_nodes_encodings)
         assert updated_cfg_nodes_encodings.size() == (nr_cfg_nodes, encoded_cfg_node_occurrences_in_paths.size(2))
 
         # Note: This gate here is the last we added so far.

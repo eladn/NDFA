@@ -62,8 +62,8 @@ class ASTEncoderParams:
 @confclass
 class CodeExpressionEncoderParams:
     encoder_type: str = confparam(
-        default='ast_treelstm',
-        choices=('tokens-seq', 'ast_paths', 'ast_treelstm'),
+        default='ast_paths',
+        choices=('tokens-seq', 'ast_paths', 'ast_treelstm', 'symbols-occurrences-seq'),
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 
@@ -118,9 +118,9 @@ class MethodCFGEncoderParams:
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
 
-    cfg_node_expression_combiner: SequenceCombinerParams = confparam(
+    cfg_node_tokenized_expression_combiner: SequenceCombinerParams = confparam(
         default_factory=lambda: SequenceCombinerParams(
-            method='attn', nr_attn_heads=4, nr_dim_reduction_layers=3),
+            method='attn', nr_attn_heads=8, nr_dim_reduction_layers=2),
         arg_prefix='cfg_node_expression_combiner')
 
     cfg_node_control_kinds_embedding_dim: int = confparam(
@@ -159,7 +159,7 @@ class MethodCodeEncoderParams:
                     "(specific architecture of the method-AST-code-encoder).",
         arg_prefix='method_ast_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
-    method_linear_seq_expression_encoder_type: CodeExpressionEncoderParams = confparam(
+    method_linear_seq_expression_encoder: CodeExpressionEncoderParams = confparam(
         default_factory=CodeExpressionEncoderParams,
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
