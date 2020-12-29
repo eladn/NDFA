@@ -150,7 +150,7 @@ class AttnRNNDecoder(nn.Module):
 
             attn_query_from = torch.cat((prev_cell_encoding, rnn_hidden[-1, :, :]), dim=1)
             attn_applied = self.attention_over_encoder_outputs(
-                sequences=encoder_outputs, attn_query_from=attn_query_from, mask=encoder_outputs_mask)
+                sequences=encoder_outputs, query=attn_query_from, mask=encoder_outputs_mask)
             assert attn_applied.size() == (batch_size, self.encoder_output_dim)
 
             attn_applied_and_input_combine = torch.cat((prev_cell_encoding, attn_applied), dim=1)  # (batch_size, decoder_output_dim + encoder_output_dim)

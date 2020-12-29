@@ -28,7 +28,7 @@ class AttnRNNEncoder(RNNEncoder):
         # TODO: if the encoder is sequential and single ltr dir - use only the last word as query key
         attn_query_from = rnn_outputs[:, 0, :] + last_hidden_out
         merged_rnn_outputs = self.attn_layer(
-            sequences=rnn_outputs, attn_query_from=attn_query_from, mask=mask, lengths=lengths)
+            sequences=rnn_outputs, query=attn_query_from, mask=mask, lengths=lengths)
         batch_size = rnn_outputs.size(0 if batch_first else 1)
         assert merged_rnn_outputs.size() == (batch_size, self.hidden_dim)
 
