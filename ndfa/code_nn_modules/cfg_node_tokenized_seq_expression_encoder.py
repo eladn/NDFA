@@ -10,10 +10,10 @@ from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 
 
-__all__ = ['ExtendedExpressionEncoder']
+__all__ = ['CFGNodeTokenizedSeqExpressionEncoder']
 
 
-class ExtendedExpressionEncoder(nn.Module):
+class CFGNodeTokenizedSeqExpressionEncoder(nn.Module):
     def __init__(self, kos_tokens_vocab: Vocabulary,
                  tokens_kinds_vocab: Vocabulary,
                  expressions_special_words_vocab: Vocabulary,
@@ -22,7 +22,7 @@ class ExtendedExpressionEncoder(nn.Module):
                  identifier_embedding_dim: int, nr_out_linear_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_out_linear_layers >= 1
-        super(ExtendedExpressionEncoder, self).__init__()
+        super(CFGNodeTokenizedSeqExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
         self.activation_layer = get_activation_layer(activation_fn)()
         self.kos_tokens_vocab = kos_tokens_vocab
