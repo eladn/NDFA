@@ -434,19 +434,21 @@ def preprocess_code_task_example(
         pdg_node.ast_node_idx not in ast_node_indices_to_mask}
 
     # FOR DEBUG:
-    # from ndfa.misc.code_data_structure_utils import print_ast, get_ast_node_expression_str
+    # from ndfa.misc.code_data_structure_utils import print_ast, get_ast_node_expression_str, get_pdg_node_expression_str
     # for pdg_node_idx, paths in ast_paths_per_pdg_node.items():
     #     # if len(paths.leaf_to_leaf_paths) > 0:
     #     #     continue
     #     pdg_node = method_pdg.pdg_nodes[pdg_node_idx]
     #     root_sub_ast_node_idx = pdg_node.ast_node_idx
     #     root_sub_ast_node = method_ast.nodes[root_sub_ast_node_idx]
-    #     if not any(len(method_ast.nodes[ast_node_idx].children_idxs) > 3 for ast_node_idx in range(paths.subtree_indices_range[0], paths.subtree_indices_range[1] + 1)):
-    #         continue
+    #     # if not any(len(method_ast.nodes[ast_node_idx].children_idxs) > 3 for ast_node_idx in range(paths.subtree_indices_range[0], paths.subtree_indices_range[1] + 1)):
+    #     #     continue
     #     print('PDG node control kind:', pdg_node.control_kind.value)
-    #     print(get_ast_node_expression_str(method=method, ast_node=root_sub_ast_node).strip())
+    #     # print(get_ast_node_expression_str(method=method, ast_node=root_sub_ast_node).strip())
+    #     print(get_pdg_node_expression_str(method=method, pdg_node=pdg_node).strip())
     #     subtrees_to_ignore = {root_sub_ast_node.children_idxs[-1]} \
-    #         if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY} else None
+    #         if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY} else set()
+    #     subtrees_to_ignore |= ast_node_indices_to_mask
     #     print_ast(method=method, method_ast=method_ast,
     #               root_sub_ast_node_idx=root_sub_ast_node_idx,
     #               subtrees_to_ignore=subtrees_to_ignore)
@@ -674,6 +676,12 @@ def preprocess_code_task_example(
         set(ast.ast_nodes_with_modifier_leaf_nodes_indices.indices.tolist())], r=2))
 
     cfg_nodes_expressions_ast = PDGExpressionsSubASTInputTensors(
+        ast_leaf_to_leaf_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node_idx
+                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
+                for _ in sub_ast_paths.leaf_to_leaf_paths.values()]),
+            tgt_indexing_group='cfg_nodes'),
         ast_leaf_to_leaf_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for sub_ast_paths in ast_paths_per_pdg_node.values()
@@ -696,6 +704,12 @@ def preprocess_code_task_example(
                     for path_node in path])
                 for sub_ast_paths in ast_paths_per_pdg_node.values()
                 for path in sub_ast_paths.leaf_to_leaf_paths.values()]),
+        ast_leaf_to_root_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node_idx
+                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
+                for _ in sub_ast_paths.leaf_to_root_paths.values()]),
+            tgt_indexing_group='cfg_nodes'),
         ast_leaf_to_root_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for sub_ast_paths in ast_paths_per_pdg_node.values()

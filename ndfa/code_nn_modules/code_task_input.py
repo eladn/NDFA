@@ -162,6 +162,9 @@ class MethodASTInputTensors(SubASTInputTensors):
 
 @dataclasses.dataclass
 class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
+    ast_leaf_to_leaf_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor
+    ast_leaf_to_root_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor
+
     pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
     pdg_node_idx_to_sub_ast_root_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
     ast_node_idx_to_pdg_node_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
