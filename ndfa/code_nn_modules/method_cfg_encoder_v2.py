@@ -57,13 +57,17 @@ class MethodCFGEncoderV2(nn.Module):
 
         self.code_expression_encoder1 = CodeExpressionEncoder(
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            is_first_encoder_layer=True, code_task_vocabs=code_task_vocabs,
+            code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,
+            is_first_encoder_layer=True,
+            ast_paths_type='leaf_to_root',
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.code_expression_encoder2 = CodeExpressionEncoder(
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            is_first_encoder_layer=False, code_task_vocabs=code_task_vocabs,
+            code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,
+            is_first_encoder_layer=True,
+            ast_paths_type='leaf_to_leaf',
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.code_expression_combiner1 = CodeExpressionCombiner(

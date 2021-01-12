@@ -21,6 +21,7 @@ class CodeExpressionEncoder(nn.Module):
             code_task_vocabs: CodeTaskVocabs,
             identifier_embedding_dim: int,
             is_first_encoder_layer: bool = True,
+            ast_paths_type: str = 'leaf_to_leaf',
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -38,7 +39,8 @@ class CodeExpressionEncoder(nn.Module):
             self.modifier_embedding_dim = self.ast_node_embedding_dim
 
             if self.encoder_params.encoder_type == 'ast_paths':
-                self.ast_paths_type = 'leaf_to_leaf'  # TODO: make something about this param!
+                assert ast_paths_type in {'leaf_to_leaf', 'leaf_to_root'}
+                self.ast_paths_type = ast_paths_type
                 self.ast_paths_encoder = ASTPathsEncoder(
                     ast_node_embedding_dim=self.ast_node_embedding_dim,
                     encoder_params=self.encoder_params.ast_encoder,
@@ -74,8 +76,8 @@ class CodeExpressionEncoder(nn.Module):
                     ast_paths_node_indices=sub_ast_input.get_ast_paths_node_indices(self.ast_paths_type),
                     ast_paths_child_place=sub_ast_input.get_ast_paths_child_place(self.ast_paths_type),
                     ast_paths_vertical_direction=sub_ast_input.get_ast_paths_vertical_direction(self.ast_paths_type),
-                    ast_paths_last_states_for_nodes=previous_code_expression_encodings.ast_paths_nodes_occurrences,
-                    ast_paths_last_states_for_traversal_order=previous_code_expression_encodings.ast_paths_traversal_orientation)
+                    ast_paths_last_states_for_nodes=previous_code_expression_encodings.ast_paths_nodes_occurrences if previous_code_expression_encodings.ast_paths_type == self.ast_paths_type else None,
+                    ast_paths_last_states_for_traversal_order=previous_code_expression_encodings.ast_paths_traversal_orientation if previous_code_expression_encodings.ast_paths_type == self.ast_paths_type else None)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
                 ast_nodes_encodings_up = self.ast_treelstm_up(
                     ast_nodes_embeddings=previous_code_expression_encodings.ast_nodes,
