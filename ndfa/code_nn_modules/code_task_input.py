@@ -86,6 +86,10 @@ class PDGInputTensors(TensorsDataClass):
 
     cfg_control_flow_graph: Optional[TGData] = None
 
+    @property
+    def nr_cfg_nodes(self) -> int:
+        return self.cfg_nodes_control_kind.tensor.size(0)
+
 
 @dataclasses.dataclass
 class IdentifiersInputTensors(TensorsDataClass):

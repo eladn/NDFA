@@ -33,7 +33,8 @@ class CodeExpressionCombiner(nn.Module):
             self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(
                 ast_node_encoding_dim=self.ast_node_embedding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,  # TODO!
-                combining_method='attn', dropout_rate=dropout_rate, activation_fn=activation_fn)
+                combining_subject='ast_nodes', combining_method='attn',  # TODO: make HP!
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.encoder_params.encoder_type}`.')
 
@@ -49,11 +50,8 @@ class CodeExpressionCombiner(nn.Module):
                 sequence_lengths=tokenized_expressions_input.token_type.sequences_lengths)
         elif self.encoder_params.encoder_type in {'ast_paths', 'ast_treelstm'}:
             combined_expressions = self.sub_ast_expression_combiner(
-                ast_nodes_encodings=encoded_code_expressions.ast_nodes,
-                ast_node_idx_to_pdg_node_idx_mapping_key=cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_key.indices,
-                ast_node_idx_to_pdg_node_idx_mapping_value=cfg_nodes_expressions_ast.ast_node_idx_to_pdg_node_idx_mapping_value.indices,
-                pdg_node_idx_to_sub_ast_root_idx_mapping_key=cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices,
-                pdg_node_idx_to_sub_ast_root_idx_mapping_value=cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices,
+                encoded_code_expressions=encoded_code_expressions,
+                cfg_nodes_expressions_ast_input=cfg_nodes_expressions_ast,
                 nr_cfg_nodes=cfg_nodes_has_expression_mask.size(0))
             # This assert is heavy because it blocks the computation (requires sync copy from gpu to cpu).
             # assert torch.all(

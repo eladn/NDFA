@@ -38,9 +38,11 @@ class CodeExpressionEncoder(nn.Module):
             self.modifier_embedding_dim = self.ast_node_embedding_dim
 
             if self.encoder_params.encoder_type == 'ast_paths':
+                self.ast_paths_type = 'leaf_to_leaf'  # TODO: make something about this param!
                 self.ast_paths_encoder = ASTPathsEncoder(
                     ast_node_embedding_dim=self.ast_node_embedding_dim,
                     encoder_params=self.encoder_params.ast_encoder,
+                    ast_paths_type=self.ast_paths_type,
                     is_first_encoder_layer=self.is_first_encoder_layer,
                     ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -66,7 +68,6 @@ class CodeExpressionEncoder(nn.Module):
                 token_seqs_embeddings=previous_code_expression_encodings.token_seqs,
                 expressions_input=tokenized_expressions_input)
         elif self.encoder_params.encoder_type in {'ast_paths', 'ast_treelstm'}:
-            self.ast_paths_type = 'leaf_to_leaf'  # TODO: make something about this param!
             if self.encoder_params.encoder_type == 'ast_paths':
                 return self.ast_paths_encoder(
                     ast_nodes_encodings=previous_code_expression_encodings.ast_nodes,

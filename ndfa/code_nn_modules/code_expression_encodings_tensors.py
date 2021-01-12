@@ -14,3 +14,4 @@ class CodeExpressionEncodingsTensors:
     ast_paths_traversal_orientation: Optional[torch.Tensor] = None
     ast_paths_combined: Optional[torch.Tensor] = None
     combined_expressions: Optional[torch.Tensor] = None
+    ast_paths_type: Optional[str] = None

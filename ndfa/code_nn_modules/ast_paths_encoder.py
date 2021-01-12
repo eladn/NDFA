@@ -23,12 +23,15 @@ class ASTPathsEncoder(nn.Module):
             self,
             ast_node_embedding_dim: int,
             encoder_params: ASTEncoderParams,
+            ast_paths_type: str,
             is_first_encoder_layer: bool = True,
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
         self.ast_node_embedding_dim = ast_node_embedding_dim
+        assert ast_paths_type in {'leaf_to_leaf', 'leaf_to_root'}
+        self.ast_paths_type = ast_paths_type
         self.is_first_encoder_layer = is_first_encoder_layer
         if self.is_first_encoder_layer:
             self.ast_traversal_orientation_vocab = ast_traversal_orientation_vocab
@@ -128,4 +131,5 @@ class ASTPathsEncoder(nn.Module):
             ast_nodes=new_ast_nodes_encodings,
             ast_paths_nodes_occurrences=ast_paths_nodes_encodings,
             ast_paths_traversal_orientation=ast_paths_traversal_orientation_encodings,
-            ast_paths_combined=ast_paths_combined)
+            ast_paths_combined=ast_paths_combined,
+            ast_paths_type=self.ast_paths_type)
