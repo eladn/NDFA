@@ -253,7 +253,7 @@ class ASTPaths:
     leaf_to_root_paths: Dict[ASTNodeIdxType, Tuple[ASTLeaf2InnerNodePathNode, ...]]
     leaves_sequence: Tuple[ASTNodeIdxType, ...]
     postorder_traversal_sequence: Tuple[ASTNodeIdxType, ...]
-    siblings_sequences: List[Tuple[ASTNodeIdxType, ...]]
+    siblings_sequences: Dict[ASTNodeIdxType, Tuple[ASTNodeIdxType, ...]]
     nodes_depth: Dict[ASTNodeIdxType, int]
     subtree_indices_range: Tuple[ASTNodeIdxType, ASTNodeIdxType]
 
@@ -267,7 +267,7 @@ def get_all_ast_paths(
     leaves_pair_common_ancestor: Dict[Tuple[ASTNodeIdxType, ASTNodeIdxType], ASTNodeIdxType] = {}
     leaves_sequence: List[ASTNodeIdxType] = []
     postorder_traversal_sequence: List[ASTNodeIdxType] = []
-    siblings_sequences: List[Tuple[ASTNodeIdxType, ...]] = []
+    siblings_sequences: Dict[ASTNodeIdxType, Tuple[ASTNodeIdxType, ...]] = {}
     nodes_depth: Dict[ASTNodeIdxType, int] = {}
     if subtrees_to_ignore is None:
         subtrees_to_ignore = set()
@@ -293,7 +293,8 @@ def get_all_ast_paths(
             return [()]
 
         if len(current_node_children_idxs) > 1:
-            siblings_sequences.append(current_node_children_idxs)
+            assert current_node_idx not in siblings_sequences
+            siblings_sequences[current_node_idx] = current_node_children_idxs
 
         inner_upward_paths_from_leaves_to_children = [
             aux_recursive_ast_traversal(child_node_idx, depth=depth + 1)

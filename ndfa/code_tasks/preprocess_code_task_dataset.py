@@ -666,7 +666,12 @@ def preprocess_code_task_example(
         siblings_sequences_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[
                 torch.LongTensor(siblings_sequence)
-                for siblings_sequence in method_ast_paths.siblings_sequences],
+                for siblings_sequence in method_ast_paths.siblings_sequences.values()],
+            tgt_indexing_group='ast_nodes'),
+        siblings_w_parent_sequences_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[
+                torch.LongTensor((parent_ast_node_idx,) + siblings_sequence)
+                for parent_ast_node_idx, siblings_sequence in method_ast_paths.siblings_sequences.items()],
             tgt_indexing_group='ast_nodes'),
         dgl_tree=dgl_ast)
 
@@ -729,12 +734,24 @@ def preprocess_code_task_example(
                 torch.LongTensor(sub_ast_paths.leaves_sequence)
                 for sub_ast_paths in ast_paths_per_pdg_node.values()],
             tgt_indexing_group='ast_nodes'),
-        siblings_sequences_node_indices=None if not pp_method_ast else BatchedFlattenedIndicesFlattenedSeq(
+        siblings_sequences_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[
                 torch.LongTensor(siblings_sequence)
                 for sub_ast_paths in ast_paths_per_pdg_node.values()
-                for siblings_sequence in sub_ast_paths.siblings_sequences],
+                for siblings_sequence in sub_ast_paths.siblings_sequences.values()],
             tgt_indexing_group='ast_nodes'),
+        siblings_w_parent_sequences_node_indices=BatchedFlattenedIndicesFlattenedSeq(
+            sequences=[
+                torch.LongTensor((parent_ast_node_idx,) + siblings_sequence)
+                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for parent_ast_node_idx, siblings_sequence in sub_ast_paths.siblings_sequences.items()],
+            tgt_indexing_group='ast_nodes'),
+        siblings_sequences_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node_idx
+                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
+                for _ in sub_ast_paths.siblings_sequences.values()]),
+            tgt_indexing_group='cfg_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.idx

@@ -109,6 +109,7 @@ class SubASTInputTensors(TensorsDataClass):
     ast_leaf_to_root_paths_child_place: BatchFlattenedSeq
     ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq
     siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq
+    siblings_w_parent_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq
     dgl_tree: dgl.DGLGraph
 
     def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
@@ -168,6 +169,7 @@ class MethodASTInputTensors(SubASTInputTensors):
 class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
     ast_leaf_to_leaf_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor
     ast_leaf_to_root_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor
+    siblings_sequences_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor
 
     pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
     pdg_node_idx_to_sub_ast_root_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
