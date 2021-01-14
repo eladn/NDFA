@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -147,7 +147,8 @@ class ASTPathsEncoder(nn.Module):
             self,
             ast_nodes_encodings: torch.Tensor,
             sub_ast_input: SubASTInputTensors,
-            ast_paths_last_states: Optional[ASTPathsEncodingsTensors] = None) -> CodeExpressionEncodingsTensors:
+            ast_paths_last_states: Optional[Dict[str, ASTPathsEncodingsTensors]] = None) \
+            -> CodeExpressionEncodingsTensors:
         nr_ast_nodes = ast_nodes_encodings.size(0)
 
         encoded_paths_by_path_type = {
@@ -155,7 +156,7 @@ class ASTPathsEncoder(nn.Module):
                 ast_nodes_encodings=ast_nodes_encodings,
                 sub_ast_input=sub_ast_input,
                 ast_paths_type=ast_paths_type,
-                ast_paths_last_states=ast_paths_last_states)
+                ast_paths_last_states=None if ast_paths_last_states is None else ast_paths_last_states[ast_paths_type])
             for ast_paths_type in self.ast_paths_types}
 
         ast_paths_masks = {
