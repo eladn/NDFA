@@ -52,15 +52,19 @@ class CFGSubASTExpressionCombiner(nn.Module):
             assert combined_sub_asts.size() == (nr_cfg_nodes, self.combined_dim)
             return combined_sub_asts
         elif self.combining_subject == 'ast_paths':
-            ast_paths_pdg_node_indices = \
-                cfg_nodes_expressions_ast_input.ast_leaf_to_leaf_paths_pdg_node_indices.indices \
-                if encoded_code_expressions.ast_paths_type == 'leaf_to_leaf' else \
-                cfg_nodes_expressions_ast_input.ast_leaf_to_root_paths_pdg_node_indices.indices
+            all_ast_paths_combined = torch.cat(
+                [ast_paths.combined for ast_paths in encoded_code_expressions.ast_paths_by_type.values()], dim=0)
+            all_ast_paths_pdg_node_indices = torch.cat(
+                [cfg_nodes_expressions_ast_input.get_ast_paths_pdg_node_indices(ast_paths_type).indices
+                 for ast_paths_type in encoded_code_expressions.ast_paths_by_type.keys()], dim=0)
+            # TODO: FIXME: what attn query should we use here?
+            #  we currently use zeros so only the bias vector affects as a global attention.
+            attn_queries = all_ast_paths_combined.new_zeros(size=(nr_cfg_nodes, self.ast_node_encoding_dim))
             combined_sub_asts = self.scatter_combiner_layer(
-                scattered_input=encoded_code_expressions.ast_paths_combined,
-                indices=ast_paths_pdg_node_indices,
+                scattered_input=all_ast_paths_combined,
+                indices=all_ast_paths_pdg_node_indices,
                 dim_size=nr_cfg_nodes,
-                attn_queries=encoded_code_expressions.ast_paths_combined.new_zeros(size=(nr_cfg_nodes, self.ast_node_encoding_dim)))  # TODO: FIXME: what attn query should we use here?
+                attn_queries=attn_queries)
             assert combined_sub_asts.size() == (nr_cfg_nodes, self.combined_dim)
             return combined_sub_asts
         else:

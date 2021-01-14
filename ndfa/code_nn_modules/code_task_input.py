@@ -178,6 +178,18 @@ class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
     ast_node_idx_to_pdg_node_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor
     ast_node_idx_to_pdg_node_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor
 
+    def get_ast_paths_pdg_node_indices(self, path_type: str) -> Optional[BatchedFlattenedIndicesFlattenedTensor]:
+        if path_type == 'leaf_to_leaf':
+            return self.ast_leaf_to_leaf_paths_pdg_node_indices
+        elif path_type == 'leaf_to_root':
+            return self.ast_leaf_to_root_paths_pdg_node_indices
+        elif path_type == 'leaves_sequence':
+            return None
+        elif path_type in {'siblings_sequences', 'siblings_w_parent_sequences'}:
+            return self.siblings_sequences_pdg_node_indices
+        else:
+            raise ValueError(f'Unsupported path type `{path_type}`.')
+
 
 @dataclasses.dataclass
 class MethodCodeInputTensors(TensorsDataClass):
