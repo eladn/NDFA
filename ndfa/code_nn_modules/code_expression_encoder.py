@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, Tuple
 
 from .code_expression_tokens_sequence_encoder import CodeExpressionTokensSequenceEncoder
 from ndfa.code_nn_modules.ast_paths_encoder import ASTPathsEncoder
@@ -21,7 +21,7 @@ class CodeExpressionEncoder(nn.Module):
             code_task_vocabs: CodeTaskVocabs,
             identifier_embedding_dim: int,
             is_first_encoder_layer: bool = True,
-            ast_paths_type: str = 'leaf_to_leaf',
+            ast_paths_types: Tuple[str, ...] = ('leaf_to_leaf',),
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -39,12 +39,11 @@ class CodeExpressionEncoder(nn.Module):
             self.modifier_embedding_dim = self.ast_node_embedding_dim
 
             if self.encoder_params.encoder_type == 'ast_paths':
-                assert ast_paths_type in {'leaf_to_leaf', 'leaf_to_root'}
-                self.ast_paths_type = ast_paths_type
+                self.ast_paths_types = ast_paths_types
                 self.ast_paths_encoder = ASTPathsEncoder(
                     ast_node_embedding_dim=self.ast_node_embedding_dim,
                     encoder_params=self.encoder_params.ast_encoder,
-                    ast_paths_type=self.ast_paths_type,
+                    ast_paths_types=self.ast_paths_types,
                     is_first_encoder_layer=self.is_first_encoder_layer,
                     ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -73,11 +72,9 @@ class CodeExpressionEncoder(nn.Module):
             if self.encoder_params.encoder_type == 'ast_paths':
                 return self.ast_paths_encoder(
                     ast_nodes_encodings=previous_code_expression_encodings.ast_nodes,
-                    ast_paths_node_indices=sub_ast_input.get_ast_paths_node_indices(self.ast_paths_type),
-                    ast_paths_child_place=sub_ast_input.get_ast_paths_child_place(self.ast_paths_type),
-                    ast_paths_vertical_direction=sub_ast_input.get_ast_paths_vertical_direction(self.ast_paths_type),
-                    ast_paths_last_states_for_nodes=previous_code_expression_encodings.ast_paths_nodes_occurrences if previous_code_expression_encodings.ast_paths_type == self.ast_paths_type else None,
-                    ast_paths_last_states_for_traversal_order=previous_code_expression_encodings.ast_paths_traversal_orientation if previous_code_expression_encodings.ast_paths_type == self.ast_paths_type else None)
+                    sub_ast_input=sub_ast_input,
+                    ast_paths_last_states=previous_code_expression_encodings.ast_paths_by_type
+                    if previous_code_expression_encodings.ast_paths_types == self.ast_paths_types else None)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
                 ast_nodes_encodings_up = self.ast_treelstm_up(
                     ast_nodes_embeddings=previous_code_expression_encodings.ast_nodes,
