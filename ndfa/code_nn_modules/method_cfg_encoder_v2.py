@@ -55,31 +55,66 @@ class MethodCFGEncoderV2(nn.Module):
             nr_final_embeddings_linear_layers=1,  # TODO: plug HP here
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        self.code_expression_encoder1 = CodeExpressionEncoder(
-            encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            code_task_vocabs=code_task_vocabs,
-            identifier_embedding_dim=self.identifier_embedding_dim,
-            is_first_encoder_layer=True,
-            ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.code_expression_encoder2 = CodeExpressionEncoder(
-            encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            code_task_vocabs=code_task_vocabs,
-            identifier_embedding_dim=self.identifier_embedding_dim,
-            is_first_encoder_layer=True,
-            ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.code_expression_encoders_before_macro = nn.ModuleList([
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=True,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn),
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=False,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn),
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=False,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn)])
 
-        self.code_expression_combiner1 = CodeExpressionCombiner(
-            encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-            ast_node_embedding_dim=self.ast_node_embedding_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.code_expression_combiner2 = CodeExpressionCombiner(
-            encoder_params=self.encoder_params.cfg_node_expression_encoder,
-            tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-            ast_node_embedding_dim=self.ast_node_embedding_dim,
-            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.code_expression_encoders_after_macro = nn.ModuleList([
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=False,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn),
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=False,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn),
+            CodeExpressionEncoder(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=self.identifier_embedding_dim,
+                is_first_encoder_layer=False,
+                ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
+                dropout_rate=dropout_rate, activation_fn=activation_fn)])
+
+        self.code_expression_combiners_before_macro = nn.ModuleList([
+            CodeExpressionCombiner(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
+                ast_node_embedding_dim=self.ast_node_embedding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            for _ in range(3)])
+        self.code_expression_combiners_after_macro = nn.ModuleList([
+            CodeExpressionCombiner(
+                encoder_params=self.encoder_params.cfg_node_expression_encoder,
+                tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
+                ast_node_embedding_dim=self.ast_node_embedding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+            for _ in range(3)])
 
         if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             self.tokenized_expression_context_adder = SeqContextAdder(
@@ -236,11 +271,14 @@ class MethodCFGEncoderV2(nn.Module):
                 embedded_code_expressions.ast_nodes = self.expressions_norm(
                     embedded_code_expressions.ast_nodes, usage_point=0)
 
-        encoded_code_expressions = self.apply_expression_encoder(
-            code_task_input=code_task_input,
-            previous_expression_encodings=embedded_code_expressions,
-            expression_encoder=self.code_expression_encoder1,
-            expression_combiner=self.code_expression_combiner1)
+        encoded_code_expressions = embedded_code_expressions
+        for encoder, combiner in \
+                zip(self.code_expression_encoders_before_macro, self.code_expression_combiners_before_macro):
+            encoded_code_expressions = self.apply_expression_encoder(
+                code_task_input=code_task_input,
+                previous_expression_encodings=encoded_code_expressions,
+                expression_encoder=encoder,
+                expression_combiner=combiner)
 
         encoded_cfg_nodes = self.cfg_node_encoder(
             combined_cfg_expressions_encodings=encoded_code_expressions.combined_expressions,
@@ -337,11 +375,13 @@ class MethodCFGEncoderV2(nn.Module):
         # if self.use_norm:
         #     encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, usage_point=0)
 
-        encoded_code_expressions = self.apply_expression_encoder(
-            code_task_input=code_task_input,
-            previous_expression_encodings=encoded_code_expressions,
-            expression_encoder=self.code_expression_encoder2,
-            expression_combiner=self.code_expression_combiner2)
+        for encoder, combiner in \
+                zip(self.code_expression_encoders_after_macro, self.code_expression_combiners_after_macro):
+            encoded_code_expressions = self.apply_expression_encoder(
+                code_task_input=code_task_input,
+                previous_expression_encodings=encoded_code_expressions,
+                expression_encoder=encoder,
+                expression_combiner=combiner)
 
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,
