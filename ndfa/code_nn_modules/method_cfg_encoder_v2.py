@@ -192,6 +192,7 @@ class MethodCFGEncoderV2(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.symbols_encoder = SymbolsEncoder(
+            identifier_embedding_dim=self.identifier_embedding_dim,
             symbol_embedding_dim=self.symbol_embedding_dim,
             expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn)

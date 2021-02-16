@@ -12,7 +12,9 @@ __all__ = ['SymbolsEncoder']
 
 
 class SymbolsEncoder(nn.Module):
-    def __init__(self, symbol_embedding_dim: int,
+    def __init__(self,
+                 symbol_embedding_dim: int,
+                 identifier_embedding_dim: int,
                  expression_encoding_dim: int,
                  combining_method: str = 'sum',
                  dropout_rate: float = 0.3,
@@ -22,7 +24,8 @@ class SymbolsEncoder(nn.Module):
         self.scatter_combiner = ScatterCombiner(
             encoding_dim=self.symbol_embedding_dim, combining_method=combining_method)
         self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
-            in_features=expression_encoding_dim + symbol_embedding_dim, out_features=symbol_embedding_dim, bias=False)
+            in_features=expression_encoding_dim + identifier_embedding_dim,
+            out_features=symbol_embedding_dim, bias=False)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
