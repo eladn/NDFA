@@ -124,6 +124,7 @@ class ChunkedRandomAccessDataset(Dataset):
             self._kvstore_chunks.append(kvstore)
             self._kvstore_chunks_lengths.append(int.from_bytes(kvstore[b'len'], 'little'))
         self._len = sum(self._kvstore_chunks_lengths)
+        print(f'Loaded dataset `{os.path.basename(pp_data_path_prefix)}` of size {self._len} with {len(self._kvstore_chunks)} chunks.')
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
