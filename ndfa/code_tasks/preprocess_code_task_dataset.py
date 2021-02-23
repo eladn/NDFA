@@ -195,6 +195,11 @@ def preprocess_code_task_example(
     identifiers = IdentifiersInputTensors(
         sub_parts_batch=BatchFlattenedTensor(
             tensor=torch.arange(len(identifiers_sub_parts_indexer)),
+            self_indexing_group='identifiers_sub_parts'),  # TODO: is it necessary?
+        sub_parts_vocab_word_index=BatchFlattenedTensor(
+            tensor=torch.LongTensor([
+                code_task_vocabs.sub_identifiers.get_word_idx_or_unk(sub_part)
+                for sub_part in identifiers_sub_parts_sorted]),
             self_indexing_group='identifiers_sub_parts'),
         identifier_sub_parts_index=identifiers_sub_parts_indices,
         identifier_sub_parts_vocab_word_index=identifiers_sub_parts_vocab_word_index,

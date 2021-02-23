@@ -94,6 +94,8 @@ class PDGInputTensors(TensorsDataClass):
 @dataclasses.dataclass
 class IdentifiersInputTensors(TensorsDataClass):
     sub_parts_batch: BatchFlattenedTensor  # (nr_sub_parts_in_batch, )
+    sub_parts_vocab_word_index: BatchFlattenedTensor  # (nr_sub_parts_in_batch, )
+
     identifier_sub_parts_index: BatchedFlattenedIndicesFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     identifier_sub_parts_vocab_word_index: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     identifier_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
