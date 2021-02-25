@@ -315,10 +315,14 @@ def preprocess_code_task_example(
         object_name='#control_flow_paths', value=len(control_flow_paths),
         min_val=model_hps.method_code_encoder.min_nr_control_flow_paths,
         max_val=model_hps.method_code_encoder.max_nr_control_flow_paths))
-    shortest_control_flow_path = min(len(path) for path in control_flow_paths)
-    longest_control_flow_path = max(len(path) for path in control_flow_paths)
+    shortest_control_flow_path = min(
+        (len(path) for path in control_flow_paths),
+        default=model_hps.method_code_encoder.min_control_flow_path_len)
+    longest_control_flow_path = max(
+        (len(path) for path in control_flow_paths),
+        default=model_hps.method_code_encoder.max_control_flow_path_len)
     limitations.append(PreprocessLimitation(
-        object_name='|shortest_control_flow_paths|', value=shortest_control_flow_path,
+        object_name='|shortest_control_flow_path|', value=shortest_control_flow_path,
         min_val=model_hps.method_code_encoder.min_control_flow_path_len))
     limitations.append(PreprocessLimitation(
         object_name='|longest_control_flow_path|', value=longest_control_flow_path,
