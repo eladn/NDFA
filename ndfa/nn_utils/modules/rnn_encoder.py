@@ -38,8 +38,10 @@ class RNNEncoder(nn.Module):
             lengths = mask.long().sum(dim=1)
 
         if lengths is not None:
+            # Since torch version 1.7.0 we explicitly move `length` to cpu, as written here:
+            # https://github.com/pytorch/pytorch/issues/43227#issuecomment-677995231
             sequence_input = pack_padded_sequence(
-                sequence_input, lengths=lengths, enforce_sorted=sorted_by_length)
+                sequence_input, lengths=lengths.cpu(), enforce_sorted=sorted_by_length)
         rnn_outputs, (last_hidden_out, _) = self.rnn_layer(sequence_input)
         assert last_hidden_out.size() == \
                (self.nr_rnn_layers * self.nr_rnn_directions, batch_size, self.hidden_dim)
