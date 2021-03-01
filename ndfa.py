@@ -107,7 +107,8 @@ def main():
 
     dataloader_cuda_kwargs = {
         'num_workers': exec_params.dataloader_num_workers,
-        'pin_memory': exec_params.dataloader_pin_memory} if use_gpu else {}
+        'pin_memory': exec_params.dataloader_pin_memory,
+        'prefetch_factor': 20} if use_gpu else {}  # TODO: pass `prefetch_factor` from a param
 
     if exec_params.perform_training:
         optimizer = create_optimizer(model, exec_params.experiment_setting.train_hyper_params)
