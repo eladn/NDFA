@@ -77,7 +77,7 @@ class PredictLogVarsTask(CodeTaskBase):
     def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
         return PredictLogVarsModelLoss(model_hps=model_hps)
 
-    def collate_examples(self, examples: List['PredictLogVarsTaggedExample']):
+    def collate_examples(self, examples: List['PredictLogVarsTaggedExample']) -> 'PredictLogVarsTaggedExample':
         assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
         example_hashes = [example.example_hash for example in examples]
         return PredictLogVarsTaggedExample.collate(

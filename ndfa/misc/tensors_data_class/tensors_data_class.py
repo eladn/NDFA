@@ -85,6 +85,14 @@ class TensorsDataClass:
         return self.cpu().deep_map(
             map_fn=lambda field_val: field_val.tolist() if hasattr(field_val, 'tolist') else field_val)
 
+    # TODO: copy to tensors data class repo.
+    # Used by worker thread to pin memory for custom batches types like shown here:
+    # https://pytorch.org/docs/stable/data.html#memory-pinning
+    def pin_memory(self):
+        return self.deep_map(
+            map_fn=lambda field_val: field_val.pin_memory() if hasattr(field_val, 'pin_memory') else field_val,
+            mapper_override_group='device')
+
     # TODO: generalize to support `TensorDataDict`!
     def deep_map(
             self,
