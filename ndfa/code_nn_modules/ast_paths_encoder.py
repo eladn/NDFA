@@ -27,6 +27,7 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_types: Tuple[str, ...],
             is_first_encoder_layer: bool = True,
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
+            nodes_folding_combining_method: str = 'attn',
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -66,7 +67,7 @@ class ASTPathsEncoder(nn.Module):
             for ast_paths_type in self.ast_paths_types})
 
         self.nodes_representation_path_folder = ScatterCombiner(
-            encoding_dim=self.ast_node_embedding_dim, combining_method='attn')
+            encoding_dim=self.ast_node_embedding_dim, combining_method=nodes_folding_combining_method)
         self.path_combiner = nn.ModuleDict({
             ast_paths_type: SequenceCombiner(
                 encoding_dim=self.ast_node_embedding_dim,

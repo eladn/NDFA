@@ -22,6 +22,7 @@ class CodeExpressionEncoder(nn.Module):
             identifier_embedding_dim: int,
             is_first_encoder_layer: bool = True,
             ast_paths_types: Tuple[str, ...] = ('leaf_to_leaf',),
+            ast_nodes_folding_combining_method: str = 'attn',
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -46,6 +47,7 @@ class CodeExpressionEncoder(nn.Module):
                     ast_paths_types=self.ast_paths_types,
                     is_first_encoder_layer=self.is_first_encoder_layer,
                     ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
+                    nodes_folding_combining_method=ast_nodes_folding_combining_method,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
                 self.ast_treelstm_up = ASTTreeLSTMEncoder(
