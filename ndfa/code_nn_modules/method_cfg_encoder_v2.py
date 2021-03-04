@@ -40,7 +40,7 @@ class MethodCFGEncoderV2(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  use_symbols_occurrences_for_symbols_encodings: bool, use_norm: bool = True,
-                 combining_method: str = 'attn',
+                 combining_method: str = 'mean',
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCFGEncoderV2, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -64,6 +64,7 @@ class MethodCFGEncoderV2(nn.Module):
                 is_first_encoder_layer=True,
                 ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
                 ast_nodes_folding_combining_method=combining_method,
+                ast_paths_combining_method='ends',
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -72,6 +73,7 @@ class MethodCFGEncoderV2(nn.Module):
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     ast_nodes_folding_combining_method=combining_method,
+            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -80,6 +82,7 @@ class MethodCFGEncoderV2(nn.Module):
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     ast_nodes_folding_combining_method=combining_method,
+            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 
@@ -91,6 +94,7 @@ class MethodCFGEncoderV2(nn.Module):
                 is_first_encoder_layer=False,
                 ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
                 ast_nodes_folding_combining_method=combining_method,
+                ast_paths_combining_method='ends',
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -99,6 +103,7 @@ class MethodCFGEncoderV2(nn.Module):
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     ast_nodes_folding_combining_method=combining_method,
+            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -107,6 +112,7 @@ class MethodCFGEncoderV2(nn.Module):
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     ast_nodes_folding_combining_method=combining_method,
+            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 

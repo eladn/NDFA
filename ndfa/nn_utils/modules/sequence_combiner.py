@@ -17,42 +17,55 @@ class SequenceCombiner(nn.Module):
                  combiner_params: SequenceCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SequenceCombiner, self).__init__()
-        self.activation_layer = get_activation_layer(activation_fn)()
         self.encoding_dim = encoding_dim
         self.combined_dim = combined_dim
         self.combiner_params = combiner_params
-        if self.combiner_params.method != 'attn':
-            raise NotImplementedError  # TODO: impl!
+
         # self.multihead_attn_layer = nn.MultiheadAttention(
         #     embed_dim=self.encoding_dim,
         #     num_heads=self.combiner_params.nr_attn_heads,
         #     dropout=0.1)  # TODO: get dropout rate from HPs
-        self.multihead_attn_layer = Attention(
-            in_embed_dim=self.encoding_dim,
-            out_embed_dim=self.combined_dim,
-            project_key=True, project_query=True, project_values=True,
-            nr_heads=self.combiner_params.nr_attn_heads,
-            activation_fn=activation_fn)
-        assert encoding_dim * self.combiner_params.nr_attn_heads >= self.combined_dim
-        assert self.combiner_params.nr_dim_reduction_layers >= 1
-        projection_dimensions = np.linspace(
-            start=self.combined_dim, stop=self.combined_dim,
-            num=self.combiner_params.nr_dim_reduction_layers + 1, dtype=int)
-        self.dim_reduction_projection_layers = nn.ModuleList([
-            nn.Linear(in_features=projection_dimensions[layer_idx],
-                      out_features=projection_dimensions[layer_idx + 1])
-            for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
-        self.layer_norms = nn.ModuleList([
-            LayerNorm(projection_dimensions[layer_idx], elementwise_affine=False)
-            for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
+
+        if self.combiner_params.method == 'attn':
+            self.multihead_attn_layer = Attention(
+                in_embed_dim=self.encoding_dim,
+                out_embed_dim=self.combined_dim,
+                project_key=True, project_query=True, project_values=True,
+                nr_heads=self.combiner_params.nr_attn_heads,
+                activation_fn=activation_fn)
+            assert encoding_dim * self.combiner_params.nr_attn_heads >= self.combined_dim
+            assert self.combiner_params.nr_dim_reduction_layers >= 1
+            projection_dimensions = np.linspace(
+                start=self.combined_dim, stop=self.combined_dim,
+                num=self.combiner_params.nr_dim_reduction_layers + 1, dtype=int)
+            self.dim_reduction_projection_layers = nn.ModuleList([
+                nn.Linear(in_features=projection_dimensions[layer_idx],
+                          out_features=projection_dimensions[layer_idx + 1])
+                for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
+            self.layer_norms = nn.ModuleList([
+                LayerNorm(projection_dimensions[layer_idx], elementwise_affine=False)
+                for layer_idx in range(self.combiner_params.nr_dim_reduction_layers)])
+        elif self.combiner_params.method in {'mean', 'sum', 'last', 'ends'}:
+            assert self.combined_dim == self.encoding_dim
+        else:
+            raise ValueError(f'Unsupported combining method `{self.combiner_params.method}`.')
+
         self.dropout_layer = nn.Dropout(dropout_rate)
+        self.activation_layer = get_activation_layer(activation_fn)()
 
     def forward(self, sequence_encodings: torch.Tensor,
                 sequence_mask: Optional[torch.BoolTensor] = None,
                 sequence_lengths: Optional[torch.LongTensor] = None,
                 batch_first: bool = True):
-        if self.combiner_params.method != 'attn':
-            raise NotImplementedError  # TODO: impl!
+        if self.combiner_params.method in {'mean', 'sum'}:
+            if sequence_mask is not None:
+                sequence_encodings = sequence_encodings.masked_fill(~sequence_mask.unsqueeze(-1), 0)
+            elif sequence_lengths is not None:
+                raise NotImplementedError  # TODO: impl!
+            seq_dim = 1 if batch_first else 0
+            agg_fns = {'sum': torch.sum, 'mean': torch.mean}
+            return agg_fns[self.combiner_params.method](sequence_encodings, dim=seq_dim)
+
         if not batch_first:
             raise NotImplementedError
         assert sequence_mask is not None or sequence_lengths is not None
@@ -64,16 +77,20 @@ class SequenceCombiner(nn.Module):
             .expand(sequence_encodings.size(0), 1, sequence_encodings.size(2))
         last_word_encoding = torch.gather(
             sequence_encodings, dim=1, index=last_word_indices).squeeze(1)
+        if self.combiner_params.method == 'last':
+            return last_word_encoding
         first_word_encoding = sequence_encodings[:, 0, :]
-        attn_query = (first_word_encoding + last_word_encoding)
+        both_end_words_encoding = (first_word_encoding + last_word_encoding)
+        if self.combiner_params.method == 'ends':
+            return both_end_words_encoding
         # attn_output = self.multihead_attn_layer(
-        #     query=attn_query.unsqueeze(0),
+        #     query=both_end_words_encoding.unsqueeze(0),
         #     key=sequence_encodings.transpose(0, 1),
         #     value=sequence_encodings.transpose(0, 1),
         #     key_padding_mask=None if sequence_mask is None else ~sequence_mask)[0].view(batch_size, self.encoding_dim)
         attn_output = self.multihead_attn_layer(
             sequences=sequence_encodings,
-            query=attn_query,
+            query=both_end_words_encoding,
             mask=sequence_mask,
             lengths=sequence_lengths)
         projected = attn_output
