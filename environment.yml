@@ -1,6 +1,6 @@
 name: ndfa-test
 channels:
-  - pytorch=1.7.0
+  - pytorch
   - conda-forge
   - defaults
   - anaconda
@@ -9,7 +9,7 @@ dependencies:
   - numpy
   - scipy
   - cudatoolkit=10.2
-  - pytorch
+  - pytorch=1.7.0
   - torchvision
   - torchaudio
   - pip
