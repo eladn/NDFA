@@ -111,7 +111,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         evaluation_metrics_types: Optional[List[Type[EvaluationMetric]]] = None,
         callbacks: Optional[Collection[TrainCallback]] = None,
         evaluation_time_consumption_ratio: float = 1/8,
-        min_train_epoch_minutes_to_perform_evaluation_during: float = 10,
+        min_train_epoch_minutes_to_perform_evaluation_during: float = 40,
         perform_evaluation_before_starting_training: bool = True):
     if callbacks is None:
         callbacks = ()
