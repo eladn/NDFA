@@ -1,19 +1,19 @@
-torch>=1.6.0
-tqdm>=4.45.0
+torch>=1.7.0
+tqdm
 tabulate
 numpy
 scipy
 sklearn
 confclass
-# OpenNMT-py>=1.1.1
-# torch-scatter==latest+cpu
-# torch-sparse==latest+cpu
-# torch-cluster==latest+cpu
-# torch-spline-conv==latest+
-# torch-geometric
 typing_extensions
 notify_run
-# pip install torch-scatter==latest+cpu -f https://pytorch-geometric.com/whl/torch-1.6.0.html
-# pip install torch-scatter==latest+cu102 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
+
+--find-links https://pytorch-geometric.com/whl/torch-1.7.0+cu102.html
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+torch-geometric
+
 dgl
 scikit-learn
