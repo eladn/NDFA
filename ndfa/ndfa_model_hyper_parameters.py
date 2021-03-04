@@ -13,8 +13,8 @@ __all__ = [
 @confclass
 class SequenceCombinerParams:
     method: str = confparam(
-        default='attn',
-        choices=('attn', 'sum', 'mean'),
+        default='ends',
+        choices=('attn', 'sum', 'mean', 'last', 'ends'),
         description="...")
     nr_attn_heads: int = confparam(
         default=8)
@@ -91,7 +91,7 @@ class CodeExpressionEncoderParams:
 
     combined_expression_encoding_dim: int = confparam(
         # default_as_other_field='code_token_encoding_size',
-        default=512,
+        default=256,
         description="Size of encoded combined code expression.")
 
     sequence_encoder: SequenceEncoderParams = confparam(
@@ -120,7 +120,7 @@ class MethodCFGEncoderParams:
 
     cfg_node_tokenized_expression_combiner: SequenceCombinerParams = confparam(
         default_factory=lambda: SequenceCombinerParams(
-            method='attn', nr_attn_heads=8, nr_dim_reduction_layers=2),
+            method='ends', nr_attn_heads=8, nr_dim_reduction_layers=2),
         arg_prefix='cfg_node_expression_combiner')
 
     cfg_node_control_kinds_embedding_dim: int = confparam(
@@ -128,7 +128,7 @@ class MethodCFGEncoderParams:
         description="Embedding size for the CFG node control kind.")
 
     cfg_node_encoding_dim: int = confparam(
-        default=512,
+        default=256,
         # default_factory_with_self_access=lambda _self:
         # _self.cfg_node_type_embedding_size + _self.code_expression_encoding_size,
         # default_description="cfg_node_type_embedding_size + code_expression_encoding_size",
@@ -142,8 +142,9 @@ class MethodCFGEncoderParams:
 @confclass
 class MethodCodeEncoderParams:
     method_encoder_type: str = confparam(
+        # default='whole-method',
         default='method-cfg-v2',
-        choices=('method-linear-seq', 'method-ast', 'method-cfg', 'method-cfg-v2'),
+        choices=('whole-method', 'method-cfg', 'method-cfg-v2'),
         description="Representation type of the code "
                     "(main architecture of the method-code-encoder).")
     # relevant only if `method_encoder_type == 'method-cfg'`
