@@ -1,9 +1,10 @@
-torch>=1.7.0
+# torch>=1.7.0
 tqdm
 tabulate
-numpy
-scipy
+# numpy
+# scipy
 sklearn
+scikit-learn
 confclass
 typing_extensions
 notify_run
@@ -16,4 +17,3 @@ torch-spline-conv
 torch-geometric
 
 dgl
-scikit-learn
