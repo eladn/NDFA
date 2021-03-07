@@ -12,6 +12,7 @@ from . import scatter_self_attention
 from . import seq_context_adder
 from . import sequence_combiner
 from . import sequence_encoder
+from . import state_updater
 
 
 __all__ = \
@@ -28,4 +29,5 @@ __all__ = \
     scatter_self_attention.__all__ + \
     seq_context_adder.__all__ + \
     sequence_combiner.__all__ + \
-    sequence_encoder.__all__
+    sequence_encoder.__all__ + \
+    state_updater.__all__
