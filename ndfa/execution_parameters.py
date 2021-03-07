@@ -141,8 +141,8 @@ class ModelExecutionParams:
         default=True,
         arg_names=['--use-notify'])
 
-    dataloader_num_workers: int = confparam(
-        default=6)
+    dataloader_num_workers: Optional[int] = confparam(
+        default=None)
 
     dataloader_pin_memory: bool = confparam(
         default=True)

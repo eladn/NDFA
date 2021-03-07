@@ -1,3 +1,4 @@
+import multiprocessing
 import numpy as np
 import os
 import base64
@@ -105,8 +106,13 @@ def main():
     if loaded_checkpoint:
         model.load_state_dict(loaded_checkpoint['model_state_dict'])
 
+    dataloader_num_workers = \
+        multiprocessing.cpu_count() \
+            if exec_params.dataloader_num_workers is None else \
+            exec_params.dataloader_num_workers
+    print(f'Using {dataloader_num_workers} dataloader workers.')
     dataloader_cuda_kwargs = {
-        'num_workers': exec_params.dataloader_num_workers,
+        'num_workers': dataloader_num_workers,
         'pin_memory': exec_params.dataloader_pin_memory,
         'prefetch_factor': 20,  # TODO: pass `prefetch_factor` from a param
         'persistent_workers': False} if use_gpu else {}
