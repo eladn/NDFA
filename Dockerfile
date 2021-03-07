@@ -41,18 +41,18 @@ RUN conda clean -ya
 
 WORKDIR /root/ndfa
 RUN conda init bash
-COPY requirements.unversioned.txt .
-COPY environment.unversioned.yml .
-RUN sed 's/%PYTHON_VERSION%/${python_version}/g' environment.unversioned.yml > environment.yml
-RUN sed 's/%CUDA_VERSION%/${conda_cuda_version}/g' environment.unversioned.yml > environment.yml
-RUN sed 's/%CUDA_SHORTCUT%/${conda_cuda_shortcut}/g' environment.unversioned.yml > environment.yml
-RUN sed 's/%PYTORCH_VERSION%/${pytorch_version}/g' environment.unversioned.yml > environment.yml
-RUN sed 's/%TORCH_GEOMETRIC_PYTORCH_VERSION%/${torch_geometric_pytorch_version}/g' environment.unversioned.yml > environment.yml
-RUN sed 's/%PYTHON_VERSION%/${python_version}/g' requirements.unversioned.txt > requirements.txt
-RUN sed 's/%CUDA_VERSION%/${conda_cuda_version}/g' requirements.unversioned.txt > requirements.txt
-RUN sed 's/%CUDA_SHORTCUT%/${conda_cuda_shortcut}/g' requirements.unversioned.txt > requirements.txt
-RUN sed 's/%PYTORCH_VERSION%/${pytorch_version}/g' requirements.unversioned.txt > requirements.txt
-RUN sed 's/%TORCH_GEOMETRIC_PYTORCH_VERSION%/${torch_geometric_pytorch_version}/g' requirements.unversioned.txt > requirements.txt
+COPY requirements.unversioned.txt ./requirements.txt
+COPY environment.unversioned.yml ./environment.yml
+RUN sed -i "s/%PYTHON_VERSION%/${python_version}/g" environment.yml
+RUN sed -i "s/%CUDA_VERSION%/${conda_cuda_version}/g" environment.yml
+RUN sed -i "s/%CUDA_SHORTCUT%/${conda_cuda_shortcut}/g" environment.yml
+RUN sed -i "s/%PYTORCH_VERSION%/${pytorch_version}/g" environment.yml
+RUN sed -i "s/%TORCH_GEOMETRIC_PYTORCH_VERSION%/${torch_geometric_pytorch_version}/g" environment.yml
+RUN sed -i "s/%PYTHON_VERSION%/${python_version}/g" requirements.txt
+RUN sed -i "s/%CUDA_VERSION%/${conda_cuda_version}/g" requirements.txt
+RUN sed -i "s/%CUDA_SHORTCUT%/${conda_cuda_shortcut}/g" requirements.txt
+RUN sed -i "s/%PYTORCH_VERSION%/${pytorch_version}/g" requirements.txt
+RUN sed -i "s/%TORCH_GEOMETRIC_PYTORCH_VERSION%/${torch_geometric_pytorch_version}/g" requirements.txt
 RUN conda env create -f environment.yml
 
 #RUN ["/bin/bash", "-c", "conda install --yes --file requirements.txt"]
