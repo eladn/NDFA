@@ -6,7 +6,7 @@ from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.ndfa_model_hyper_parameters import ASTEncoderParams
-from ndfa.nn_utils.modules.gate import Gate
+from ndfa.nn_utils.modules.state_updater import StateUpdater
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors, \
@@ -55,7 +55,7 @@ class ASTPathsEncoder(nn.Module):
                 for ast_paths_type in self.ast_paths_types})
         else:
             self.nodes_occurrences_update_gate = nn.ModuleDict({
-                ast_paths_type: Gate(
+                ast_paths_type: StateUpdater(
                     state_dim=self.ast_node_embedding_dim, update_dim=self.ast_node_embedding_dim,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
                 for ast_paths_type in self.ast_paths_types})

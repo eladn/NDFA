@@ -9,6 +9,7 @@ from ndfa.nn_utils.misc.misc import get_activation_layer
 __all__ = ['SeqContextAdder']
 
 
+# TODO: use `StateUpdater` for parallel methods
 class SeqContextAdder(nn.Module):
     def __init__(self, main_dim: int, ctx_dim: int,
                  method: str = 'parallel-gated', ctx_dim_reduction_rate: float = 0.5,

@@ -17,7 +17,7 @@ from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
-from ndfa.nn_utils.modules.gate import Gate
+from ndfa.nn_utils.modules.state_updater import StateUpdater
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -424,8 +424,9 @@ class MacroContextAdderToSubAST(nn.Module):
         super(MacroContextAdderToSubAST, self).__init__()
         self.ast_node_encoding_dim = ast_node_encoding_dim
         self.cfg_node_encoding_dim = cfg_node_encoding_dim
-        self.gate = Gate(state_dim=self.ast_node_encoding_dim, update_dim=self.cfg_node_encoding_dim,
-                         dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.gate = StateUpdater(
+            state_dim=self.ast_node_encoding_dim, update_dim=self.cfg_node_encoding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(
             self, previous_ast_nodes_encodings: torch.Tensor,
@@ -504,8 +505,9 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
         super(AddSymbolsEncodingsToExpressions, self).__init__()
         self.expression_token_encoding_dim = expression_token_encoding_dim
         self.symbol_encoding_dim = symbol_encoding_dim
-        self.gate = Gate(state_dim=expression_token_encoding_dim, update_dim=symbol_encoding_dim,
-                         dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.gate = StateUpdater(
+            state_dim=expression_token_encoding_dim, update_dim=symbol_encoding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
@@ -545,8 +547,9 @@ class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
         self.cfg_combined_expression_dim = cfg_combined_expression_dim
         # self.projection_layer = nn.Linear(
         #     in_features=self.cfg_node_dim + self.cfg_combined_expression_dim, out_features=self.cfg_node_dim)
-        self.gate = Gate(state_dim=self.cfg_node_dim, update_dim=self.cfg_combined_expression_dim,
-                         dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.gate = StateUpdater(
+            state_dim=self.cfg_node_dim, update_dim=self.cfg_combined_expression_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
@@ -588,7 +591,7 @@ class CFGPathsNGramsEncoder(nn.Module):
             encoder_params=cfg_paths_sequence_encoder_params,
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.nodes_occurrences_encodings_gate = Gate(
+        self.nodes_occurrences_encodings_gate = StateUpdater(
             state_dim=self.cfg_node_dim, update_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -649,7 +652,7 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
         self.cfg_node_encoding_dim = cfg_node_encoding_dim
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
-        self.gate = Gate(
+        self.gate = StateUpdater(
             state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -694,7 +697,7 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
         self.combining_method = combining_method
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
-        self.gate = Gate(
+        self.gate = StateUpdater(
             state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
