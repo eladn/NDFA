@@ -1,0 +1,19 @@
+# torch>=%PYTORCH_VERSION%
+tqdm
+tabulate
+# numpy
+# scipy
+sklearn
+scikit-learn
+confclass
+typing_extensions
+notify_run
+
+--find-links https://pytorch-geometric.com/whl/torch-%TORCH_GEOMETRIC_PYTORCH_VERSION%+%CUDA_SHORTCUT%.html
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+torch-geometric
+
+dgl

@@ -1,0 +1,17 @@
+name: ndfa-test
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+  - anaconda
+dependencies:
+  - python=%PYTHON_VERSION%
+  - numpy
+  - scipy
+  - cudatoolkit=%CUDA_VERSION%
+  - pytorch=%PYTORCH_VERSION%
+  - torchvision
+  - torchaudio
+  - pip
+  - pip:
+      - -r file:requirements.txt
