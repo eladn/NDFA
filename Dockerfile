@@ -9,6 +9,7 @@ ARG torch_geometric_pytorch_version=1.7.0
 MAINTAINER Elad Nachmias <eladnah@gmail.com>
 
 ENV TERM xterm
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends git curl wget ca-certificates bzip2 unzip openjdk-8-jdk-headless gnupg software-properties-common
 RUN DEBIAN_FRONTEND=noninteractive apt-get install lightdm -y
