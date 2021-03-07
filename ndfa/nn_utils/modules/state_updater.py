@@ -23,6 +23,7 @@ class StateUpdater(nn.Module):
             self.gate = Gate(state_dim=self.state_dim, update_dim=self.update_dim,
                              dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.update_method == 'add':
+            assert self.state_dim == self.update_dim
             pass  # we don't need anything in this case ...
         else:
             raise ValueError(f'Unsupported update method `{self.update_method}`.')
