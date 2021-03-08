@@ -138,6 +138,9 @@ class MethodCFGEncoderParams:
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence-encoder')
 
+    create_sub_grams_from_long_gram: bool = confparam(
+        default=False)
+
 
 @confclass
 class MethodCodeEncoderParams:

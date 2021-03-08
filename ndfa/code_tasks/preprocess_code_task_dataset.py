@@ -329,13 +329,24 @@ def preprocess_code_task_example(
         max_val=model_hps.method_code_encoder.max_control_flow_path_len))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    control_flow_paths_ngrams = {}
-    for ngrams_n in range(2, 6 + 1):  # TODO: make these HPs
-        control_flow_paths_ngrams[ngrams_n] = set()
+    ngrams_min_n, ngrams_max_n = 2, 7  # TODO: make these HPs
+    control_flow_paths_ngrams = defaultdict(set)
+    if model_hps.method_code_encoder.method_cfg_encoder.create_sub_grams_from_long_gram:  # TODO: put it in pp params
+        for ngrams_n in range(ngrams_min_n, ngrams_max_n + 1):
+            control_flow_paths_ngrams[ngrams_n] = set()
+            for control_flow_path in control_flow_paths:
+                for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
+                    ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
+                    control_flow_paths_ngrams[ngrams_n].add(ngram)
+    else:
         for control_flow_path in control_flow_paths:
-            for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
-                ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
-                control_flow_paths_ngrams[ngrams_n].add(ngram)
+            if ngrams_min_n <= len(control_flow_path) <= ngrams_max_n:
+                control_flow_paths_ngrams[len(control_flow_path)].add(control_flow_path)
+            elif len(control_flow_path) > ngrams_max_n:
+                for path_ngram_start_idx in range(len(control_flow_path) - ngrams_max_n + 1):
+                    ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_max_n]
+                    control_flow_paths_ngrams[ngrams_max_n].add(ngram)
+    control_flow_paths_ngrams = dict(control_flow_paths_ngrams)
     # sort for determinism
     control_flow_paths_ngrams = {
         ngrams_n: sorted(list(ngrams))
