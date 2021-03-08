@@ -116,7 +116,7 @@ def main():
         'pin_memory': exec_params.dataloader_pin_memory,
         'persistent_workers': False} if use_gpu else {}
     torch_ver_major, torch_ver_minor = (int(v) for v in torch.__version__.split('.')[:2])
-    if dataloader_num_workers > 0 and (torch_ver_major > 1 or torch_ver_major == 1 and torch_ver_minor >= 8):
+    if use_gpu and dataloader_num_workers > 0 and (torch_ver_major > 1 or torch_ver_major == 1 and torch_ver_minor >= 8):
         dataloader_prefetch_factor = 20  # TODO: pass `prefetch_factor` from a param
         dataloader_cuda_kwargs['prefetch_factor'] = dataloader_prefetch_factor
 
