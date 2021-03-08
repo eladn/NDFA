@@ -3,8 +3,8 @@ FROM ubuntu:18.04
 ARG python_version=3.8
 ARG conda_cuda_version=10.2
 ARG conda_cuda_shortcut=cu102
-ARG pytorch_version=1.7.1
-ARG torch_geometric_pytorch_version=1.7.0
+ARG pytorch_version=1.8.0
+ARG torch_geometric_pytorch_version=1.8.0
 
 MAINTAINER Elad Nachmias <eladnah@gmail.com>
 
@@ -53,6 +53,7 @@ RUN sed -i "s/%CUDA_VERSION%/${conda_cuda_version}/g" requirements.txt
 RUN sed -i "s/%CUDA_SHORTCUT%/${conda_cuda_shortcut}/g" requirements.txt
 RUN sed -i "s/%PYTORCH_VERSION%/${pytorch_version}/g" requirements.txt
 RUN sed -i "s/%TORCH_GEOMETRIC_PYTORCH_VERSION%/${torch_geometric_pytorch_version}/g" requirements.txt
+RUN [ "${conda_cuda_shortcut}" = "cpu" ] && sed -i.bak '/cudatoolkit/d' environment.yml
 RUN conda env create -f environment.yml
 
 #RUN ["/bin/bash", "-c", "conda install --yes --file requirements.txt"]

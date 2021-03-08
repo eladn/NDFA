@@ -1,4 +1,4 @@
-name: ndfa-test
+name: NDFA
 channels:
   - pytorch
   - conda-forge
@@ -9,7 +9,7 @@ dependencies:
   - numpy
   - scipy
   - cudatoolkit=10.2
-  - pytorch=1.7.1
+  - pytorch=1.8.0
   - torchvision
   - torchaudio
   - pip

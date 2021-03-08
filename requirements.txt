@@ -1,4 +1,4 @@
-# torch>=1.7.0
+# torch>=1.8.0
 tqdm
 tabulate
 # numpy
@@ -9,7 +9,7 @@ confclass
 typing_extensions
 notify_run
 
---find-links https://pytorch-geometric.com/whl/torch-1.7.0+cu102.html
+--find-links https://pytorch-geometric.com/whl/torch-1.8.0+cu102.html
 torch-scatter
 torch-sparse
 torch-cluster
