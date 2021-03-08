@@ -329,28 +329,26 @@ def preprocess_code_task_example(
         max_val=model_hps.method_code_encoder.max_control_flow_path_len))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    ngrams_min_n, ngrams_max_n = 2, 7  # TODO: make these HPs
-    control_flow_paths_ngrams = defaultdict(set)
-    if model_hps.method_code_encoder.method_cfg_encoder.create_sub_grams_from_long_gram:  # TODO: put it in pp params
-        for ngrams_n in range(ngrams_min_n, ngrams_max_n + 1):
-            control_flow_paths_ngrams[ngrams_n] = set()
-            for control_flow_path in control_flow_paths:
-                for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
-                    ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_n]
-                    control_flow_paths_ngrams[ngrams_n].add(ngram)
-    else:
-        for control_flow_path in control_flow_paths:
-            if ngrams_min_n <= len(control_flow_path) <= ngrams_max_n:
-                control_flow_paths_ngrams[len(control_flow_path)].add(control_flow_path)
-            elif len(control_flow_path) > ngrams_max_n:
-                for path_ngram_start_idx in range(len(control_flow_path) - ngrams_max_n + 1):
-                    ngram = control_flow_path[path_ngram_start_idx:path_ngram_start_idx + ngrams_max_n]
-                    control_flow_paths_ngrams[ngrams_max_n].add(ngram)
-    control_flow_paths_ngrams = dict(control_flow_paths_ngrams)
+    ngrams_min_n, ngrams_max_n = 2, 10  # TODO: make these HPs, which are also part of the pp data properties
+    control_flow_paths_exact_ngrams = defaultdict(set)
+    control_flow_paths_partial_ngrams = defaultdict(set)
+    for control_flow_path in control_flow_paths:
+        if len(control_flow_path) < ngrams_min_n:
+            continue
+        if ngrams_min_n <= len(control_flow_path) <= ngrams_max_n:
+            control_flow_paths_exact_ngrams[len(control_flow_path)].add(control_flow_path)
+        for ngrams_n in range(ngrams_min_n, min(ngrams_max_n, len(control_flow_path) - 1) + 1):
+            for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
+                ngram = control_flow_path[path_ngram_start_idx: path_ngram_start_idx + ngrams_n]
+                control_flow_paths_partial_ngrams[ngrams_n].add(ngram)
     # sort for determinism
-    control_flow_paths_ngrams = {
+    control_flow_paths_exact_ngrams = {
         ngrams_n: sorted(list(ngrams))
-        for ngrams_n, ngrams in control_flow_paths_ngrams.items()
+        for ngrams_n, ngrams in control_flow_paths_exact_ngrams.items()
+        if len(ngrams) > 0}
+    control_flow_paths_partial_ngrams = {
+        ngrams_n: sorted(list(ngrams))
+        for ngrams_n, ngrams in control_flow_paths_partial_ngrams.items()
         if len(ngrams) > 0}
 
     control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths for node_idx, _ in path}
@@ -834,7 +832,7 @@ def preprocess_code_task_example(
                         '<PAD>' if edge_type is None else edge_type)
                      for _, edge_type in path])
                     for path in control_flow_paths])),
-        cfg_control_flow_paths_ngrams=TensorsDataDict({
+        cfg_control_flow_paths_exact_ngrams=TensorsDataDict({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                     sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
@@ -845,7 +843,19 @@ def preprocess_code_task_example(
                             '<PAD>' if edge_type is None else edge_type)
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
-            for key, ngrams in control_flow_paths_ngrams.items()}),
+            for key, ngrams in control_flow_paths_exact_ngrams.items()}),
+        cfg_control_flow_paths_partial_ngrams=TensorsDataDict({
+            key: CFGPathsNGramsInputTensors(
+                nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
+                    sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
+                    tgt_indexing_group='cfg_nodes'),
+                edges_types=BatchFlattenedSeq(
+                    sequences=[torch.LongTensor(
+                        [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(
+                            '<PAD>' if edge_type is None else edge_type)
+                            for _, edge_type in ngram])
+                        for ngram in ngrams]))
+            for key, ngrams in control_flow_paths_partial_ngrams.items()}),
         cfg_control_flow_graph=cfg_control_flow_graph)
 
     token_ranges_to_mask = [

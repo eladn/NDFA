@@ -82,7 +82,8 @@ class PDGInputTensors(TensorsDataClass):
 
     cfg_nodes_random_permutation: Optional[BatchedFlattenedIndicesPseudoRandomPermutation] = None
     cfg_control_flow_paths: Optional[CFGPathsInputTensors] = None
-    cfg_control_flow_paths_ngrams: Optional[TensorsDataDict[int, CFGPathsNGramsInputTensors]] = None
+    cfg_control_flow_paths_exact_ngrams: Optional[TensorsDataDict[int, CFGPathsNGramsInputTensors]] = None
+    cfg_control_flow_paths_partial_ngrams: Optional[TensorsDataDict[int, CFGPathsNGramsInputTensors]] = None
 
     cfg_control_flow_graph: Optional[TGData] = None
 
