@@ -312,12 +312,26 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths)
         if self.encoder_params.encoder_type in \
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
-            ngrams_ns = None  # TODO: put in encoder's HPs
-            # ngrams_ns = (2, 3)  # TODO: put in encoder's HPs
+            ngrams_min_n = None  # TODO: put in encoder's HPs
+            ngrams_max_n = 6  # TODO: put in encoder's HPs
+            all_ngram_ns = \
+                set(code_task_input.pdg.cfg_control_flow_paths_exact_ngrams.keys()) | \
+                set(code_task_input.pdg.cfg_control_flow_paths_partial_ngrams.keys())
+            assert len(all_ngram_ns) > 0
+            ngrams_n_range_start = min(all_ngram_ns) if ngrams_min_n is None else max(min(all_ngram_ns), ngrams_min_n)
+            ngrams_n_range_end = max(all_ngram_ns) if ngrams_max_n is None else min(max(all_ngram_ns), ngrams_max_n)
+            assert ngrams_n_range_start <= ngrams_n_range_end
+            cfg_control_flow_paths_ngrams_input = {
+                ngram_n: ngrams
+                for ngram_n, ngrams in code_task_input.pdg.cfg_control_flow_paths_exact_ngrams.items()
+                if ngrams_n_range_start <= ngram_n <= ngrams_n_range_end}
+            if ngrams_max_n in code_task_input.pdg.cfg_control_flow_paths_partial_ngrams:
+                cfg_control_flow_paths_ngrams_input[ngrams_max_n + 1] = \
+                    code_task_input.pdg.cfg_control_flow_paths_partial_ngrams[ngrams_max_n]
+
             encoded_cfg_paths_ngrams = self.cfg_paths_ngrams_encoder(
                 cfg_nodes_encodings=encoded_cfg_nodes,
-                cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
-                ngrams_ns=ngrams_ns)
+                cfg_control_flow_paths_ngrams_input=cfg_control_flow_paths_ngrams_input)
 
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
@@ -352,7 +366,7 @@ class MethodCFGEncoderV2(nn.Module):
         elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
             encoded_cfg_nodes = self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings(
                 encoded_cfg_paths_ngrams=encoded_cfg_paths_ngrams,
-                cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
+                cfg_control_flow_paths_ngrams_input=cfg_control_flow_paths_ngrams_input,
                 previous_cfg_nodes_encodings=encoded_cfg_nodes,
                 nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
             if self.use_norm:
@@ -598,14 +612,11 @@ class CFGPathsNGramsEncoder(nn.Module):
     def forward(
             self, cfg_nodes_encodings: torch.Tensor,
             cfg_control_flow_paths_ngrams_input: Mapping[int, CFGPathsNGramsInputTensors],
-            ngrams_ns: Optional[Tuple[int, ...]] = None,
             previous_encoding_layer_output: Optional[Dict[int, EncodedCFGPaths]] = None) \
             -> Dict[int, EncodedCFGPaths]:
         assert (previous_encoding_layer_output is not None) ^ self.is_first
         results = {}
         for ngrams_n, ngrams in cfg_control_flow_paths_ngrams_input.items():
-            if ngrams_ns is not None and ngrams_n not in ngrams_ns:
-                continue
             if self.is_first:
                 ngrams_edges_types_embeddings = self.control_flow_edge_types_embeddings(ngrams.edges_types.sequences)
                 ngrams_nodes_encodings = cfg_nodes_encodings[ngrams.nodes_indices.sequences]
