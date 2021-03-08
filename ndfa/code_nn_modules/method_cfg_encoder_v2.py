@@ -314,7 +314,7 @@ class MethodCFGEncoderV2(nn.Module):
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
             ngrams_ns = None  # TODO: put in encoder's HPs
             # ngrams_ns = (2, 3)  # TODO: put in encoder's HPs
-            encoded_cfg_paths_ngrams = self.first_cfg_paths_ngrams_encoder(
+            encoded_cfg_paths_ngrams = self.cfg_paths_ngrams_encoder(
                 cfg_nodes_encodings=encoded_cfg_nodes,
                 cfg_control_flow_paths_ngrams_input=code_task_input.pdg.cfg_control_flow_paths_ngrams,
                 ngrams_ns=ngrams_ns)
