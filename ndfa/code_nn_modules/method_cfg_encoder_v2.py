@@ -680,7 +680,7 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
             scattered_input=flattened_nodes_occurrences,
             indices=flattened_nodes_indices,
             dim_size=nr_cfg_nodes,
-            attn_keys=previous_cfg_nodes_encodings)
+            attn_queries=previous_cfg_nodes_encodings)
         assert updated_cfg_nodes_encodings.size() == (nr_cfg_nodes, self.cfg_node_encoding_dim)
 
         # Note: This gate here is the last we added so far (in the paths case).
