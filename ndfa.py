@@ -115,7 +115,8 @@ def main():
         'num_workers': dataloader_num_workers,
         'pin_memory': exec_params.dataloader_pin_memory,
         'persistent_workers': False} if use_gpu else {}
-    if dataloader_num_workers > 0:
+    torch_ver_major, torch_ver_minor = (int(v) for v in torch.__version__.split('.')[:2])
+    if dataloader_num_workers > 0 and (torch_ver_major > 1 or torch_ver_major == 1 and torch_ver_minor >= 8):
         dataloader_prefetch_factor = 20  # TODO: pass `prefetch_factor` from a param
         dataloader_cuda_kwargs['prefetch_factor'] = dataloader_prefetch_factor
 
@@ -199,7 +200,8 @@ def main():
             save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
             evaluation_metrics_types=task.evaluation_metrics(
                 model_hps=exec_params.experiment_setting.model_hyper_params),
-            callbacks=train_callbacks)
+            callbacks=train_callbacks,
+            gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')

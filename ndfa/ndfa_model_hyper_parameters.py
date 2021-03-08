@@ -283,3 +283,6 @@ class NDFAModelTrainingHyperParams:
         choices=('early-stopping',),
         default=None,
         description="Criterion for stopping training.")
+
+    gradient_clip: Optional[float] = confparam(
+        default=0.5)

@@ -20,7 +20,7 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
                                 criterion: nn.Module, optimizer: Optional[Optimizer] = None,
                                 batch_idx: Optional[int] = None, nr_batches: Optional[int] = None,
                                 nr_gradient_accumulation_steps: int = 1, dbg_test_grads: bool = False,
-                                lazy_move_to_device_history=None):
+                                lazy_move_to_device_history=None, gradient_clip_param: Optional[float] = None):
     if lazy_move_to_device_history is None:
         lazy_move_to_device_history = {'x': {}, 'y': {}}
     else:
@@ -47,6 +47,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
             model.dbg_test_grads()
         if nr_gradient_accumulation_steps is None or (batch_idx % nr_gradient_accumulation_steps) == nr_gradient_accumulation_steps - 1 or \
                 (nr_batches is not None and batch_idx == nr_batches - 1):
+            if gradient_clip_param is not None:
+                nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_param)
             optimizer.step()
             optimizer.zero_grad()
     return y_pred, loss.item() * nr_gradient_accumulation_steps, x_batch.batch_size
@@ -112,7 +114,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         callbacks: Optional[Collection[TrainCallback]] = None,
         evaluation_time_consumption_ratio: float = 1/8,
         min_train_epoch_minutes_to_perform_evaluation_during: float = 40,
-        perform_evaluation_before_starting_training: bool = True):
+        perform_evaluation_before_starting_training: bool = True,
+        gradient_clip_param: Optional[float] = None):
     if callbacks is None:
         callbacks = ()
     model.to(device)
@@ -159,7 +162,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
                 nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
-                lazy_move_to_device_history=train_lazy_move_to_device_history)
+                lazy_move_to_device_history=train_lazy_move_to_device_history,
+                gradient_clip_param=gradient_clip_param)
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
                 train_step_avg_time * 0.8 + cur_step_duration * 0.2
