@@ -4,7 +4,8 @@ import torch.nn as nn
 from ndfa.ndfa_model_hyper_parameters import IdentifierEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
-from ndfa.nn_utils.modules.attn_rnn_encoder import AttnRNNEncoder
+from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
+from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 from ndfa.code_nn_modules.code_task_input import IdentifiersInputTensors
 from ndfa.nn_utils.modules.embedding_with_obfuscation import EmbeddingWithObfuscation
@@ -14,7 +15,6 @@ __all__ = ['IdentifierEncoder']
 
 
 # TODO: add `EmbeddingWithObfuscationParams` to `IdentifierEncoderParams`.
-# TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,
                  encoder_params: IdentifierEncoderParams,
@@ -22,7 +22,6 @@ class IdentifierEncoder(nn.Module):
                  sub_parts_obfuscation_rate: float = 0.3,
                  use_vocab: bool = True,
                  use_hashing_trick: bool = False,
-                 nr_rnn_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(IdentifierEncoder, self).__init__()
         assert sub_parts_obfuscation in {'none', 'add_all', 'replace_all', 'replace_oovs',
@@ -39,11 +38,16 @@ class IdentifierEncoder(nn.Module):
             nr_hashing_features=self.encoder_params.nr_sub_identifier_hashing_features,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        # TODO: use `SequenceEncoder` instead of `AttnRNNEncoder`
-        self.attn_rnn_encoder = AttnRNNEncoder(
+        self.sequence_encoder = SequenceEncoder(
+            encoder_params=self.encoder_params.sequence_encoder,
             input_dim=self.encoder_params.identifier_embedding_dim,
-            hidden_dim=self.encoder_params.identifier_embedding_dim, rnn_type='lstm',
-            nr_rnn_layers=nr_rnn_layers, rnn_bi_direction=True, activation_fn=activation_fn)
+            hidden_dim=self.encoder_params.identifier_embedding_dim,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.sequence_combiner = SequenceCombiner(
+            encoding_dim=self.encoder_params.identifier_embedding_dim,
+            combined_dim=self.encoder_params.identifier_embedding_dim,
+            combiner_params=self.encoder_params.sequence_combiner,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -68,9 +72,13 @@ class IdentifierEncoder(nn.Module):
                 ~identifiers.identifier_sub_parts_index.sequences_mask.unsqueeze(-1)
                     .expand(identifiers_sub_parts_embeddings.shape), 0)
 
-        encoded_identifiers, _ = self.attn_rnn_encoder(
+        encoded_identifiers_as_seq = self.sequence_encoder(
             sequence_input=identifiers_sub_parts_embeddings,
             lengths=identifiers.identifier_sub_parts_vocab_word_index.sequences_lengths,
+            batch_first=True).sequence
+        encoded_identifiers = self.sequence_combiner(
+            sequence_encodings=encoded_identifiers_as_seq,
+            sequence_lengths=identifiers.identifier_sub_parts_vocab_word_index.sequences_lengths,
             batch_first=True)
         assert encoded_identifiers.size() == (nr_identifiers_in_batch, self.encoder_params.identifier_embedding_dim)
         return encoded_identifiers

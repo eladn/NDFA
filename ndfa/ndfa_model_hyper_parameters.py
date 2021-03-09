@@ -45,6 +45,12 @@ class IdentifierEncoderParams:
         description="Embedding size for an identifier.")
     nr_sub_identifier_hashing_features: int = confparam(
         default=256)
+    sequence_encoder: SequenceEncoderParams = confparam(
+        default_factory=SequenceEncoderParams,
+        arg_prefix='sequence_encoder')
+    sequence_combiner: SequenceCombinerParams = confparam(
+        default_factory=SequenceCombinerParams,
+        arg_prefix='sequence_combiner')
 
 
 @confclass
@@ -109,6 +115,7 @@ class MethodCFGEncoderParams:
         choices=('set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
                  'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
                  'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
+                 'all-nodes-single-unstructured-linear-seq-ngrams',  # TODO: support it!
                  'all-nodes-single-random-permutation-seq'),
         description="Representation type of the method-CFG (specific architecture of the method-CFG-code-encoder).")
 
@@ -222,7 +229,8 @@ class MethodCodeEncoderParams:
         description="The max size of the sub-identifiers vocabulary.")
 
     identifier_encoder: IdentifierEncoderParams = confparam(
-        default_factory=IdentifierEncoderParams)
+        default_factory=IdentifierEncoderParams,
+        arg_prefix='identifier_encoder')
 
     symbol_embedding_dim: int = confparam(
         default=256,
