@@ -57,8 +57,8 @@ class ChunkedRandomAccessDatasetWriter:
             if self.cur_chunk_idx is None:
                 self.cur_chunk_idx = 0
             else:
-                self.cur_chunk_idx += 1
                 self.close_last_written_chunk()
+                self.cur_chunk_idx += 1
             self.cur_chunk_filepath = self._get_chunk_filepath(self.cur_chunk_idx)
             cur_chunk_files_found_in_pp_dir = [
                 filename for filename in os.listdir(os.path.dirname(self.cur_chunk_filepath))
