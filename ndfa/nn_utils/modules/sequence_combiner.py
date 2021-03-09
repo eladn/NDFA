@@ -13,12 +13,13 @@ __all__ = ['SequenceCombiner']
 
 
 class SequenceCombiner(nn.Module):
-    def __init__(self, encoding_dim: int, combined_dim: int,
+    def __init__(self, encoding_dim: int,
                  combiner_params: SequenceCombinerParams,
+                 combined_dim: Optional[int] = None,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(SequenceCombiner, self).__init__()
         self.encoding_dim = encoding_dim
-        self.combined_dim = combined_dim
+        self.combined_dim = self.encoding_dim if combined_dim is None else combined_dim
         self.combiner_params = combiner_params
 
         # self.multihead_attn_layer = nn.MultiheadAttention(
