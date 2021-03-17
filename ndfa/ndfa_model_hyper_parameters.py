@@ -112,7 +112,7 @@ class CodeExpressionEncoderParams:
 class CFGGNNEncoderParams:
     gnn_type: str = confparam(
         default='ggnn',
-        choices=('ggnn', 'gcn'))
+        choices=('ggnn', 'res_ggnn', 'gcn', 'transformer_conv', ))
     nr_layers: int = confparam(
         default=2)
 

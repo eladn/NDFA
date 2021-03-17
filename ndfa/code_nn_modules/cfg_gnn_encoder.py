@@ -35,6 +35,10 @@ class CFGGNNEncoder(nn.Module):
             gnn_layer_ctor = lambda: tgnn.GatedGraphConv(
                 out_channels=self.cfg_node_encoding_dim,
                 num_layers=self.encoder_params.nr_layers)
+        elif encoder_params.gnn_type == 'transformer_conv':
+            gnn_layer_ctor = lambda: tgnn.TransformerConv(
+                in_channels=self.cfg_node_encoding_dim,
+                out_channels=self.cfg_node_encoding_dim,)
         else:
             raise ValueError(f'Unsupported GNN type {self.encoder_params.gnn_type}')
         self_unrolling_gnn_types = {'ggnn'}
