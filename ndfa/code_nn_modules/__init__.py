@@ -1,6 +1,7 @@
 from . import ast_nodes_embedder
 from . import ast_paths_encoder
 from . import ast_tree_lstm_encoder
+from . import cfg_gnn_encoder
 from . import cfg_node_encoder
 from . import cfg_node_sub_ast_expression_combiner
 from . import cfg_paths_encoder
@@ -19,6 +20,7 @@ __all__ = \
     ast_nodes_embedder.__all__ + \
     ast_paths_encoder.__all__ + \
     ast_tree_lstm_encoder.__all__ + \
+    cfg_gnn_encoder.__all__ + \
     cfg_node_encoder.__all__ + \
     cfg_node_sub_ast_expression_combiner.__all__ + \
     cfg_paths_encoder.__all__ + \

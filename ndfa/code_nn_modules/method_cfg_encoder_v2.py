@@ -25,6 +25,7 @@ from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
 from ndfa.code_nn_modules.code_expression_embedder import CodeExpressionEmbedder
 from ndfa.code_nn_modules.code_expression_combiner import CodeExpressionCombiner
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.code_nn_modules.cfg_gnn_encoder import CFGGNNEncoder
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -39,8 +40,10 @@ class EncodedMethodCFGV2(NamedTuple):
 class MethodCFGEncoderV2(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
-                 use_symbols_occurrences_for_symbols_encodings: bool, use_norm: bool = True,
+                 use_symbols_occurrences_for_symbols_encodings: bool,
                  combining_method: str = 'mean',
+                 use_norm: bool = True, affine_norm: bool = False, norm_type: str = 'layer',  # TODO: put in HPs
+                 share_norm_between_usage_points: bool = True,  # TODO: put in HPs
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCFGEncoderV2, self).__init__()
         self.identifier_embedding_dim = identifier_embedding_dim
@@ -170,20 +173,14 @@ class MethodCFGEncoderV2(nn.Module):
                 control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types, is_first=True,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type == 'gnn':
-            self.nr_gnn_layers = 1
-            self.cfg_gnn = ModuleRepeater(
-                # lambda: tgnn.GCNConv(
-                #     in_channels=self.encoder_params.cfg_node_encoding_dim,
-                #     out_channels=self.encoder_params.cfg_node_encoding_dim,
-                #     cached=False, normalize=True, add_self_loops=True),
-                lambda: tgnn.GatedGraphConv(
-                    out_channels=self.encoder_params.cfg_node_encoding_dim,
-                    num_layers=8),
-                repeats=self.nr_gnn_layers, share=False, repeat_key='gnn_layer_idx')
-            self.control_flow_edge_types_embeddings = nn.Embedding(
-                num_embeddings=len(code_task_vocabs.pdg_control_flow_edge_types),
-                embedding_dim=self.encoder_params.cfg_node_encoding_dim,
-                padding_idx=code_task_vocabs.pdg_control_flow_edge_types.get_word_idx('<PAD>'))
+            self.cfg_gnn_encoder = CFGGNNEncoder(
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                encoder_params=self.encoder_params.cfg_gnn_encoder,
+                pdg_control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
+                norm_layer_ctor=lambda: NormWrapper(
+                    self.encoder_params.cfg_node_encoding_dim,
+                    affine=affine_norm, norm_type=norm_type),
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
             self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = \
                 ScatterCFGEncodedNGramsToCFGNodeEncodings(
@@ -220,9 +217,6 @@ class MethodCFGEncoderV2(nn.Module):
 
         self.use_norm = use_norm
         if self.use_norm:
-            affine_norm = False
-            norm_type = 'layer'
-            share_norm_between_usage_points = True
             self.expressions_norm = ModuleRepeater(
                 module_create_fn=lambda: NormWrapper(
                     self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
@@ -313,7 +307,7 @@ class MethodCFGEncoderV2(nn.Module):
         if self.encoder_params.encoder_type in \
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
             ngrams_min_n = None  # TODO: put in encoder's HPs
-            ngrams_max_n = 6  # TODO: put in encoder's HPs
+            ngrams_max_n = 3  # TODO: put in encoder's HPs
             all_ngram_ns = \
                 set(code_task_input.pdg.cfg_control_flow_paths_exact_ngrams.keys()) | \
                 set(code_task_input.pdg.cfg_control_flow_paths_partial_ngrams.keys())
@@ -352,15 +346,9 @@ class MethodCFGEncoderV2(nn.Module):
         elif self.encoder_params.encoder_type == 'set-of-control-flow-paths':
             raise NotImplementedError  # TODO: impl
         elif self.encoder_params.encoder_type == 'gnn':
-            # edge_weight = self.control_flow_edge_types_embeddings(
-            #     code_task_input.pdg.cfg_control_flow_graph.edge_attr)
-            for gnn_layer_idx in range(self.nr_gnn_layers):
-                encoded_cfg_nodes = self.dropout_layer(self.activation_layer(self.cfg_gnn(
-                    x=encoded_cfg_nodes,
-                    edge_index=code_task_input.pdg.cfg_control_flow_graph.edge_index,  # edge_weight=edge_weight,
-                    gnn_layer_idx=gnn_layer_idx)))
-                if self.use_norm:
-                    encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, usage_point=1)
+            encoded_cfg_nodes = self.cfg_gnn_encoder(
+                encoded_cfg_nodes=encoded_cfg_nodes,
+                cfg_control_flow_graph=code_task_input.pdg.cfg_control_flow_graph)
         elif self.encoder_params.encoder_type == 'set-of-control-flow-paths-ngrams':
             raise NotImplementedError  # TODO: impl
         elif self.encoder_params.encoder_type == 'control-flow-paths-ngrams-folded-to-nodes':
