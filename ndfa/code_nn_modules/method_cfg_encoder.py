@@ -4,7 +4,7 @@ from typing import NamedTuple, Dict, Optional, Tuple, Mapping
 from torch_geometric import nn as tgnn
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
-from ndfa.ndfa_model_hyper_parameters import MethodCFGEncoderParams
+from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
     CodeExpressionTokensSequenceInputTensors, CFGPathsNGramsInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
@@ -16,7 +16,7 @@ from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.seq_context_adder import SeqContextAdder
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
-from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
+from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.nn_utils.modules.gate import Gate

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors, MethodASTInputTensors
 from ndfa.code_nn_modules.code_tokens_embedder import CodeTokensEmbedder

@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Dict
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
-from ndfa.ndfa_model_hyper_parameters import ASTEncoderParams
+from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.nn_utils.modules.state_updater import StateUpdater
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
@@ -13,7 +13,7 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
     ASTPathsEncodingsTensors
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
-from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
+from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
 __all__ = ['ASTPathsEncoder']

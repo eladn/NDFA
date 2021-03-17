@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from typing import NamedTuple, Optional
 
-from ndfa.ndfa_model_hyper_parameters import MethodCodeEncoderParams
+from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.attn_rnn_decoder import ScatteredEncodings
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors

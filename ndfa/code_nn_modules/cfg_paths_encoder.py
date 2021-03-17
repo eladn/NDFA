@@ -4,7 +4,7 @@ import dataclasses
 
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
-from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
+from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 

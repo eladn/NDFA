@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors, \
     PDGExpressionsSubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.code_nn_modules.cfg_node_sub_ast_expression_combiner import CFGSubASTExpressionCombiner
-from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
+from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
 __all__ = ['CodeExpressionCombiner']

@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 from .code_expression_tokens_sequence_encoder import CodeExpressionTokensSequenceEncoder
 from ndfa.code_nn_modules.ast_paths_encoder import ASTPathsEncoder
 from ndfa.code_nn_modules.ast_tree_lstm_encoder import ASTTreeLSTMEncoder
-from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors, \
     SubASTInputTensors

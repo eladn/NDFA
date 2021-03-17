@@ -4,7 +4,7 @@ from torch_geometric import nn as tgnn
 from typing import Optional, Callable
 from torch_geometric.data import Data as TGData
 
-from ndfa.ndfa_model_hyper_parameters import CFGGNNEncoderParams
+from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.misc.misc import get_activation_layer

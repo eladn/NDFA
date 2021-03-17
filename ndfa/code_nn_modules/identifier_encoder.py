@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ndfa.ndfa_model_hyper_parameters import IdentifierEncoderParams
+from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder

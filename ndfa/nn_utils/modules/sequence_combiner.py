@@ -6,7 +6,7 @@ from typing import Optional
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.attention import Attention
-from ndfa.ndfa_model_hyper_parameters import SequenceCombinerParams
+from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
 __all__ = ['SequenceCombiner']

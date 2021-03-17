@@ -5,7 +5,7 @@ from torch.nn.modules.normalization import LayerNorm
 import dataclasses
 from typing import Optional
 
-from ndfa.ndfa_model_hyper_parameters import SequenceEncoderParams
+from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.nn_utils.modules.rnn_encoder import RNNEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 

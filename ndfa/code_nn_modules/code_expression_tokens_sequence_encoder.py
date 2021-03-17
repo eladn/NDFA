@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ndfa.ndfa_model_hyper_parameters import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
