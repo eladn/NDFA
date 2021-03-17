@@ -109,6 +109,15 @@ class CodeExpressionEncoderParams:
 
 
 @confclass
+class CFGGNNEncoderParams:
+    gnn_type: str = confparam(
+        default='ggnn',
+        choices=('ggnn', 'gcn'))
+    nr_layers: int = confparam(
+        default=2)
+
+
+@confclass
 class MethodCFGEncoderParams:
     encoder_type: str = confparam(
         default='control-flow-paths-folded-to-nodes',
@@ -144,6 +153,10 @@ class MethodCFGEncoderParams:
     cfg_paths_sequence_encoder: SequenceEncoderParams = confparam(
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence-encoder')
+
+    cfg_gnn_encoder: CFGGNNEncoderParams = confparam(
+        default_factory=CFGGNNEncoderParams,
+        arg_prefix='gnn-encoder')
 
     create_sub_grams_from_long_gram: bool = confparam(
         default=False)
