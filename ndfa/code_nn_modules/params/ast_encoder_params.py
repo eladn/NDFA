@@ -1,5 +1,6 @@
 from confclass import confparam
 from dataclasses import dataclass
+from typing import Tuple
 
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
@@ -25,3 +26,6 @@ class ASTEncoderParams:
 
     nodes_folding_params: ScatterCombinerParams = confparam(
         default_factory=ScatterCombinerParams)
+
+    ast_paths_types: Tuple[str, ...] = confparam(
+        default=('leaf_to_leaf', 'leaf_to_root'))  # 'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences', 'siblings_w_parent_sequences'

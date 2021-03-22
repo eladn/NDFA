@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Tuple, Dict
+from typing import Optional, Dict
 
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -24,18 +24,15 @@ class ASTPathsEncoder(nn.Module):
             self,
             ast_node_embedding_dim: int,
             encoder_params: ASTEncoderParams,
-            ast_paths_types: Tuple[str, ...],
             is_first_encoder_layer: bool = True,
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
         self.ast_node_embedding_dim = ast_node_embedding_dim
-        assert isinstance(ast_paths_types, tuple)
         assert all(
             ast_paths_type in {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences', 'siblings_w_parent_sequences'}
-            for ast_paths_type in ast_paths_types)
-        self.ast_paths_types = tuple(ast_paths_types)
+            for ast_paths_type in self.encoder_params.ast_paths_types)
         self.is_first_encoder_layer = is_first_encoder_layer
 
         if self.is_first_encoder_layer:
@@ -45,25 +42,25 @@ class ASTPathsEncoder(nn.Module):
                     num_embeddings=len(self.ast_traversal_orientation_vocab),
                     embedding_dim=self.ast_node_embedding_dim,
                     padding_idx=self.ast_traversal_orientation_vocab.get_word_idx('<PAD>'))
-                for ast_paths_type in self.ast_paths_types})
+                for ast_paths_type in self.encoder_params.ast_paths_types})
             self.ast_traversal_orientation_linear_projection_layer = nn.ModuleDict({
                 ast_paths_type: nn.Linear(
                     in_features=2 * self.ast_node_embedding_dim,
                     out_features=self.ast_node_embedding_dim)
-                for ast_paths_type in self.ast_paths_types})
+                for ast_paths_type in self.encoder_params.ast_paths_types})
         else:
             self.nodes_occurrences_update_gate = nn.ModuleDict({
                 ast_paths_type: StateUpdater(
                     state_dim=self.ast_node_embedding_dim, update_dim=self.ast_node_embedding_dim,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
-                for ast_paths_type in self.ast_paths_types})
+                for ast_paths_type in self.encoder_params.ast_paths_types})
 
         self.path_sequence_encoder = nn.ModuleDict({
             ast_paths_type: SequenceEncoder(
                 encoder_params=self.encoder_params.paths_sequence_encoder_params,
                 input_dim=self.ast_node_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-            for ast_paths_type in self.ast_paths_types})
+            for ast_paths_type in self.encoder_params.ast_paths_types})
 
         self.nodes_representation_path_folder = ScatterCombiner(
             encoding_dim=self.ast_node_embedding_dim,
@@ -74,7 +71,7 @@ class ASTPathsEncoder(nn.Module):
                 combined_dim=self.ast_node_embedding_dim,  # TODO: define a dedicated HP. it should be bigger.
                 combiner_params=self.encoder_params.paths_combiner_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-            for ast_paths_type in self.ast_paths_types})
+            for ast_paths_type in self.encoder_params.ast_paths_types})
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward_single_path_type(
@@ -158,7 +155,7 @@ class ASTPathsEncoder(nn.Module):
                 sub_ast_input=sub_ast_input,
                 ast_paths_type=ast_paths_type,
                 ast_paths_last_states=None if ast_paths_last_states is None else ast_paths_last_states[ast_paths_type])
-            for ast_paths_type in self.ast_paths_types}
+            for ast_paths_type in self.encoder_params.ast_paths_types}
 
         ast_paths_masks = {
             ast_paths_type: sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences_mask
@@ -178,4 +175,4 @@ class ASTPathsEncoder(nn.Module):
         return CodeExpressionEncodingsTensors(
             ast_nodes=new_ast_nodes_encodings,
             ast_paths_by_type=encoded_paths_by_path_type,
-            ast_paths_types=self.ast_paths_types)
+            ast_paths_types=self.encoder_params.ast_paths_types)

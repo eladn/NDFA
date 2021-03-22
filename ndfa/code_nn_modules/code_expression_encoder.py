@@ -21,7 +21,6 @@ class CodeExpressionEncoder(nn.Module):
             code_task_vocabs: CodeTaskVocabs,
             identifier_embedding_dim: int,
             is_first_encoder_layer: bool = True,
-            ast_paths_types: Tuple[str, ...] = ('leaf_to_leaf',),
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -39,11 +38,9 @@ class CodeExpressionEncoder(nn.Module):
             self.modifier_embedding_dim = self.ast_node_embedding_dim
 
             if self.encoder_params.encoder_type == 'ast_paths':
-                self.ast_paths_types = ast_paths_types
                 self.ast_paths_encoder = ASTPathsEncoder(
                     ast_node_embedding_dim=self.ast_node_embedding_dim,
                     encoder_params=self.encoder_params.ast_encoder,
-                    ast_paths_types=self.ast_paths_types,
                     is_first_encoder_layer=self.is_first_encoder_layer,
                     ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -74,7 +71,8 @@ class CodeExpressionEncoder(nn.Module):
                     ast_nodes_encodings=previous_code_expression_encodings.ast_nodes,
                     sub_ast_input=sub_ast_input,
                     ast_paths_last_states=previous_code_expression_encodings.ast_paths_by_type
-                    if previous_code_expression_encodings.ast_paths_types == self.ast_paths_types else None)
+                    if previous_code_expression_encodings.ast_paths_types ==
+                       self.ast_paths_encoder.encoder_params.ast_paths_types else None)
             elif self.encoder_params.encoder_type == 'ast_treelstm':
                 ast_nodes_encodings_up = self.ast_treelstm_up(
                     ast_nodes_embeddings=previous_code_expression_encodings.ast_nodes,

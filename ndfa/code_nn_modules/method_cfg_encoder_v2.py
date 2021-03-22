@@ -65,21 +65,18 @@ class MethodCFGEncoderV2(nn.Module):
                 code_task_vocabs=code_task_vocabs,
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 is_first_encoder_layer=True,
-                ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
             #     code_task_vocabs=code_task_vocabs,
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
-            #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
             #     code_task_vocabs=code_task_vocabs,
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
-            #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 
@@ -89,21 +86,18 @@ class MethodCFGEncoderV2(nn.Module):
                 code_task_vocabs=code_task_vocabs,
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 is_first_encoder_layer=False,
-                ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
             #     code_task_vocabs=code_task_vocabs,
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
-            #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
             #     code_task_vocabs=code_task_vocabs,
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
-            #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 
