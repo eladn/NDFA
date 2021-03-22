@@ -21,6 +21,7 @@ class Vocabulary:
         self.idx2word = self.special_words + tuple(all_words_sorted_by_idx)
         self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
         self.params = {} if params is None else params
+        print(f'Loaded vocabulary {self.name} of size {len(self.idx2word)}.')
 
     def __len__(self):
         return len(self.idx2word)
