@@ -139,7 +139,7 @@ class ModelExecutionParams:
         default=1)
 
     use_notify: bool = confparam(
-        default=True,
+        default=False,
         arg_names=['--use-notify'])
 
     dataloader_num_workers: Optional[int] = confparam(
