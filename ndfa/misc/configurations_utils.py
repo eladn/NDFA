@@ -1,3 +1,4 @@
+import enum
 import typing
 import argparse
 import omegaconf
@@ -44,8 +45,6 @@ def create_argparser_from_dataclass_conf_structure(
         arg_name = '--' + '.'.join(prefix + (field.name,))
         arg_negate_name = '--' + '.'.join(prefix + ('no_' + field.name,))
         original_field_type_info = _get_original_type(field.type)
-        if field.name == 'activation_fn':
-            print(field)
         required = not original_field_type_info.is_optional and \
                    (field.default is dataclasses.MISSING or field.default is omegaconf.MISSING) and \
                    (field.default_factory is dataclasses.MISSING or field.default_factory is omegaconf.MISSING)
@@ -64,6 +63,10 @@ def create_argparser_from_dataclass_conf_structure(
             argparser.add_argument(
                 arg_name, choices=typing.get_args(original_field_type_info.unwrapped_type),
                 required=required, dest=arg_dest)
+        elif issubclass(original_field_type_info.original_type, enum.Enum):
+            argparser.add_argument(
+                arg_name, choices=tuple(original_field_type_info.original_type.__members__.keys()),
+                required=required, dest=arg_dest)
         elif issubclass(original_field_type_info.original_type, (list, tuple, set, frozenset)):
             item_type = None
             if original_field_type_info.unwrapped_type is not None:
@@ -71,6 +74,8 @@ def create_argparser_from_dataclass_conf_structure(
                 assert len(container_typing_args) <= 1
                 if len(container_typing_args) == 1:
                     item_type = container_typing_args[0]
+            # TODO: finish this case
+        # TODO: support `confparam` meta-data (description & choices)
 
     return argparser
 
@@ -110,6 +115,11 @@ def reinstantiate_omegaconf_container(
         return original_type_info.original_type({
             reinstantiate_omegaconf_container(item, key_type): reinstantiate_omegaconf_container(item, value_type)
             for item in cnf})
+    elif issubclass(original_type_info.original_type, enum.Enum):
+        chosen_enum_member = next(
+            (member for member in original_type_info.original_type.__members__.values()
+             if member == cnf or member.name == cnf), None)
+        return chosen_enum_member
     assert issubclass(original_type_info.original_type, (int, str, float, bool))
     return original_type_info.original_type(cnf)
 
