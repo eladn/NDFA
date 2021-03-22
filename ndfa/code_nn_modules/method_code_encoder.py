@@ -39,6 +39,7 @@ class MethodCodeEncoder(nn.Module):
         self.activation_layer = get_activation_layer(activation_fn)()
 
         self.identifier_encoder = IdentifierEncoder(
+            identifiers_vocab=code_task_vocabs.identifiers,
             sub_identifiers_vocab=code_task_vocabs.sub_identifiers,
             encoder_params=self.encoder_params.identifier_encoder,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -91,7 +92,7 @@ class MethodCodeEncoder(nn.Module):
     def forward(self, code_task_input: MethodCodeInputTensors) -> EncodedMethodCode:
         # (nr_identifiers_in_batch, identifier_encoding_dim)
         encoded_identifiers = self.identifier_encoder(
-            identifiers=code_task_input.identifiers)  # (nr_identifiers_in_batch, identifier_encoding_dim)
+            identifiers_input=code_task_input.identifiers)  # (nr_identifiers_in_batch, identifier_encoding_dim)
 
         whole_method_code_encoded = None
         unflattened_cfg_nodes_encodings = None
