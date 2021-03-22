@@ -176,6 +176,12 @@ def preprocess_code_task_example(
             for identifier_sub_parts in method_pdg.sub_identifiers_by_idx],
         self_indexing_group='identifiers')
 
+    identifiers_vocab_word_index = BatchFlattenedTensor(
+        tensor=torch.LongTensor([
+            code_task_vocabs.identifiers.get_word_idx_or_unk(identifier)
+            for identifier in method_pdg.identifier_by_idx]),
+        self_indexing_group='identifiers')
+
     # TODO: plug HP for hasher `n_features`
     sub_identifiers_hasher = HashingVectorizer(analyzer='char', n_features=256, ngram_range=(1, 3))
     identifiers_sub_parts_hashings = BatchFlattenedSeq(
@@ -203,6 +209,7 @@ def preprocess_code_task_example(
             self_indexing_group='identifiers_sub_parts'),
         identifier_sub_parts_index=identifiers_sub_parts_indices,
         identifier_sub_parts_vocab_word_index=identifiers_sub_parts_vocab_word_index,
+        identifiers_vocab_word_index=identifiers_vocab_word_index,
         identifier_sub_parts_hashings=identifiers_sub_parts_hashings,
         sub_parts_obfuscation=sub_parts_obfuscation)
 
