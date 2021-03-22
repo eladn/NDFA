@@ -16,6 +16,8 @@ class IdentifierEncoderParams:
         description="Embedding size for an identifier.")
     nr_sub_identifier_hashing_features: int = confparam(
         default=256)
+    nr_identifier_hashing_features: int = confparam(
+        default=256)
     sequence_encoder: SequenceEncoderParams = confparam(
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence_encoder')

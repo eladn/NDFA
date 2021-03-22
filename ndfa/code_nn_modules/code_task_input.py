@@ -102,6 +102,7 @@ class IdentifiersInputTensors(TensorsDataClass):
     identifiers_vocab_word_index: BatchFlattenedTensor  # (nr_identifiers_in_batch, )
     identifier_sub_parts_hashings: BatchFlattenedSeq  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
     sub_parts_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange  # (nr_sub_parts_obfuscation_embeddings)
+    identifiers_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange  # (nr_identifiers_obfuscation_embeddings)
 
 
 @dataclasses.dataclass

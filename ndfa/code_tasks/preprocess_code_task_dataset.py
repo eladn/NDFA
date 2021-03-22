@@ -198,6 +198,12 @@ def preprocess_code_task_example(
         tgt_range_end=len(code_task_vocabs.sub_identifiers),
         initial_seed_salt='idntf', replacement='wo_replacement_within_example')
 
+    identifiers_obfuscation = BatchFlattenedPseudoRandomSamplerFromRange(
+        sample_size=len(method_pdg.identifier_by_idx),
+        tgt_range_start=len(code_task_vocabs.identifiers.special_words),
+        tgt_range_end=len(code_task_vocabs.identifiers),
+        initial_seed_salt='idntf', replacement='wo_replacement_within_example')
+
     identifiers = IdentifiersInputTensors(
         sub_parts_batch=BatchFlattenedTensor(
             tensor=torch.arange(len(identifiers_sub_parts_indexer)),
@@ -211,7 +217,8 @@ def preprocess_code_task_example(
         identifier_sub_parts_vocab_word_index=identifiers_sub_parts_vocab_word_index,
         identifiers_vocab_word_index=identifiers_vocab_word_index,
         identifier_sub_parts_hashings=identifiers_sub_parts_hashings,
-        sub_parts_obfuscation=sub_parts_obfuscation)
+        sub_parts_obfuscation=sub_parts_obfuscation,
+        identifiers_obfuscation=identifiers_obfuscation)
 
     # Note:
     # For pdg-nodes of control kind CATCH_CLAUSE_ENTRY / METHOD_ENTRY, their sub-AST should be trimmed.
