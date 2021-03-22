@@ -57,7 +57,7 @@ def main():
         torch.cuda.empty_cache()
 
     experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
-    expr_settings_hash_base64 = base64.b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest())\
+    expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest())\
         .strip().decode('ascii').strip('=')
     print(f'{expr_settings_hash_base64=}')
 
@@ -88,7 +88,7 @@ def main():
         # TODO: Modify `exec_params.experiment_setting` according to `loaded_checkpoint['experiment_setting']`.
         #       Verify overridden arguments and raise ArgumentException if needed.
         experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
-        expr_settings_hash_base64 = base64.b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest()) \
+        expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest()) \
             .strip().decode('ascii').strip('=')
 
     # TODO: print the `experiment_setting`.
