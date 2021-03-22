@@ -33,7 +33,7 @@ class MethodCodeEncoderParams:
         arg_prefix='method_ast_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
     method_linear_seq_expression_encoder: CodeExpressionEncoderParams = confparam(
-        default_factory=CodeExpressionEncoderParams,
+        default_factory=lambda: CodeExpressionEncoderParams(encoder_type='tokens-seq'),
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='method_linear_seq_encoder')
