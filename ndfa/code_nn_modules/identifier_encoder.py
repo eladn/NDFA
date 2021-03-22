@@ -7,7 +7,7 @@ from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.misc.tensors_data_class import BatchFlattenedSeq
 from ndfa.code_nn_modules.code_task_input import IdentifiersInputTensors
-from ndfa.nn_utils.modules.embedding_with_obfuscation import EmbeddingWithObfuscation
+from ndfa.nn_utils.modules.embedding_with_unknowns import EmbeddingWithUnknowns
 
 
 __all__ = ['IdentifierEncoder']
@@ -24,7 +24,7 @@ class IdentifierEncoder(nn.Module):
         self.encoder_params = encoder_params
 
         if self.encoder_params.use_sub_identifiers:
-            self.sub_identifiers_embedding = EmbeddingWithObfuscation(
+            self.sub_identifiers_embedding = EmbeddingWithUnknowns(
                 vocab=sub_identifiers_vocab,
                 embedding_dim=self.encoder_params.identifier_embedding_dim,
                 embedding_params=self.encoder_params.embedding_params,
@@ -41,7 +41,7 @@ class IdentifierEncoder(nn.Module):
                 combiner_params=self.encoder_params.sequence_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
-            self.identifiers_embedding = EmbeddingWithObfuscation(
+            self.identifiers_embedding = EmbeddingWithUnknowns(
                 vocab=identifiers_vocab,
                 embedding_dim=self.encoder_params.identifier_embedding_dim,
                 embedding_params=self.encoder_params.embedding_params,

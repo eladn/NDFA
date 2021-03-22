@@ -5,20 +5,20 @@ from typing import Optional
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
-from ndfa.nn_utils.modules.params.embedding_with_obfuscation_params import EmbeddingWithObfuscationParams
+from ndfa.nn_utils.modules.params.embedding_with_unknowns_params import EmbeddingWithUnknownsParams
 
 
-__all__ = ['EmbeddingWithObfuscation']
+__all__ = ['EmbeddingWithUnknowns']
 
 
-class EmbeddingWithObfuscation(nn.Module):
+class EmbeddingWithUnknowns(nn.Module):
     def __init__(self, vocab: Vocabulary,
                  embedding_dim: int,
-                 embedding_params: EmbeddingWithObfuscationParams,
+                 embedding_params: EmbeddingWithUnknownsParams,
                  nr_obfuscation_words: Optional[int] = None,
                  nr_hashing_features: Optional[int] = None,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(EmbeddingWithObfuscation, self).__init__()
+        super(EmbeddingWithUnknowns, self).__init__()
         self.embedding_params = embedding_params
         assert self.embedding_params.obfuscation_type in \
                {'none', 'add_all', 'replace_all', 'replace_oovs',

@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from confclass import confparam
 
 
-__all__ = ['EmbeddingWithObfuscationParams']
+__all__ = ['EmbeddingWithUnknownsParams']
 
 
 @dataclass
-class EmbeddingWithObfuscationParams:
+class EmbeddingWithUnknownsParams:
     obfuscation_type: str = confparam(
         default='replace_oov_and_random',
         choices=('none', 'add_all', 'replace_all', 'replace_oovs',

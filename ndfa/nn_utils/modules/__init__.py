@@ -1,7 +1,7 @@
 # from . import attention
 # from . import attn_rnn_decoder
 # from . import attn_rnn_encoder
-# from . import embedding_with_obfuscation
+# from . import embedding_with_unknowns
 # from . import gate
 # from . import module_repeater
 # from . import norm_wrapper
@@ -19,7 +19,7 @@
 #     attention.__all__ + \
 #     attn_rnn_decoder.__all__ + \
 #     attn_rnn_encoder.__all__ + \
-#     embedding_with_obfuscation.__all__ + \
+#     embedding_with_unknowns.__all__ + \
 #     gate.__all__ + \
 #     module_repeater.__all__ + \
 #     norm_wrapper.__all__ + \
