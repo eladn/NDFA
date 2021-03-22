@@ -14,27 +14,18 @@ from ndfa.nn_utils.modules.embedding_with_obfuscation import EmbeddingWithObfusc
 __all__ = ['IdentifierEncoder']
 
 
-# TODO: add `EmbeddingWithObfuscationParams` to `IdentifierEncoderParams`.
 class IdentifierEncoder(nn.Module):
     def __init__(self, sub_identifiers_vocab: Vocabulary,
                  encoder_params: IdentifierEncoderParams,
-                 sub_parts_obfuscation: str = 'replace_oov_and_random',
-                 sub_parts_obfuscation_rate: float = 0.3,
-                 use_vocab: bool = True,
-                 use_hashing_trick: bool = False,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(IdentifierEncoder, self).__init__()
-        assert sub_parts_obfuscation in {'none', 'add_all', 'replace_all', 'replace_oovs',
-                                         'replace_random', 'replace_oov_and_random'}
         self.sub_identifiers_vocab = sub_identifiers_vocab
         self.encoder_params = encoder_params
-        self.sub_parts_obfuscation = sub_parts_obfuscation
-        self.use_hashing_trick = use_hashing_trick
 
         self.sub_identifiers_embedding = EmbeddingWithObfuscation(
-            vocab=sub_identifiers_vocab, embedding_dim=self.encoder_params.identifier_embedding_dim,
-            obfuscation_type=sub_parts_obfuscation, obfuscation_rate=sub_parts_obfuscation_rate,
-            use_vocab=use_vocab, use_hashing_trick=use_hashing_trick,
+            vocab=sub_identifiers_vocab,
+            embedding_dim=self.encoder_params.identifier_embedding_dim,
+            embedding_params=self.encoder_params.embedding_params,
             nr_hashing_features=self.encoder_params.nr_sub_identifier_hashing_features,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 

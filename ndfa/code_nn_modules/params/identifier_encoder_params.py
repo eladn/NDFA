@@ -1,7 +1,9 @@
 from confclass import confparam
 from dataclasses import dataclass
+
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
+from ndfa.nn_utils.modules.params.embedding_with_obfuscation_params import EmbeddingWithObfuscationParams
 
 
 __all__ = ['IdentifierEncoderParams']
@@ -20,3 +22,7 @@ class IdentifierEncoderParams:
     sequence_combiner: SequenceCombinerParams = confparam(
         default_factory=SequenceCombinerParams,
         arg_prefix='sequence_combiner')
+    use_sub_identifiers: bool = confparam(
+        default=True)
+    embedding_params: EmbeddingWithObfuscationParams = confparam(
+        default_factory=EmbeddingWithObfuscationParams)
