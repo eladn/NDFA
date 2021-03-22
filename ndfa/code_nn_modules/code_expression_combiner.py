@@ -18,7 +18,7 @@ class CodeExpressionCombiner(nn.Module):
     def __init__(self,
                  encoder_params: CodeExpressionEncoderParams,
                  tokenized_expression_combiner_params: SequenceCombinerParams,
-                 ast_node_embedding_dim: int, sub_ast_combining_method: str = 'attn',
+                 ast_node_embedding_dim: int,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionCombiner, self).__init__()
         self.encoder_params = encoder_params
@@ -33,7 +33,7 @@ class CodeExpressionCombiner(nn.Module):
             self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(
                 ast_node_encoding_dim=self.ast_node_embedding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,  # TODO!
-                combining_subject='ast_nodes', combining_method=sub_ast_combining_method,
+                combining_params=self.encoder_params.cfg_sub_ast_expression_combiner_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.encoder_params.encoder_type}`.')

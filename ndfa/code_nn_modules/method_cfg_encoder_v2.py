@@ -25,6 +25,8 @@ from ndfa.code_nn_modules.code_expression_embedder import CodeExpressionEmbedder
 from ndfa.code_nn_modules.code_expression_combiner import CodeExpressionCombiner
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 from ndfa.code_nn_modules.cfg_gnn_encoder import CFGGNNEncoder
+from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
+from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -39,8 +41,7 @@ class EncodedMethodCFGV2(NamedTuple):
 class MethodCFGEncoderV2(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
-                 use_symbols_occurrences_for_symbols_encodings: bool,
-                 combining_method: str = 'mean',
+                 symbols_encoder_params: SymbolsEncoderParams,
                  use_norm: bool = True, affine_norm: bool = False, norm_type: str = 'layer',  # TODO: put in HPs
                  share_norm_between_usage_points: bool = True,  # TODO: put in HPs
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
@@ -65,8 +66,6 @@ class MethodCFGEncoderV2(nn.Module):
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 is_first_encoder_layer=True,
                 ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
-                ast_nodes_folding_combining_method=combining_method,
-                ast_paths_combining_method='ends',
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -74,8 +73,6 @@ class MethodCFGEncoderV2(nn.Module):
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            #     ast_nodes_folding_combining_method=combining_method,
-            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -83,8 +80,6 @@ class MethodCFGEncoderV2(nn.Module):
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            #     ast_nodes_folding_combining_method=combining_method,
-            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 
@@ -95,8 +90,6 @@ class MethodCFGEncoderV2(nn.Module):
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 is_first_encoder_layer=False,
                 ast_paths_types=('leaf_to_leaf', 'leaf_to_root'),  # 'siblings_w_parent_sequences'
-                ast_nodes_folding_combining_method=combining_method,
-                ast_paths_combining_method='ends',
                 dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -104,8 +97,6 @@ class MethodCFGEncoderV2(nn.Module):
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            #     ast_nodes_folding_combining_method=combining_method,
-            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn),
             # CodeExpressionEncoder(
             #     encoder_params=self.encoder_params.cfg_node_expression_encoder,
@@ -113,8 +104,6 @@ class MethodCFGEncoderV2(nn.Module):
             #     identifier_embedding_dim=self.identifier_embedding_dim,
             #     is_first_encoder_layer=False,
             #     ast_paths_types=('leaf_to_leaf', 'leaf_to_root', 'siblings_w_parent_sequences'),
-            #     ast_nodes_folding_combining_method=combining_method,
-            #     ast_paths_combining_method='ends',
             #     dropout_rate=dropout_rate, activation_fn=activation_fn)
         ])
 
@@ -122,14 +111,14 @@ class MethodCFGEncoderV2(nn.Module):
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
                 tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-                ast_node_embedding_dim=self.ast_node_embedding_dim, sub_ast_combining_method=combining_method,
+                ast_node_embedding_dim=self.ast_node_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
         self.code_expression_combiners_after_macro = nn.ModuleList([
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
                 tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-                ast_node_embedding_dim=self.ast_node_embedding_dim, sub_ast_combining_method=combining_method,
+                ast_node_embedding_dim=self.ast_node_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
 
@@ -184,13 +173,13 @@ class MethodCFGEncoderV2(nn.Module):
             self.scatter_cfg_encoded_ngrams_to_cfg_node_encodings = \
                 ScatterCFGEncodedNGramsToCFGNodeEncodings(
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
-                    combining_method=combining_method,
+                    cfg_nodes_folding_params=self.encoder_params.cfg_nodes_folding_params,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = \
                 ScatterCFGEncodedPathsToCFGNodeEncodings(
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
-                    combining_method=combining_method,
+                    cfg_nodes_folding_params=self.encoder_params.cfg_nodes_folding_params,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                   'all-nodes-single-random-permutation-seq'}:
@@ -208,7 +197,8 @@ class MethodCFGEncoderV2(nn.Module):
             identifier_embedding_dim=self.identifier_embedding_dim,
             symbol_embedding_dim=self.symbol_embedding_dim,
             expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
-            combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn)
+            encoder_params=symbols_encoder_params,
+            dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
             expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
@@ -232,9 +222,6 @@ class MethodCFGEncoderV2(nn.Module):
                     self.encoder_params.cfg_node_encoding_dim,
                     affine=affine_norm, norm_type=norm_type),
                 repeats=2, share=share_norm_between_usage_points, repeat_key='usage_point')
-
-        self.use_symbols_occurrences_for_symbols_encodings = \
-            use_symbols_occurrences_for_symbols_encodings
 
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -406,10 +393,10 @@ class MethodCFGEncoderV2(nn.Module):
             encoded_identifiers=encoded_identifiers,
             symbols=code_task_input.symbols,
             encoded_expressions=encoded_code_expressions.token_seqs
-            if self.use_symbols_occurrences_for_symbols_encodings else None,
+            if self.symbols_encoder.encoder_params.use_symbols_occurrences else None,
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             encoded_ast_nodes=encoded_code_expressions.ast_nodes
-            if self.use_symbols_occurrences_for_symbols_encodings else None,
+            if self.symbols_encoder.encoder_params.use_symbols_occurrences else None,
             ast_nodes_with_symbol_leaf_nodes_indices=code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices,
             ast_nodes_with_symbol_leaf_symbol_idx=code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.indices)
 
@@ -643,13 +630,14 @@ class CFGPathsNGramsEncoder(nn.Module):
 
 
 class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
-    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn',
+    def __init__(self, cfg_node_encoding_dim: int,
+                 cfg_nodes_folding_params: ScatterCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ScatterCFGEncodedNGramsToCFGNodeEncodings, self).__init__()
-        self.combining_method = combining_method
+        self.cfg_nodes_folding_params = cfg_nodes_folding_params
         self.cfg_node_encoding_dim = cfg_node_encoding_dim
         self.scatter_combiner_layer = ScatterCombiner(
-            encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
+            encoding_dim=cfg_node_encoding_dim, combiner_params=cfg_nodes_folding_params)
         self.gate = StateUpdater(
             state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -671,7 +659,7 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
         flattened_nodes_indices = torch.cat(
             [cfg_control_flow_paths_ngrams_input[ngrams_n].nodes_indices.sequences.flatten(0, 1)
              for ngrams_n in sorted_ngrams_n], dim=0)
-        if self.combining_method == 'attn':
+        if self.cfg_nodes_folding_params.method == 'attn':
             assert previous_cfg_nodes_encodings is not None
             assert previous_cfg_nodes_encodings.size(0) == nr_cfg_nodes
         updated_cfg_nodes_encodings = self.scatter_combiner_layer(
@@ -689,12 +677,13 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
 
 
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
-    def __init__(self, cfg_node_encoding_dim: int, combining_method: str = 'attn',
+    def __init__(self, cfg_node_encoding_dim: int,
+                 cfg_nodes_folding_params: ScatterCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ScatterCFGEncodedPathsToCFGNodeEncodings, self).__init__()
-        self.combining_method = combining_method
+        self.cfg_nodes_folding_params = cfg_nodes_folding_params
         self.scatter_combiner_layer = ScatterCombiner(
-            encoding_dim=cfg_node_encoding_dim, combining_method=combining_method)
+            encoding_dim=cfg_node_encoding_dim, combiner_params=cfg_nodes_folding_params)
         self.gate = StateUpdater(
             state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -706,7 +695,7 @@ class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
                 nr_cfg_nodes: int):
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
         # The mask also helps to ignore paddings.
-        if self.combining_method == 'attn':
+        if self.cfg_nodes_folding_params.method == 'attn':
             assert previous_cfg_nodes_encodings is not None
             assert previous_cfg_nodes_encodings.size(0) == nr_cfg_nodes
         updated_cfg_nodes_encodings = self.scatter_combiner_layer(

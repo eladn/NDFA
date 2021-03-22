@@ -50,8 +50,6 @@ class MethodCodeEncoder(nn.Module):
                 encoder_params=self.encoder_params.method_cfg_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                use_symbols_occurrences_for_symbols_encodings=
-                self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
             self.method_cfg_encoder_v2 = MethodCFGEncoderV2(
@@ -59,8 +57,7 @@ class MethodCodeEncoder(nn.Module):
                 encoder_params=self.encoder_params.method_cfg_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                use_symbols_occurrences_for_symbols_encodings=
-                self.encoder_params.use_symbols_occurrences_for_symbols_encodings,
+                symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'whole-method':
             self.ast_node_embedding_dim = self.encoder_params.method_linear_seq_expression_encoder.token_encoding_dim  # TODO: FIXME: plug-in correct HPs
@@ -80,7 +77,8 @@ class MethodCodeEncoder(nn.Module):
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 expression_encoding_dim=self.encoder_params.method_cfg_encoder.cfg_node_expression_encoder.token_encoding_dim,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
-                combining_method='sum', dropout_rate=dropout_rate, activation_fn=activation_fn)
+                encoder_params=self.encoder_params.symbols_encoder_params,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unexpected method code encoder type `{self.encoder_params.method_encoder_type}`.')
 
@@ -137,10 +135,10 @@ class MethodCodeEncoder(nn.Module):
                 encoded_identifiers=encoded_identifiers,
                 symbols=code_task_input.symbols,
                 encoded_expressions=whole_method_code_encoded.token_seqs
-                if self.encoder_params.use_symbols_occurrences_for_symbols_encodings else None,
+                if self.encoder_params.symbols_encoder_params.use_symbols_occurrences else None,
                 tokenized_expressions_input=code_task_input.method_tokenized_code,
                 encoded_ast_nodes=whole_method_code_encoded.ast_nodes
-                if self.encoder_params.use_symbols_occurrences_for_symbols_encodings else None,
+                if self.encoder_params.symbols_encoder_params.use_symbols_occurrences else None,
                 ast_nodes_with_symbol_leaf_nodes_indices=code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices,
                 ast_nodes_with_symbol_leaf_symbol_idx=code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.indices)
         else:

@@ -1,9 +1,11 @@
 from confclass import confparam
 from dataclasses import dataclass
+
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEncoderParams
+from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
 
 
 __all__ = ['MethodCodeEncoderParams']
@@ -96,5 +98,5 @@ class MethodCodeEncoderParams:
         default=256,
         description="Embedding size for a symbol.")
 
-    use_symbols_occurrences_for_symbols_encodings: bool = confparam(
-        default=True)
+    symbols_encoder_params: SymbolsEncoderParams = confparam(
+        default=SymbolsEncoderParams)

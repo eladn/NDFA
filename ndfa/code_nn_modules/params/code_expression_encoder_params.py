@@ -1,7 +1,9 @@
 from confclass import confparam
 from dataclasses import dataclass
+
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
+from ndfa.code_nn_modules.params.cfg_sub_ast_expression_combiner_params import CFGSubASTExpressionCombinerParams
 
 
 __all__ = ['CodeExpressionEncoderParams']
@@ -48,3 +50,6 @@ class CodeExpressionEncoderParams:
 
     shuffle_expressions: bool = confparam(
         default=False)
+
+    cfg_sub_ast_expression_combiner_params: CFGSubASTExpressionCombinerParams = confparam(
+        default=CFGSubASTExpressionCombinerParams)

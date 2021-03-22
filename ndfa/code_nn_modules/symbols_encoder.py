@@ -6,6 +6,7 @@ from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInp
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
+from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
 
 
 __all__ = ['SymbolsEncoder']
@@ -16,13 +17,15 @@ class SymbolsEncoder(nn.Module):
                  symbol_embedding_dim: int,
                  identifier_embedding_dim: int,
                  expression_encoding_dim: int,
-                 combining_method: str = 'sum',
+                 encoder_params: SymbolsEncoderParams,
                  dropout_rate: float = 0.3,
                  activation_fn: str = 'relu'):
         super(SymbolsEncoder, self).__init__()
         self.symbol_embedding_dim = symbol_embedding_dim
+        self.encoder_params = encoder_params
         self.scatter_combiner = ScatterCombiner(
-            encoding_dim=self.symbol_embedding_dim, combining_method=combining_method)
+            encoding_dim=self.symbol_embedding_dim,
+            combiner_params=self.encoder_params.combining_params)
         self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
             in_features=expression_encoding_dim + identifier_embedding_dim,
             out_features=symbol_embedding_dim, bias=False)

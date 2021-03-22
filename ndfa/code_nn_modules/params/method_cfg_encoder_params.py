@@ -4,6 +4,7 @@ from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombin
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
+from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 
 
 __all__ = ['MethodCFGEncoderParams']
@@ -12,7 +13,7 @@ __all__ = ['MethodCFGEncoderParams']
 @dataclass
 class MethodCFGEncoderParams:
     encoder_type: str = confparam(
-        default='gnn',
+        default='control-flow-paths-folded-to-nodes',
         choices=('set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
                  'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
                  'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
@@ -28,7 +29,7 @@ class MethodCFGEncoderParams:
 
     cfg_node_tokenized_expression_combiner: SequenceCombinerParams = confparam(
         default_factory=lambda: SequenceCombinerParams(
-            method='ends', nr_attn_heads=8, nr_dim_reduction_layers=2),
+            method='ends', nr_attn_heads=8, nr_dim_reduction_layers=0),
         arg_prefix='cfg_node_expression_combiner')
 
     cfg_node_control_kinds_embedding_dim: int = confparam(
@@ -52,3 +53,6 @@ class MethodCFGEncoderParams:
 
     create_sub_grams_from_long_gram: bool = confparam(
         default=False)
+
+    cfg_nodes_folding_params: ScatterCombinerParams = confparam(
+        default_factory=ScatterCombinerParams)

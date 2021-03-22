@@ -4,6 +4,7 @@ import torch.nn as nn
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
 from ndfa.code_nn_modules.code_task_input import PDGExpressionsSubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.code_nn_modules.params.cfg_sub_ast_expression_combiner_params import CFGSubASTExpressionCombinerParams
 
 
 __all__ = ['CFGSubASTExpressionCombiner']
@@ -11,24 +12,22 @@ __all__ = ['CFGSubASTExpressionCombiner']
 
 class CFGSubASTExpressionCombiner(nn.Module):
     def __init__(self, ast_node_encoding_dim: int, combined_dim: int,
-                 combining_subject: str = 'ast_nodes', combining_method: str = 'attn',
+                 combining_params: CFGSubASTExpressionCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGSubASTExpressionCombiner, self).__init__()
         self.combined_dim = combined_dim
-        assert combining_subject in {'ast_nodes', 'ast_paths'}
-        self.combining_subject = combining_subject
-        self.combining_method = combining_method
+        self.combining_params = combining_params
         self.ast_node_encoding_dim = ast_node_encoding_dim
-        # assert combining_method != 'attn' or combining_subject != 'ast_paths'
         self.scatter_combiner_layer = ScatterCombiner(
-            encoding_dim=ast_node_encoding_dim, combining_method=combining_method,
-            nr_attn_heads=8, applied_attn_output_dim=combined_dim)  # TODO: plug `nr_attn_heads` in HPs
+            encoding_dim=ast_node_encoding_dim,
+            combiner_params=self.combining_params,
+            applied_attn_output_dim=combined_dim)
 
     def forward(self,
                 encoded_code_expressions: CodeExpressionEncodingsTensors,
                 cfg_nodes_expressions_ast_input: PDGExpressionsSubASTInputTensors,
                 nr_cfg_nodes: int):
-        if self.combining_subject == 'ast_nodes':
+        if self.combining_params.combining_subject == 'ast_nodes':
             ast_node_idx_to_pdg_node_idx_mapping_key = \
                 cfg_nodes_expressions_ast_input.ast_node_idx_to_pdg_node_idx_mapping_key.indices
             ast_node_idx_to_pdg_node_idx_mapping_value = \
@@ -51,7 +50,7 @@ class CFGSubASTExpressionCombiner(nn.Module):
                 attn_queries=attn_queries)
             assert combined_sub_asts.size() == (nr_cfg_nodes, self.combined_dim)
             return combined_sub_asts
-        elif self.combining_subject == 'ast_paths':
+        elif self.combining_params.combining_subject == 'ast_paths':
             all_ast_paths_combined = torch.cat(
                 [ast_paths.combined for ast_paths in encoded_code_expressions.ast_paths_by_type.values()], dim=0)
             all_ast_paths_pdg_node_indices = torch.cat(
