@@ -24,7 +24,7 @@ class EmbeddingWithObfuscation(nn.Module):
                {'none', 'add_all', 'replace_all', 'replace_oovs',
                 'replace_random', 'replace_oov_and_random'}
         assert self.embedding_params.obfuscation_embeddings_type in \
-               {'learnable', 'fix_orthogonal'}
+               {'learnable', 'fixed_orthogonal'}
         self.vocab = vocab
         self.embedding_dim = embedding_dim
         self.nr_obfuscation_words = len(vocab) if nr_obfuscation_words is None else nr_obfuscation_words
@@ -44,7 +44,7 @@ class EmbeddingWithObfuscation(nn.Module):
                 # all of the words here are accessed randomly. We mask-out the paddings later.
                 self.obfuscation_embedding_layer = nn.Embedding(
                     num_embeddings=self.nr_obfuscation_words, embedding_dim=self.embedding_dim)
-            elif self.embedding_params.obfuscation_embeddings_type == 'fix_orthogonal':
+            elif self.embedding_params.obfuscation_embeddings_type == 'fixed_orthogonal':
                 # TODO: we might want to fix `nr_obfuscation_words` to be `min(nr_obfuscation_words, embedding_dim)`
                 # self.nr_obfuscation_words = min(self.nr_obfuscation_words, self.embedding_dim)
                 if nr_hashing_features is not None and nr_obfuscation_words != self.nr_obfuscation_words:
@@ -114,7 +114,7 @@ class EmbeddingWithObfuscation(nn.Module):
             words_obfuscated_indices = words_obfuscated_indices % self.nr_obfuscation_words
             if self.embedding_params.obfuscation_embeddings_type == 'learnable':
                 obfuscation_words_embeddings = self.obfuscation_embedding_layer(words_obfuscated_indices)
-            elif self.embedding_params.obfuscation_embeddings_type == 'fix_orthogonal':
+            elif self.embedding_params.obfuscation_embeddings_type == 'fixed_orthogonal':
                 obfuscation_words_embeddings = self.obfuscation_fixed_embeddings[words_obfuscated_indices]
             obfuscation_words_embeddings = self.dropout_layer(obfuscation_words_embeddings)
 

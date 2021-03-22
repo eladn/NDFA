@@ -13,7 +13,7 @@ class EmbeddingWithObfuscationParams:
                  'replace_random', 'replace_oov_and_random'))
     obfuscation_embeddings_type: str = confparam(
         default='learnable',
-        choices=('learnable', 'fix_orthogonal'))
+        choices=('learnable', 'fixed_orthogonal'))
     obfuscation_rate: float = confparam(
         default=0.3)
     use_vocab: bool = confparam(default=True)
