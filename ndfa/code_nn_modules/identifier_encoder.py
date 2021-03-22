@@ -80,9 +80,9 @@ class IdentifierEncoder(nn.Module):
             assert encoded_identifiers.size() == (nr_identifiers_in_batch, self.encoder_params.identifier_embedding_dim)
             return encoded_identifiers
         else:
-            nr_identifiers = identifiers_input.identifiers_vocab_word_index.size(0)
+            nr_identifiers = identifiers_input.identifiers_vocab_word_index.tensor.size(0)
             return self.identifiers_embedding(
-                vocab_word_idx=identifiers_input.identifier_vocab_word_index.tensor,
+                vocab_word_idx=identifiers_input.identifiers_vocab_word_index.tensor,
                 word_hashes=None,  # identifiers.identifier_hashings.tensor  # TODO
                 batch_unique_word_idx=torch.arange(nr_identifiers),
                 obfuscation_vocab_random_indices_shuffle=identifiers_input.identifiers_obfuscation.sample)
