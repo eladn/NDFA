@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from dataclasses import dataclass
+from confclass import confparam
 
 
 __all__ = ['task_names', 'CodeTaskProperties']
@@ -7,7 +8,7 @@ __all__ = ['task_names', 'CodeTaskProperties']
 task_names = ('pred-log-vars',)
 
 
-@confclass
+@dataclass
 class CodeTaskProperties:
     name: str = confparam(
         default=task_names[0],

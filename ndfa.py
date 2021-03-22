@@ -2,6 +2,7 @@ import multiprocessing
 import numpy as np
 import os
 import base64
+import hashlib
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
@@ -9,6 +10,7 @@ from torch.utils.data.dataloader import DataLoader
 from typing import Optional, Tuple
 import itertools
 from warnings import warn
+from omegaconf import OmegaConf
 
 from ndfa.execution_parameters import ModelExecutionParams
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
@@ -16,6 +18,8 @@ from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
+from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
+    reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -36,16 +40,24 @@ def create_lr_schedulers(model: nn.Module, train_hps: NDFAModelTrainingHyperPara
 
 
 def main():
-    exec_params: ModelExecutionParams = ModelExecutionParams.factory(
-        load_from_args=True, load_from_yaml=True, verify_confclass=True)
-    use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()  # TODO: fix confclass issues (the bool default to true doesn't work)
+    conf = OmegaConf.structured(ModelExecutionParams)
+    argparser = create_argparser_from_dataclass_conf_structure(ModelExecutionParams)
+    args = argparser.parse_args()
+    conf = OmegaConf.merge(conf, OmegaConf.from_dotlist(create_conf_dotlist_from_parsed_args(args)))
+    if os.path.isfile('ndfa_conf.yaml'):
+        with open('ndfa_conf.yaml', 'r') as conf_file:
+            conf = OmegaConf.merge(conf, OmegaConf.load(conf_file))
+    exec_params = reinstantiate_omegaconf_container(conf, ModelExecutionParams)
+
+    use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()
     device = torch.device("cuda" if use_gpu else "cpu")
     print(f'Using device: {device} (is CUDA available: {torch.cuda.is_available()})')
 
     if device.type == 'cuda':
         torch.cuda.empty_cache()
 
-    expr_settings_hash_base64 = base64.b64encode(str(hash(exec_params.experiment_setting)).encode('utf8'))\
+    experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
+    expr_settings_hash_base64 = base64.b64encode(hashlib.sha256(experiment_setting_yaml.encode('utf8')).digest())\
         .strip().decode('ascii').strip('=')
 
     loaded_checkpoint = None

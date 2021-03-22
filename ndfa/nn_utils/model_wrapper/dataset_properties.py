@@ -1,4 +1,6 @@
-from confclass import confclass, confparam
+from dataclasses import dataclass
+import omegaconf
+from confclass import confparam
 from enum import Enum
 from typing import Optional
 
@@ -12,9 +14,9 @@ class DataFold(Enum):
     Test = 'Test'
 
 
-@confclass
+@dataclass
 class DatasetProperties:
-    name: str
+    name: str = omegaconf.MISSING
     datafold: Optional[str] = confparam(
         default=None,
         choices=('train', 'validation', 'test'))

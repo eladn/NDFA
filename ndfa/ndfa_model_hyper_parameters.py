@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from typing import Optional
 
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
@@ -9,7 +10,7 @@ __all__ = [
     'NDFAModelHyperParams', 'NDFAModelTrainingHyperParams']
 
 
-@confclass
+@dataclass
 class TargetSymbolsDecoderParams:
     # logging call task params:
     # TODO: move to logging-call task specific params
@@ -23,7 +24,7 @@ class TargetSymbolsDecoderParams:
         default=False)
 
 
-@confclass
+@dataclass
 class NDFAModelHyperParams:
     activation_fn: str = confparam(
         default='relu',
@@ -38,7 +39,7 @@ class NDFAModelHyperParams:
         arg_prefix='tgt-symbols-decoder')
 
 
-@confclass
+@dataclass
 class NDFAModelTrainingHyperParams:
     dropout_rate: float = confparam(
         default=0.3,

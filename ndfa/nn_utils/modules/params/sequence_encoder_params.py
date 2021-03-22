@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from typing import Optional
 from .sequence_combiner_params import SequenceCombinerParams
 
@@ -6,7 +7,7 @@ from .sequence_combiner_params import SequenceCombinerParams
 __all__ = ['SequenceEncoderParams']
 
 
-@confclass
+@dataclass
 class SequenceEncoderParams:
     encoder_type: str = confparam(
         default='rnn',

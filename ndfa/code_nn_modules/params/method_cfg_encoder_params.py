@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
@@ -8,7 +9,7 @@ from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderPara
 __all__ = ['MethodCFGEncoderParams']
 
 
-@confclass
+@dataclass
 class MethodCFGEncoderParams:
     encoder_type: str = confparam(
         default='gnn',

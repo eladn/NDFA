@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 
@@ -6,7 +7,7 @@ from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoder
 __all__ = ['IdentifierEncoderParams']
 
 
-@confclass
+@dataclass
 class IdentifierEncoderParams:
     identifier_embedding_dim: int = confparam(
         default=256,

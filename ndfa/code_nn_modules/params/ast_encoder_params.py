@@ -1,11 +1,12 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 
 
 __all__ = ['ASTEncoderParams']
 
 
-@confclass
+@dataclass
 class ASTEncoderParams:
     encoder_type: str = confparam(
         default='paths-folded',

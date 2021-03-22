@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from dataclasses import dataclass
+from confclass import confparam
 from typing import Optional
 import argparse
 
@@ -8,7 +9,7 @@ from ndfa.experiment_setting import ExperimentSetting
 __all__ = ['ModelExecutionParams']
 
 
-@confclass
+@dataclass
 class ModelExecutionParams:
     model_save_path: Optional[str] = confparam(
         default=None,

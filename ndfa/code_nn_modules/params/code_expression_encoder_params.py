@@ -1,4 +1,5 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 
@@ -6,7 +7,7 @@ from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 __all__ = ['CodeExpressionEncoderParams']
 
 
-@confclass
+@dataclass
 class CodeExpressionEncoderParams:
     encoder_type: str = confparam(
         default='ast_paths',

@@ -1,10 +1,11 @@
-from confclass import confclass, confparam
+from confclass import confparam
+from dataclasses import dataclass
 
 
 __all__ = ['CFGGNNEncoderParams']
 
 
-@confclass
+@dataclass
 class CFGGNNEncoderParams:
     gnn_type: str = confparam(
         default='ggnn',
