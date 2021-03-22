@@ -71,8 +71,10 @@ def create_argparser_from_dataclass_conf_structure(
             item_type = None
             if original_field_type_info.unwrapped_type is not None:
                 container_typing_args = typing.get_args(original_field_type_info.unwrapped_type)
-                assert len(container_typing_args) <= 1
-                if len(container_typing_args) == 1:
+                assert (original_field_type_info.original_type != tuple and len(container_typing_args) <= 1) or \
+                       (original_field_type_info.original_type == tuple and len(container_typing_args) == 0) or \
+                       (original_field_type_info.original_type == tuple and len(container_typing_args) == 2 and container_typing_args[1] is ...)
+                if len(container_typing_args) >= 1:
                     item_type = container_typing_args[0]
             # TODO: finish this case
         # TODO: support `confparam` meta-data (description & choices)
@@ -101,8 +103,11 @@ def reinstantiate_omegaconf_container(
         item_type = None
         if original_type_info.unwrapped_type is not None:
             container_typing_args = typing.get_args(original_type_info.unwrapped_type)
-            assert len(container_typing_args) <= 1
-            if len(container_typing_args) == 1:
+            assert (original_type_info.original_type != tuple and len(container_typing_args) <= 1) or \
+                   (original_type_info.original_type == tuple and len(container_typing_args) == 0) or \
+                   (original_type_info.original_type == tuple and len(container_typing_args) == 2 and
+                    container_typing_args[1] is ...)
+            if len(container_typing_args) >= 1:
                 item_type = container_typing_args[0]
         return original_type_info.original_type((reinstantiate_omegaconf_container(item, item_type) for item in cnf))
     elif original_type_info.original_type == dict:
