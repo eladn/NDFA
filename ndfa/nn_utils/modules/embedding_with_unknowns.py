@@ -158,7 +158,8 @@ class EmbeddingWithUnknowns(nn.Module):
             words_with_oov_obfuscated_embeddings = torch.where(
                 oovs_mask, obfuscation_words_embeddings, non_obfuscated_words_embeddings)
 
-        if self.embedding_params.obfuscation_type in {'replace_random', 'replace_oov_and_random'}:
+        if (self.training or self.embedding_params.replace_random_in_inference) and \
+                self.embedding_params.obfuscation_type in {'replace_random', 'replace_oov_and_random'}:
             # TODO: consider using a given dedicated RNG here.
             random_obfuscation_probs = torch.rand(input_words_shape, device=obfuscation_words_embeddings.device)
             random_obfuscation_mask = (random_obfuscation_probs < self.embedding_params.obfuscation_rate)
@@ -171,11 +172,15 @@ class EmbeddingWithUnknowns(nn.Module):
         elif self.embedding_params.obfuscation_type == 'replace_oovs':
             final_words_embeddings = words_with_oov_obfuscated_embeddings
         elif self.embedding_params.obfuscation_type == 'replace_random':
-            final_words_embeddings = torch.where(
-                random_obfuscation_mask, obfuscation_words_embeddings, non_obfuscated_words_embeddings)
+            final_words_embeddings = non_obfuscated_words_embeddings
+            if self.training or self.embedding_params.replace_random_in_inference:
+                final_words_embeddings = torch.where(
+                    random_obfuscation_mask, obfuscation_words_embeddings, final_words_embeddings)
         elif self.embedding_params.obfuscation_type == 'replace_oov_and_random':
-            final_words_embeddings = torch.where(
-                random_obfuscation_mask, obfuscation_words_embeddings, words_with_oov_obfuscated_embeddings)
+            final_words_embeddings = words_with_oov_obfuscated_embeddings
+            if self.training or self.embedding_params.replace_random_in_inference:
+                final_words_embeddings = torch.where(
+                    random_obfuscation_mask, obfuscation_words_embeddings, final_words_embeddings)
 
         if pad_mask is not None:
             final_words_embeddings = final_words_embeddings.masked_fill(pad_mask, 0)

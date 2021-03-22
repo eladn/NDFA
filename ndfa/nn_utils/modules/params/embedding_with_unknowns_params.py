@@ -11,6 +11,8 @@ class EmbeddingWithUnknownsParams:
         default='replace_oov_and_random',
         choices=('none', 'add_all', 'replace_all', 'replace_oovs',
                  'replace_random', 'replace_oov_and_random'))
+    replace_random_in_inference: bool = confparam(
+        default=False)
     obfuscation_embeddings_type: str = confparam(
         default='learnable',
         choices=('learnable', 'fixed_orthogonal'))
