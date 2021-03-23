@@ -148,6 +148,8 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_last_states: Optional[Dict[str, ASTPathsEncodingsTensors]] = None) \
             -> CodeExpressionEncodingsTensors:
         nr_ast_nodes = ast_nodes_encodings.size(0)
+        assert ast_paths_last_states is None or \
+               set(ast_paths_last_states.keys()) == set(self.encoder_params.ast_paths_types)
 
         encoded_paths_by_path_type = {
             ast_paths_type: self.forward_single_path_type(
