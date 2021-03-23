@@ -30,7 +30,8 @@ class CFGGNNEncoder(nn.Module):
             gnn_layer_ctor = lambda: tgnn.GCNConv(
                 in_channels=self.cfg_node_encoding_dim,
                 out_channels=self.cfg_node_encoding_dim,
-                cached=False, normalize=True, add_self_loops=True)
+                improved=True, cached=False,
+                normalize=True, add_self_loops=True)
         elif encoder_params.gnn_type == 'ggnn':
             gnn_layer_ctor = lambda: tgnn.GatedGraphConv(
                 out_channels=self.cfg_node_encoding_dim,
