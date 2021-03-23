@@ -6,6 +6,7 @@ tabulate
 sklearn
 scikit-learn
 confclass
+omegaconf
 typing_extensions
 notify_run
 
@@ -17,3 +18,6 @@ torch-spline-conv
 torch-geometric
 
 dgl
+
+oauth2client
+google-api-python-client
