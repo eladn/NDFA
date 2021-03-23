@@ -30,9 +30,12 @@ class ScatterCombiner(nn.Module):
             self.scatter_attn_layers = nn.ModuleList([
                 ScatterAttention(
                     in_embed_dim=encoding_dim, qk_proj_dim=head_embed_dim,
-                    project_values=True, out_values_dim=head_out_values_dim)
+                    project_values=self.combiner_params.project_attn_values,
+                    out_values_dim=head_out_values_dim)
                 for _ in range(self.combiner_params.nr_attn_heads)])
-            self.applied_attn_linear_proj = None if applied_attn_output_dim is None else \
+            actual_attn_output_dim = head_out_values_dim * self.combiner_params.nr_attn_heads
+            self.applied_attn_linear_proj = None \
+                if applied_attn_output_dim is None or applied_attn_output_dim == actual_attn_output_dim else \
                 nn.Linear(
                     in_features=head_out_values_dim * self.combiner_params.nr_attn_heads,
                     out_features=applied_attn_output_dim)
