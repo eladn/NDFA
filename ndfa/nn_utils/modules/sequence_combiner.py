@@ -31,7 +31,8 @@ class SequenceCombiner(nn.Module):
             self.multihead_attn_layer = Attention(
                 in_embed_dim=self.encoding_dim,
                 out_embed_dim=self.combined_dim,
-                project_key=True, project_query=True, project_values=True,
+                project_key=True, project_query=True,
+                project_values=self.combiner_params.project_attn_values,
                 nr_heads=self.combiner_params.nr_attn_heads,
                 activation_fn=activation_fn)
             assert encoding_dim * self.combiner_params.nr_attn_heads >= self.combined_dim

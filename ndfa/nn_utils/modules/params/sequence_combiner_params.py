@@ -12,5 +12,7 @@ class SequenceCombinerParams:
         choices=('attn', 'sum', 'mean', 'last', 'ends'))
     nr_attn_heads: int = confparam(
         default=8)
+    project_attn_values: bool = confparam(
+        default=False)
     nr_dim_reduction_layers: int = confparam(
         default=1)
