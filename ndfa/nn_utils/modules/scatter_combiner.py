@@ -38,7 +38,7 @@ class ScatterCombiner(nn.Module):
                 if applied_attn_output_dim is None or applied_attn_output_dim == actual_attn_output_dim else \
                 nn.Linear(
                     in_features=head_out_values_dim * self.combiner_params.nr_attn_heads,
-                    out_features=applied_attn_output_dim)
+                    out_features=applied_attn_output_dim, bias=False)
 
     def forward(self, scattered_input: torch.Tensor, indices=torch.LongTensor,
                 dim_size: Optional[int] = None, attn_queries: Optional[torch.Tensor] = None):

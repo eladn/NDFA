@@ -19,13 +19,16 @@ class ScatterAttention(nn.Module):
         assert self.qk_proj_dim == self.in_embed_dim or project_keys
         assert self.qk_proj_dim == self.in_queries_dim or project_queries
         self.query_projection_layer = nn.Linear(
-            in_features=self.in_queries_dim, out_features=self.qk_proj_dim) if project_queries else None
+            in_features=self.in_queries_dim, out_features=self.qk_proj_dim, bias=False) \
+            if project_queries else None
         self.key_projection_layer = nn.Linear(
-            in_features=self.in_embed_dim, out_features=self.qk_proj_dim) if project_keys else None
+            in_features=self.in_embed_dim, out_features=self.qk_proj_dim, bias=False) \
+            if project_keys else None
         self.out_values_dim = self.in_embed_dim if out_values_dim is None else out_values_dim
         assert self.out_values_dim == self.in_embed_dim or project_values
         self.value_projection_layer = nn.Linear(
-            in_features=self.in_embed_dim, out_features=self.out_values_dim) if project_values else None
+            in_features=self.in_embed_dim, out_features=self.out_values_dim, bias=False) \
+            if project_values else None
 
     def forward(self, scattered_values: torch.Tensor, indices: torch.LongTensor,
                 queries: torch.Tensor, queries_indices: Optional[torch.LongTensor] = None) \

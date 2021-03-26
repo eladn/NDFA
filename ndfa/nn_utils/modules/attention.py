@@ -27,13 +27,16 @@ class Attention(nn.Module):
         self.query_in_embed_dim = self.in_embed_dim if query_in_embed_dim is None else query_in_embed_dim
         assert (self.qk_embed_dim == self.query_in_embed_dim) or project_query
         self.query_linear_projection_layer = \
-            nn.Linear(in_features=self.query_in_embed_dim, out_features=self.qk_embed_dim) if project_query else None
+            nn.Linear(in_features=self.query_in_embed_dim, out_features=self.qk_embed_dim, bias=False) \
+                if project_query else None
         assert (self.qk_embed_dim == self.in_embed_dim) or project_key
         self.key_linear_projection_layer = \
-            nn.Linear(in_features=self.in_embed_dim, out_features=self.qk_embed_dim) if project_key else None
+            nn.Linear(in_features=self.in_embed_dim, out_features=self.qk_embed_dim, bias=False) \
+                if project_key else None
         assert (self.in_embed_dim == self.out_embed_dim) or project_values
         self.value_linear_projection_layer = \
-            nn.Linear(in_features=self.in_embed_dim, out_features=self.out_embed_dim) if project_values else None
+            nn.Linear(in_features=self.in_embed_dim, out_features=self.out_embed_dim, bias=False) \
+                if project_values else None
 
     def forward(self, sequences: torch.Tensor,
                 query: Optional[torch.Tensor] = None,
