@@ -1,3 +1,5 @@
+from typing import Optional
+
 from confclass import confparam
 from dataclasses import dataclass
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
@@ -13,8 +15,9 @@ __all__ = ['MethodCFGEncoderParams']
 @dataclass
 class MethodCFGEncoderParams:
     encoder_type: str = confparam(
-        default='control-flow-paths-folded-to-nodes',
-        choices=('set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
+        default='pdg-paths-folded-to-nodes',
+        choices=('pdg-paths-folded-to-nodes',
+                 'set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
                  'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
                  'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
                  'all-nodes-single-unstructured-linear-seq-ngrams',  # TODO: support it!
@@ -56,3 +59,8 @@ class MethodCFGEncoderParams:
 
     cfg_nodes_folding_params: ScatterCombinerParams = confparam(
         default_factory=ScatterCombinerParams)
+
+    cfg_paths_ngrams_min_n: Optional[int] = confparam(
+        default=None)
+    cfg_paths_ngrams_max_n: Optional[int] = confparam(
+        default=3)

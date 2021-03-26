@@ -141,7 +141,7 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
+        if self.encoder_params.encoder_type in {'pdg-paths-folded-to-nodes', 'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
             self.cfg_paths_encoder = CFGPathEncoder(
                 cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
@@ -169,7 +169,7 @@ class MethodCFGEncoderV2(nn.Module):
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
                     cfg_nodes_folding_params=self.encoder_params.cfg_nodes_folding_params,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
-        if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
+        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'pdg-paths-folded-to-nodes'}:
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = \
                 ScatterCFGEncodedPathsToCFGNodeEncodings(
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -278,16 +278,19 @@ class MethodCFGEncoderV2(nn.Module):
         if self.use_norm:
             encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, usage_point=0)
 
-        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
+        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'pdg-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
+            cfg_paths_input = code_task_input.pdg.cfg_pdg_paths \
+                if self.encoder_params.encoder_type == 'pdg-paths-folded-to-nodes' else \
+                code_task_input.pdg.cfg_control_flow_paths
             encoded_cfg_paths = self.cfg_paths_encoder(
                 cfg_nodes_encodings=encoded_cfg_nodes,
-                cfg_paths_nodes_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
-                cfg_paths_edge_types=code_task_input.pdg.cfg_control_flow_paths.edges_types.sequences,
-                cfg_paths_lengths=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_lengths)
+                cfg_paths_nodes_indices=cfg_paths_input.nodes_indices.sequences,
+                cfg_paths_edge_types=cfg_paths_input.edges_types.sequences,
+                cfg_paths_lengths=cfg_paths_input.nodes_indices.sequences_lengths)
         if self.encoder_params.encoder_type in \
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
-            ngrams_min_n = None  # TODO: put in encoder's HPs
-            ngrams_max_n = 3  # TODO: put in encoder's HPs
+            ngrams_min_n = self.encoder_params.cfg_paths_ngrams_min_n
+            ngrams_max_n = self.encoder_params.cfg_paths_ngrams_max_n
             all_ngram_ns = \
                 set(code_task_input.pdg.cfg_control_flow_paths_exact_ngrams.keys()) | \
                 set(code_task_input.pdg.cfg_control_flow_paths_partial_ngrams.keys())
@@ -307,11 +310,11 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_nodes_encodings=encoded_cfg_nodes,
                 cfg_control_flow_paths_ngrams_input=cfg_control_flow_paths_ngrams_input)
 
-        if self.encoder_params.encoder_type == 'control-flow-paths-folded-to-nodes':
+        if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'pdg-paths-folded-to-nodes'}:
             encoded_cfg_nodes = self.scatter_cfg_encoded_paths_to_cfg_node_encodings(
                 encoded_cfg_node_occurrences_in_paths=encoded_cfg_paths.nodes_occurrences,
-                cfg_paths_mask=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences_mask,
-                cfg_paths_node_indices=code_task_input.pdg.cfg_control_flow_paths.nodes_indices.sequences,
+                cfg_paths_mask=cfg_paths_input.nodes_indices.sequences_mask,
+                cfg_paths_node_indices=cfg_paths_input.nodes_indices.sequences,
                 previous_cfg_nodes_encodings=encoded_cfg_nodes,
                 nr_cfg_nodes=code_task_input.pdg.cfg_nodes_has_expression_mask.batch_size)
             if self.use_norm:
