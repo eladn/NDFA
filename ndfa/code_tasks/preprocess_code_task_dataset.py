@@ -319,7 +319,8 @@ def preprocess_code_task_example(
         src_pdg_node_idx=method_pdg.entry_pdg_node_idx, tgt_pdg_node_idx=method_pdg.exit_pdg_node_idx,
         control_flow=True, data_dependency=True, max_nr_data_dependency_edges_in_path=1,
         group_different_edges_of_single_nodes_pair_in_same_path=True,
-        max_nr_paths=model_hps.method_code_encoder.max_nr_pdg_paths)
+        max_nr_paths=model_hps.method_code_encoder.max_nr_pdg_paths,
+        remove_data_dependency_edges_from_pdg_nodes_idxs=remove_edges_from_pdg_nodes_idxs)
 
     if control_flow_paths is None:
         PreprocessLimitation.enforce_limitations(limitations=[

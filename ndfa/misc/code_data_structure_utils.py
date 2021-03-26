@@ -123,7 +123,8 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
                  max_nr_control_flow_edges_in_path: Optional[int] = None,
                  group_different_edges_of_single_nodes_pair_in_same_path: bool = False,
                  revisit_nodes_on_different_branches: bool = True, propagate_results: bool = True,
-                 reverse: bool = False, twice_loop_traversal: bool = False) -> Any:
+                 reverse: bool = False, twice_loop_traversal: bool = False,
+                 remove_data_dependency_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None) -> Any:
     if twice_loop_traversal:
         # TODO: implement the option to traverse loop twice.
         raise NotImplementedError('traverse_pdg(): `twice_loop_traversal` option not implemented yet!')
@@ -161,10 +162,14 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
                     control_flow_edges = cur_node.control_flow_in_edges if reverse else cur_node.control_flow_out_edges
                     for edge in control_flow_edges:
                         edges_by_tgt_node_idx[edge.pgd_node_idx].append(edge)
-                if traverse_data_dependency_edges:
+                if traverse_data_dependency_edges and \
+                        (remove_data_dependency_edges_from_pdg_nodes_idxs is None or
+                         cur_node_idx not in remove_data_dependency_edges_from_pdg_nodes_idxs):
                     data_dependency_edges = cur_node.data_dependency_in_edges if reverse else cur_node.data_dependency_out_edges
                     for edge in data_dependency_edges:
-                        edges_by_tgt_node_idx[edge.pgd_node_idx].append(edge)
+                        if remove_data_dependency_edges_from_pdg_nodes_idxs is None or \
+                                edge.pgd_node_idx not in remove_data_dependency_edges_from_pdg_nodes_idxs:
+                            edges_by_tgt_node_idx[edge.pgd_node_idx].append(edge)
                 if group_different_edges_of_single_nodes_pair_in_same_path:
                     edges_grouped = list(edges_by_tgt_node_idx.values())
                 else:
@@ -238,7 +243,8 @@ def get_all_pdg_simple_paths(
         max_nr_paths: Optional[int] = None,
         max_nr_data_dependency_edges_in_path: Optional[int] = None,
         max_nr_control_flow_edges_in_path: Optional[int] = None,
-        group_different_edges_of_single_nodes_pair_in_same_path: bool = False) \
+        group_different_edges_of_single_nodes_pair_in_same_path: bool = False,
+        remove_data_dependency_edges_from_pdg_nodes_idxs: Optional[Set[int]] = None) \
         -> Optional[List[_PDGPath]]:
     traverse_ctrl = argparse.Namespace(max_nr_paths_found=0)
     simple_paths_from_node_to_tgt: Dict[int, Set[PDGPathWithEdgesCountByType]] = {}
@@ -289,7 +295,8 @@ def get_all_pdg_simple_paths(
         max_nr_data_dependency_edges_in_path=None,
         max_nr_control_flow_edges_in_path=None,
         group_different_edges_of_single_nodes_pair_in_same_path=group_different_edges_of_single_nodes_pair_in_same_path,
-        revisit_nodes_on_different_branches=True)
+        revisit_nodes_on_different_branches=True,
+        remove_data_dependency_edges_from_pdg_nodes_idxs=remove_data_dependency_edges_from_pdg_nodes_idxs)
 
     paths = sorted(list(paths))
     paths = [path.path for path in paths]
