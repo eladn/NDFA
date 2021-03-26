@@ -90,6 +90,7 @@ class CodeTaskVocabs(NamedTuple):
             special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
             carpus_generator=tokens_kinds_carpus_generator)
 
+        # FIXME: It actually contains 'DataDependency' edge type, but the vocab is called `control_flow_edge`.
         pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             edge.type.value
             for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
@@ -97,7 +98,7 @@ class CodeTaskVocabs(NamedTuple):
             for edge in pdg_node.control_flow_out_edges)
         pdg_control_flow_edge_types_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='pdg_control_flow_edge_types',
-            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('DataDependency',), min_word_freq=200,
             carpus_generator=pdg_control_flow_edge_types_carpus_generator)
 
         ast_node_types_carpus_generator = None if raw_train_data_path is None else lambda: (

@@ -5,8 +5,9 @@ import dataclasses
 import numpy as np
 from enum import Enum
 from functools import reduce
+from collections import defaultdict
 from typing_extensions import Protocol
-from typing import List, Dict, Tuple, Set, Optional, Any, Union, Iterable
+from typing import List, Dict, Tuple, Set, Optional, Any, Union, Iterable, Generic, TypeVar
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
     SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType, SerToken
@@ -91,9 +92,12 @@ class PDGTraversePreVisitFnRes:
     trim_branch_traversal: bool = False
 
 
+T = TypeVar('T')
+
+
 @dataclasses.dataclass
-class PDGTraversePostVisitFnRes:
-    val: Any
+class PDGTraversePostVisitFnRes(Generic[T]):
+    val: T
     stop_traversal: bool = False
 
 
@@ -101,22 +105,30 @@ class PDGTraversePreVisitFn(Protocol):
     def __call__(self, pdg_node_idx: int, already_visited_before: bool) -> Optional[PDGTraversePreVisitFnRes]: ...
 
 
-class PDGTraversePostVisitFn(Protocol):
+PDGEdge = Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge]
+PDGEdgesGroup = List[PDGEdge]
+
+
+class PDGTraversePostVisitFn(Protocol[T]):
     def __call__(self, pdg_node_idx: int, already_visited_before: bool,
-                 successor_results: Optional[Tuple[Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge], Any]]) \
-            -> Optional[PDGTraversePostVisitFnRes]: ...
+                 successor_results: Optional[List[Tuple[PDGEdgesGroup, T]]]) \
+            -> Optional[PDGTraversePostVisitFnRes[T]]: ...
 
 
 def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
                  pre_visitor_fn: Optional[PDGTraversePreVisitFn] = None,
-                 post_visitor_fn: Optional[PDGTraversePostVisitFn] = None,
+                 post_visitor_fn: Optional[PDGTraversePostVisitFn[T]] = None,
                  traverse_control_flow_edges: bool = True, traverse_data_dependency_edges: bool = True,
+                 max_nr_data_dependency_edges_in_path: Optional[int] = None,
+                 max_nr_control_flow_edges_in_path: Optional[int] = None,
+                 group_different_edges_of_single_nodes_pair_in_same_path: bool = False,
                  revisit_nodes_on_different_branches: bool = True, propagate_results: bool = True,
                  reverse: bool = False, twice_loop_traversal: bool = False) -> Any:
     if twice_loop_traversal:
         # TODO: implement the option to traverse loop twice.
         raise NotImplementedError('traverse_pdg(): `twice_loop_traversal` option not implemented yet!')
-    occurrences_in_dfs_stack_count = np.zeros(len(method_pdg.pdg_nodes), dtype=np.int)
+    nodes_occurrences_in_dfs_stack_count = np.zeros(len(method_pdg.pdg_nodes), dtype=np.int)
+    nr_edges_occurrences_in_dfs_stack_by_type = {'data_dependency': 0, 'control_flow': 0}
     already_visited = np.zeros(len(method_pdg.pdg_nodes), dtype=np.bool)
     traversal_control = argparse.Namespace(stop_traversal=False)
     def _dfs(cur_node_idx: int) -> Any:
@@ -129,12 +141,12 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
         if method_pdg.control_scopes[cur_node.belongs_to_control_scopes_idxs[-1]].type.value in \
                 loop_update_condition_control_scope_types:
             nr_allowed_visits_in_path_for_cur_node = 2
-        assert occurrences_in_dfs_stack_count[cur_node_idx] <= nr_allowed_visits_in_path_for_cur_node
-        if occurrences_in_dfs_stack_count[cur_node_idx] >= nr_allowed_visits_in_path_for_cur_node:
+        assert nodes_occurrences_in_dfs_stack_count[cur_node_idx] <= nr_allowed_visits_in_path_for_cur_node
+        if nodes_occurrences_in_dfs_stack_count[cur_node_idx] >= nr_allowed_visits_in_path_for_cur_node:
             return None
         if not revisit_nodes_on_different_branches and already_visited[cur_node_idx]:
             return None
-        occurrences_in_dfs_stack_count[cur_node_idx] += 1
+        nodes_occurrences_in_dfs_stack_count[cur_node_idx] += 1
         successor_results = None
         if cur_node_idx != tgt_node_idx and not traversal_control.stop_traversal:
             pre_visitor_res = None
@@ -143,15 +155,44 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
             if pre_visitor_res is None or not pre_visitor_res.trim_branch_traversal:
                 if propagate_results and post_visitor_fn is not None:
                     successor_results = []
-                edges = []
+                edges_by_tgt_node_idx: Dict[int, PDGEdgesGroup] = \
+                    defaultdict(list)
                 if traverse_control_flow_edges:
-                    edges += cur_node.control_flow_in_edges if reverse else cur_node.control_flow_out_edges
+                    control_flow_edges = cur_node.control_flow_in_edges if reverse else cur_node.control_flow_out_edges
+                    for edge in control_flow_edges:
+                        edges_by_tgt_node_idx[edge.pgd_node_idx].append(edge)
                 if traverse_data_dependency_edges:
-                    edges += cur_node.data_dependency_in_edges if reverse else cur_node.data_dependency_out_edges
-                for edge in edges:
-                    cur_successor_res = _dfs(edge.pgd_node_idx)
+                    data_dependency_edges = cur_node.data_dependency_in_edges if reverse else cur_node.data_dependency_out_edges
+                    for edge in data_dependency_edges:
+                        edges_by_tgt_node_idx[edge.pgd_node_idx].append(edge)
+                if group_different_edges_of_single_nodes_pair_in_same_path:
+                    edges_grouped = list(edges_by_tgt_node_idx.values())
+                else:
+                    edges_grouped = [[edge] for edges_by_tgt in edges_by_tgt_node_idx.values() for edge in edges_by_tgt]
+                for edges_group in edges_grouped:
+                    edge_types_in_group = set((
+                        'data_dependency' if isinstance(edge, SerPDGDataDependencyEdge) else 'control_flow'
+                        for edge in edges_group))
+                    sole_edge_type = None
+                    if edge_types_in_group == {'data_dependency'}:
+                        sole_edge_type = 'data_dependency'
+                        if max_nr_data_dependency_edges_in_path is not None and \
+                                max_nr_data_dependency_edges_in_path <= \
+                                nr_edges_occurrences_in_dfs_stack_by_type['data_dependency']:
+                            continue
+                    elif edge_types_in_group == {'control_flow'}:
+                        sole_edge_type = 'control_flow'
+                        if max_nr_control_flow_edges_in_path is not None and \
+                            max_nr_control_flow_edges_in_path <= \
+                            nr_edges_occurrences_in_dfs_stack_by_type['control_flow']:
+                            continue
+                    if sole_edge_type is not None:
+                        nr_edges_occurrences_in_dfs_stack_by_type[sole_edge_type] += 1
+                    cur_successor_res = _dfs(edges_group[0].pgd_node_idx)
+                    if sole_edge_type is not None:
+                        nr_edges_occurrences_in_dfs_stack_by_type[sole_edge_type] -= 1
                     if propagate_results and post_visitor_fn is not None:
-                        successor_results.append((edge, cur_successor_res))
+                        successor_results.append((edges_group, cur_successor_res))
                     if traversal_control.stop_traversal:
                         break
         post_visitor_res = None
@@ -159,52 +200,77 @@ def traverse_pdg(method_pdg: SerMethodPDG, src_node_idx: int, tgt_node_idx: int,
             post_visitor_res = post_visitor_fn(cur_node_idx, already_visited[cur_node_idx], successor_results)
         if post_visitor_res is not None and post_visitor_res.stop_traversal:
             traversal_control.stop_traversal = True
-        occurrences_in_dfs_stack_count[cur_node_idx] -= 1
-        if occurrences_in_dfs_stack_count[cur_node_idx] == 0:
+        nodes_occurrences_in_dfs_stack_count[cur_node_idx] -= 1
+        if nodes_occurrences_in_dfs_stack_count[cur_node_idx] == 0:
             already_visited[cur_node_idx] = True
         return None if post_visitor_res is None else post_visitor_res.val
     return _dfs(src_node_idx)
 
 
 @dataclasses.dataclass
-class _PathNode:
+class _PDGPathNode:
     node_idx: int
-    edge: Optional[Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge]]
+    edges: Tuple[PDGEdge, ...] = ()
 
     def __lt__(self, other):
-        assert isinstance(other, _PathNode)
+        assert isinstance(other, _PDGPathNode)
         if self.node_idx != other.node_idx:
             return self.node_idx < other.node_idx
         return hash(self) < hash(other)
 
     def __hash__(self):
-        return hash((self.node_idx, None if self.edge is None else json.dumps(self.edge.to_dict(), sort_keys=True)))
+        return hash((self.node_idx, None if self.edges is None else tuple(json.dumps(edge.to_dict(), sort_keys=True) for edge in self.edges)))
+
+
+_PDGPath = Tuple[_PDGPathNode, ...]
+
+
+@dataclasses.dataclass(unsafe_hash=True, order=True)
+class PDGPathWithEdgesCountByType:
+    path: _PDGPath
+    nr_data_dependency_edges: int
+    nr_control_flow_edges: int
 
 
 def get_all_pdg_simple_paths(
         method_pdg: SerMethodPDG, src_pdg_node_idx: int, tgt_pdg_node_idx: int,
-        control_flow: bool = True, data_dependency: bool = False, max_nr_paths: Optional[int] = None) \
-        -> Optional[List[Tuple[_PathNode, ...]]]:
+        control_flow: bool = True, data_dependency: bool = False,
+        max_nr_paths: Optional[int] = None,
+        max_nr_data_dependency_edges_in_path: Optional[int] = None,
+        max_nr_control_flow_edges_in_path: Optional[int] = None,
+        group_different_edges_of_single_nodes_pair_in_same_path: bool = False) \
+        -> Optional[List[_PDGPath]]:
     traverse_ctrl = argparse.Namespace(max_nr_paths_found=0)
-    simple_paths_from_node_to_tgt: Dict[int, Set[Tuple[_PathNode, ...]]] = {}
+    simple_paths_from_node_to_tgt: Dict[int, Set[PDGPathWithEdgesCountByType]] = {}
 
     def pre_visitor(pdg_node_idx: int, already_visited_before: bool) -> PDGTraversePreVisitFnRes:
         return PDGTraversePreVisitFnRes(trim_branch_traversal=pdg_node_idx in simple_paths_from_node_to_tgt)
 
     def post_visitor(
             pdg_node_idx: int, already_visited_before: bool,
-            successor_results: Optional[Tuple[Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge], Any]]) \
-            -> Optional[PDGTraversePostVisitFnRes]:
+            successor_results: Optional[List[Tuple[PDGEdgesGroup,
+                                                   Tuple[int, Set[PDGPathWithEdgesCountByType]]]]]) \
+            -> Optional[PDGTraversePostVisitFnRes[Tuple[int, Set[PDGPathWithEdgesCountByType]]]]:
         if pdg_node_idx == tgt_pdg_node_idx:
-            simple_paths_from_node_to_tgt[pdg_node_idx] = {(_PathNode(pdg_node_idx, None),)}
+            simple_paths_from_node_to_tgt[pdg_node_idx] = {PDGPathWithEdgesCountByType(
+                path=(_PDGPathNode(pdg_node_idx, ()),), nr_control_flow_edges=0, nr_data_dependency_edges=0)}
         else:
             assert pdg_node_idx in simple_paths_from_node_to_tgt or successor_results is not None
             if successor_results is not None:
                 new_paths = {
-                    (_PathNode(pdg_node_idx, successor_result[0]),) + path_to_successor
+                    PDGPathWithEdgesCountByType(
+                        path=(_PDGPathNode(pdg_node_idx, tuple(successor_result[0])),) + path_to_successor.path,
+                        nr_data_dependency_edges=path_to_successor.nr_data_dependency_edges + int(all(isinstance(edge, SerPDGDataDependencyEdge) for edge in successor_result[0])),
+                        nr_control_flow_edges=path_to_successor.nr_control_flow_edges + int(all(isinstance(edge, SerPDGControlFlowEdge) for edge in successor_result[0])))
                     for successor_result in successor_results
                     if successor_result is not None and successor_result[1] is not None
                     for path_to_successor in successor_result[1][1]}
+                new_paths = {
+                    path for path in new_paths
+                    if (max_nr_data_dependency_edges_in_path is None or
+                        path.nr_data_dependency_edges <= max_nr_data_dependency_edges_in_path) and
+                       (max_nr_control_flow_edges_in_path is None or
+                        path.nr_control_flow_edges <= max_nr_control_flow_edges_in_path)}
                 if pdg_node_idx not in simple_paths_from_node_to_tgt:
                     simple_paths_from_node_to_tgt[pdg_node_idx] = set()
                 simple_paths_from_node_to_tgt[pdg_node_idx].update(new_paths)
@@ -216,10 +282,17 @@ def get_all_pdg_simple_paths(
 
     nr_paths, paths = traverse_pdg(
         method_pdg=method_pdg, src_node_idx=src_pdg_node_idx, tgt_node_idx=tgt_pdg_node_idx,
-        post_visitor_fn=post_visitor, pre_visitor_fn=pre_visitor, traverse_control_flow_edges=control_flow,
-        traverse_data_dependency_edges=data_dependency, revisit_nodes_on_different_branches=True)
+        post_visitor_fn=post_visitor, pre_visitor_fn=pre_visitor,
+        traverse_control_flow_edges=control_flow, traverse_data_dependency_edges=data_dependency,
+        # We enforce max #edges in this method; enforcing it in the traversal itself would harm correctness,
+        # as a node might be traversed only once (pre_visitor trims deepening for already-visited nodes).
+        max_nr_data_dependency_edges_in_path=None,
+        max_nr_control_flow_edges_in_path=None,
+        group_different_edges_of_single_nodes_pair_in_same_path=group_different_edges_of_single_nodes_pair_in_same_path,
+        revisit_nodes_on_different_branches=True)
 
     paths = sorted(list(paths))
+    paths = [path.path for path in paths]
     if max_nr_paths is not None and nr_paths >= max_nr_paths:
         return None
     return paths
