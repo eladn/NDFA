@@ -59,7 +59,9 @@ class PredictLogVarsTask(CodeTaskBase):
         code_task_input = pp_example.code_task_input
         model.to(device)
         model.eval()
-        code_task_input = MethodCodeInputTensors.collate([code_task_input])
+        example_hashes = [pp_example.example_hash]
+        code_task_input = MethodCodeInputTensors.collate(
+            [code_task_input], collate_data=CollateData(example_hashes=example_hashes))
         code_task_input = code_task_input.to(device)
         output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
         decoder_outputs = output.decoder_outputs.squeeze(dim=0)
@@ -68,6 +70,7 @@ class PredictLogVarsTask(CodeTaskBase):
         symbol_indices = symbol_indices.cpu().tolist()
         symbol_indices = [symbol_idx - 3 for symbol_idx in symbol_indices if symbol_idx > 2]
         symbol_names = [raw_example.method_pdg.symbols[symbol_idx].symbol_name for symbol_idx in symbol_indices]
+        print(symbol_names)
         return symbol_names
 
     def create_dataset(self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
