@@ -23,12 +23,21 @@ class SymbolsEncoder(nn.Module):
         super(SymbolsEncoder, self).__init__()
         self.symbol_embedding_dim = symbol_embedding_dim
         self.encoder_params = encoder_params
-        self.scatter_combiner = ScatterCombiner(
-            encoding_dim=self.symbol_embedding_dim,
-            combiner_params=self.encoder_params.combining_params)
-        self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
-            in_features=expression_encoding_dim + identifier_embedding_dim,
-            out_features=symbol_embedding_dim, bias=False)
+        if self.encoder_params.use_symbols_occurrences:
+            self.scatter_combiner = ScatterCombiner(
+                encoding_dim=expression_encoding_dim,
+                applied_attn_output_dim=self.symbol_embedding_dim,
+                combiner_params=self.encoder_params.combining_params)
+            # TODO: add `output_dim` to `ScatterCombiner` and use it
+            self.scatter_combiner_output_dim = self.symbol_embedding_dim \
+                if self.scatter_combiner.combiner_params.method == 'attn' else expression_encoding_dim
+        if self.encoder_params.use_symbols_occurrences and self.encoder_params.use_identifier_encoding:
+            self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
+                in_features=self.scatter_combiner_output_dim + identifier_embedding_dim,
+                out_features=self.symbol_embedding_dim, bias=False)
+        else:
+            assert self.scatter_combiner_output_dim == self.symbol_embedding_dim
+            # TODO: impl linear projection if it's not the case
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
@@ -41,7 +50,8 @@ class SymbolsEncoder(nn.Module):
                 ast_nodes_with_symbol_leaf_symbol_idx: Optional[torch.LongTensor] = None):
         symbols_identifiers_encodings = encoded_identifiers[symbols.symbols_identifier_indices.indices]
 
-        if encoded_expressions is not None or encoded_ast_nodes is not None:
+        if self.encoder_params.use_symbols_occurrences:
+            assert encoded_expressions is not None or encoded_ast_nodes is not None
             if encoded_expressions is not None:
                 assert tokenized_expressions_input.is_symbol_mask.sequences.shape == encoded_expressions.shape[:-1]
                 encodings_of_symbols_occurrences = encoded_expressions[tokenized_expressions_input.is_symbol_mask.sequences]
@@ -77,12 +87,18 @@ class SymbolsEncoder(nn.Module):
             #         .expand(cfg_expr_tokens_encodings_of_symbols_occurrences.size()),
             #     dim=0, dim_size=nr_symbols)
 
-            assert symbols_identifiers_encodings.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
-            final_symbols_encoding = torch.cat(
-                [symbols_identifiers_encodings, symbols_occurrences_encodings], dim=-1)
-            final_symbols_encoding = \
-                self.symbols_token_occurrences_and_identifiers_embeddings_combiner(final_symbols_encoding)
+            if self.encoder_params.use_identifier_encoding:
+                assert symbols_identifiers_encodings.size()[:-1] == symbols_occurrences_encodings.size()[:-1]
+                final_symbols_encoding = torch.cat(
+                    [symbols_identifiers_encodings, symbols_occurrences_encodings], dim=-1)
+                final_symbols_encoding = \
+                    self.symbols_token_occurrences_and_identifiers_embeddings_combiner(final_symbols_encoding)
+            else:
+                assert self.symbol_embedding_dim == symbols_occurrences_encodings.size(-1)
+                final_symbols_encoding = symbols_occurrences_encodings
             final_symbols_encoding = self.dropout_layer(self.activation_layer(final_symbols_encoding))
         else:
+            assert self.encoder_params.use_identifier_encoding
+            assert self.symbol_embedding_dim == symbols_identifiers_encodings.size(-1)
             final_symbols_encoding = symbols_identifiers_encodings
         return final_symbols_encoding
