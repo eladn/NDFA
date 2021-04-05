@@ -13,7 +13,6 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
     ASTPathsEncodingsTensors
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
-from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
 __all__ = ['ASTPathsEncoder']

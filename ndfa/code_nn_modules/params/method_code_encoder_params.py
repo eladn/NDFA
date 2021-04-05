@@ -1,3 +1,4 @@
+from typing import Optional
 from confclass import confparam
 from dataclasses import dataclass
 
@@ -27,13 +28,13 @@ class MethodCodeEncoderParams(HasDispatchableField):
         description="Representation type of the code "
                     "(main architecture of the method-code-encoder).")
     # relevant only if `method_encoder_type == 'method-cfg'`
-    method_cfg_encoder: MethodCFGEncoderParams = confparam(
+    method_cfg_encoder: Optional[MethodCFGEncoderParams] = confparam(
         default_factory=MethodCFGEncoderParams,
         description="Representation type of the method-CFG "
                     "(specific architecture of the method-CFG-code-encoder).",
         arg_prefix='method_cfg_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
-    whole_method_expression_encoder: CodeExpressionEncoderParams = confparam(
+    whole_method_expression_encoder: Optional[CodeExpressionEncoderParams] = confparam(
         default_factory=lambda: CodeExpressionEncoderParams(encoder_type='tokens-seq'),
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",

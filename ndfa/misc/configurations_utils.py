@@ -193,7 +193,8 @@ class HasDispatchableField(abc.ABC):
                 if val in dispatch_field.value_to_field_name_map:
                     to_keep = dispatch_field.value_to_field_name_map[val]
                     fields_to_keep = {to_keep} if isinstance(to_keep, str) else set(to_keep)
-                fields_to_remove = set(dispatch_field.value_to_field_name_map.values()) - fields_to_keep
+                all_dispatched_fields = set(fld for flds_group in dispatch_field.value_to_field_name_map.values() for fld in flds_group)
+                fields_to_remove = all_dispatched_fields - fields_to_keep
                 for field_name in fields_to_remove:
                     setattr(self, field_name, None)
         for fld in dataclasses.fields(self):

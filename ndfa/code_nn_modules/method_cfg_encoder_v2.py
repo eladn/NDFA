@@ -185,14 +185,20 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
+        # TODO: put in HPs
+        expression_encoding_dim = \
+            self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim \
+                if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq' else \
+                self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim
+
         self.symbols_encoder = SymbolsEncoder(
             identifier_embedding_dim=self.identifier_embedding_dim,
             symbol_embedding_dim=self.symbol_embedding_dim,
-            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
+            expression_encoding_dim=expression_encoding_dim,
             encoder_params=symbols_encoder_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
-            expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
+            expression_token_encoding_dim=expression_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -200,7 +206,7 @@ class MethodCFGEncoderV2(nn.Module):
         if self.use_norm:
             self.expressions_norm = ModuleRepeater(
                 module_create_fn=lambda: NormWrapper(
-                    self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
+                    expression_encoding_dim,
                     affine=affine_norm, norm_type=norm_type),
                 repeats=3, share=share_norm_between_usage_points, repeat_key='usage_point')
             self.combined_expressions_norm = NormWrapper(

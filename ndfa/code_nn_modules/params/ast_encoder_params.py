@@ -1,6 +1,6 @@
 from confclass import confparam
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Optional
 
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
@@ -17,7 +17,7 @@ class ASTEncoderParams(HasDispatchableField):
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'paths-folded': ['paths_sequence_encoder_params', 'nodes_folding_params', 'ast_paths_types'],
+                'paths-folded': ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types'],  # TODO: remove 'paths_combiner_params'?
                 'set-of-paths': ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types'],
                 'tree': []}))
     encoder_type: str = confparam(
@@ -32,10 +32,10 @@ class ASTEncoderParams(HasDispatchableField):
         default_factory=SequenceEncoderParams,
         arg_prefix='paths_sequence_encoder')
 
-    paths_combiner_params: SequenceCombinerParams = confparam(
+    paths_combiner_params: Optional[SequenceCombinerParams] = confparam(
         default_factory=SequenceCombinerParams)
 
-    nodes_folding_params: ScatterCombinerParams = confparam(
+    nodes_folding_params: Optional[ScatterCombinerParams] = confparam(
         default_factory=ScatterCombinerParams)
 
     ast_paths_types: Tuple[str, ...] = confparam(

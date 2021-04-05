@@ -19,7 +19,7 @@ from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
-    reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args
+    reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -39,7 +39,7 @@ def create_lr_schedulers(model: nn.Module, train_hps: NDFAModelTrainingHyperPara
             threshold=0.1, threshold_mode='rel'))
 
 
-def main():
+def load_exec_params() -> ModelExecutionParams:
     conf = OmegaConf.structured(ModelExecutionParams)
     argparser = create_argparser_from_dataclass_conf_structure(ModelExecutionParams)
     args = argparser.parse_args()
@@ -48,6 +48,12 @@ def main():
         with open('ndfa_conf.yaml', 'r') as conf_file:
             conf = OmegaConf.merge(conf, OmegaConf.load(conf_file))
     exec_params = reinstantiate_omegaconf_container(conf, ModelExecutionParams)
+    HasDispatchableField.fix_dispatch_fields(exec_params)
+    return exec_params
+
+
+def main():
+    exec_params = load_exec_params()
 
     use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()
     device = torch.device("cuda" if use_gpu else "cpu")
@@ -91,7 +97,9 @@ def main():
         expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest()) \
             .strip().decode('ascii').strip('=')
 
-    # TODO: print the `experiment_setting`.
+    experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
+    print('Experiment setting:')
+    print(experiment_setting_yaml)
 
     if exec_params.seed is not None:
         np.random.seed(exec_params.seed)

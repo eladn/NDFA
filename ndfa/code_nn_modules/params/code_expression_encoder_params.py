@@ -1,3 +1,4 @@
+from typing import Optional
 from confclass import confparam
 from dataclasses import dataclass
 
@@ -32,7 +33,7 @@ class CodeExpressionEncoderParams(HasDispatchableField):
                     "(part of the architecture of the code-encoder).",
         arg_prefix='ast_encoder')
 
-    tokens_seq_encoder: CodeTokensSeqEncoderParams = confparam(
+    tokens_seq_encoder: Optional[CodeTokensSeqEncoderParams] = confparam(
         default_factory=CodeTokensSeqEncoderParams,
         arg_prefix='tokens_seq_encoder')
 

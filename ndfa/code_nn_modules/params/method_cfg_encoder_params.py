@@ -67,14 +67,14 @@ class MethodCFGEncoderParams(HasDispatchableField):
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence-encoder')
 
-    cfg_gnn_encoder: CFGGNNEncoderParams = confparam(
+    cfg_gnn_encoder: Optional[CFGGNNEncoderParams] = confparam(
         default_factory=CFGGNNEncoderParams,
         arg_prefix='gnn-encoder')
 
-    create_sub_grams_from_long_gram: bool = confparam(
+    create_sub_grams_from_long_gram: Optional[bool] = confparam(
         default=False)
 
-    cfg_nodes_folding_params: ScatterCombinerParams = confparam(
+    cfg_nodes_folding_params: Optional[ScatterCombinerParams] = confparam(
         default_factory=ScatterCombinerParams)
 
     cfg_paths_ngrams_min_n: Optional[int] = confparam(
