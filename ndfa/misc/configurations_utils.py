@@ -155,9 +155,16 @@ class HasDispatchableField(abc.ABC):
             cls._dispatch_fields: Dict[str, DispatchField] = {}
         if dispatch_field.dispatch_field_name in cls._dispatch_fields:
             return  # dispatch field already set
+        dispatch_field = DispatchField(
+            dispatch_field_name=dispatch_field.dispatch_field_name,
+            value_to_field_name_map={
+                val: {flds} if isinstance(flds, str) else set(flds)
+                for val, flds in dispatch_field.value_to_field_name_map.items()})
         self_field_names = set(fld.name for fld in dataclasses.fields(cls))
         assert dispatch_field.dispatch_field_name in self_field_names
-        assert all(fld_name in self_field_names for fld_name in dispatch_field.value_to_field_name_map.values())
+        assert all(fld_name in self_field_names
+                   for fld_names in dispatch_field.value_to_field_name_map.values()
+                   for fld_name in fld_names)
         cls._dispatch_fields[dispatch_field.dispatch_field_name] = dispatch_field
 
     @classmethod

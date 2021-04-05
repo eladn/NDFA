@@ -189,7 +189,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
             encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
         elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
             # TODO: fix this!
-            encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_expression_encoder.token_encoding_dim
+            encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_expression_encoder\
+                .tokens_seq_encoder.token_encoding_dim
         else:
             assert False
 

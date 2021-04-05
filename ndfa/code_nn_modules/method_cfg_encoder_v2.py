@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Dict, Optional, Tuple, Mapping
+from typing import NamedTuple, Dict, Optional, Mapping
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
@@ -50,12 +50,10 @@ class MethodCFGEncoderV2(nn.Module):
         self.symbol_embedding_dim = symbol_embedding_dim
         self.encoder_params = encoder_params
 
-        self.ast_node_embedding_dim = self.encoder_params.cfg_node_expression_encoder.token_encoding_dim  # TODO: FIXME: plug-in correct HPs
         self.code_expression_embedder = CodeExpressionEmbedder(
             code_task_vocabs=code_task_vocabs,
             encoder_params=self.encoder_params.cfg_node_expression_encoder,
             identifier_embedding_dim=self.identifier_embedding_dim,
-            ast_node_embedding_dim=self.ast_node_embedding_dim,
             nr_final_embeddings_linear_layers=1,  # TODO: plug HP here
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -105,28 +103,28 @@ class MethodCFGEncoderV2(nn.Module):
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
                 tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-                ast_node_embedding_dim=self.ast_node_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
         self.code_expression_combiners_after_macro = nn.ModuleList([
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
                 tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
-                ast_node_embedding_dim=self.ast_node_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
 
         if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
             self.tokenized_expression_context_adder = SeqContextAdder(
-                main_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                main_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
                 ctx_dim=self.encoder_params.cfg_node_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             self.macro_context_adder_to_sub_ast = MacroContextAdderToSubAST(
-                ast_node_encoding_dim=self.ast_node_embedding_dim,
+                ast_node_encoding_dim=self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim,
                 cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
         else:
-            raise ValueError(f'Unsupported expression encoder type `{self.expression_encoder_type}`.')
+            raise ValueError(
+                f'Unsupported expression encoder type '
+                f'`{self.encoder_params.cfg_node_expression_encoder.encoder_type}`.')
 
         self.cfg_node_encoder = CFGNodeEncoder(
             cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -190,11 +188,11 @@ class MethodCFGEncoderV2(nn.Module):
         self.symbols_encoder = SymbolsEncoder(
             identifier_embedding_dim=self.identifier_embedding_dim,
             symbol_embedding_dim=self.symbol_embedding_dim,
-            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            expression_encoding_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
             encoder_params=symbols_encoder_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
-            expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+            expression_token_encoding_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -202,7 +200,7 @@ class MethodCFGEncoderV2(nn.Module):
         if self.use_norm:
             self.expressions_norm = ModuleRepeater(
                 module_create_fn=lambda: NormWrapper(
-                    self.encoder_params.cfg_node_expression_encoder.token_encoding_dim,
+                    self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
                     affine=affine_norm, norm_type=norm_type),
                 repeats=3, share=share_norm_between_usage_points, repeat_key='usage_point')
             self.combined_expressions_norm = NormWrapper(
@@ -359,7 +357,7 @@ class MethodCFGEncoderV2(nn.Module):
             if self.use_norm:
                 encoded_code_expressions.token_seqs = self.expressions_norm(
                     encoded_code_expressions.token_seqs, usage_point=2)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             encoded_code_expressions.ast_nodes = self.macro_context_adder_to_sub_ast(
                 previous_ast_nodes_encodings=encoded_code_expressions.ast_nodes,
                 new_cfg_nodes_encodings=encoded_cfg_nodes,

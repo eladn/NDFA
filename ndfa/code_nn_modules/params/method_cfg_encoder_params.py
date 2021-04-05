@@ -7,15 +7,31 @@ from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoder
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField
 
 
 __all__ = ['MethodCFGEncoderParams']
 
 
 @dataclass
-class MethodCFGEncoderParams:
+class MethodCFGEncoderParams(HasDispatchableField):
+    @classmethod
+    def set_dispatch_fields(cls):
+        cls.register_dispatch_field(DispatchField(
+            'encoder_type', {
+                'pdg-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params'],
+                'set-of-control-flow-paths': ['cfg_paths_sequence_encoder'],
+                'control-flow-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params'],
+                'gnn': ['cfg_gnn_encoder'],
+                'set-of-control-flow-paths-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n'],
+                'control-flow-paths-ngrams-folded-to-nodes': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n', 'cfg_nodes_folding_params'],
+                'set-of-nodes': [],
+                'all-nodes-single-unstructured-linear-seq': ['cfg_paths_sequence_encoder'],
+                'all-nodes-single-unstructured-linear-seq-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n'],
+                'all-nodes-single-random-permutation-seq': ['cfg_paths_sequence_encoder']
+            }))
     encoder_type: str = confparam(
-        default='pdg-paths-folded-to-nodes',
+        default='control-flow-paths-folded-to-nodes',
         choices=('pdg-paths-folded-to-nodes',
                  'set-of-control-flow-paths', 'control-flow-paths-folded-to-nodes', 'gnn',
                  'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
@@ -30,6 +46,7 @@ class MethodCFGEncoderParams:
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
 
+    # TODO: dispatch it somehow; not relevant for non tokens-seq encoder
     cfg_node_tokenized_expression_combiner: SequenceCombinerParams = confparam(
         default_factory=lambda: SequenceCombinerParams(
             method='ends', nr_attn_heads=8, nr_dim_reduction_layers=0),

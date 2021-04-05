@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.code_tokens_seq_encoder_params import CodeTokensSeqEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
@@ -13,7 +13,7 @@ __all__ = ['CodeExpressionTokensSequenceEncoder']
 
 class CodeExpressionTokensSequenceEncoder(nn.Module):
     def __init__(self,
-                 encoder_params: CodeExpressionEncoderParams,
+                 encoder_params: CodeTokensSeqEncoderParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionTokensSequenceEncoder, self).__init__()
         self.encoder_params = encoder_params

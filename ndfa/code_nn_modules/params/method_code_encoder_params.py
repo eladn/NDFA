@@ -2,17 +2,24 @@ from confclass import confparam
 from dataclasses import dataclass
 
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
-from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEncoderParams
 from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
+from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField
 
 
 __all__ = ['MethodCodeEncoderParams']
 
 
 @dataclass
-class MethodCodeEncoderParams:
+class MethodCodeEncoderParams(HasDispatchableField):
+    @classmethod
+    def set_dispatch_fields(cls):
+        cls.register_dispatch_field(DispatchField(
+            'method_encoder_type', {
+                'whole-method': 'whole_method_expression_encoder',
+                'method-cfg': 'method_cfg_encoder',
+                'method-cfg-v2': 'method_cfg_encoder'}))
     method_encoder_type: str = confparam(
         # default='whole-method',
         default='method-cfg-v2',
@@ -25,18 +32,12 @@ class MethodCodeEncoderParams:
         description="Representation type of the method-CFG "
                     "(specific architecture of the method-CFG-code-encoder).",
         arg_prefix='method_cfg_encoder')
-    # relevant only if `method_encoder_type == 'method-ast'`
-    method_ast_encoder: ASTEncoderParams = confparam(
-        default_factory=ASTEncoderParams,
-        description="Representation type of the method-AST "
-                    "(specific architecture of the method-AST-code-encoder).",
-        arg_prefix='method_ast_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
-    method_linear_seq_expression_encoder: CodeExpressionEncoderParams = confparam(
+    whole_method_expression_encoder: CodeExpressionEncoderParams = confparam(
         default_factory=lambda: CodeExpressionEncoderParams(encoder_type='tokens-seq'),
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
-        arg_prefix='method_linear_seq_encoder')
+        arg_prefix='whole_method_expression_encoder')
 
     # preprocess params
     # TODO: put the preprocess params in a dedicated nested confclass.

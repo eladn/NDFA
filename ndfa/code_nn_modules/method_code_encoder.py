@@ -61,22 +61,21 @@ class MethodCodeEncoder(nn.Module):
                 symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == 'whole-method':
-            self.ast_node_embedding_dim = self.encoder_params.method_linear_seq_expression_encoder.token_encoding_dim  # TODO: FIXME: plug-in correct HPs
             self.whole_method_code_embedder = CodeExpressionEmbedder(
                 code_task_vocabs=code_task_vocabs,
-                encoder_params=self.encoder_params.method_linear_seq_expression_encoder,
+                encoder_params=self.encoder_params.whole_method_expression_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
-                ast_node_embedding_dim=self.ast_node_embedding_dim,
                 nr_final_embeddings_linear_layers=1,  # TODO: plug HP here
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             self.whole_method_code_encoder = CodeExpressionEncoder(
-                encoder_params=self.encoder_params.method_linear_seq_expression_encoder,
+                encoder_params=self.encoder_params.whole_method_expression_encoder,
                 code_task_vocabs=code_task_vocabs,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             self.symbols_encoder = SymbolsEncoder(
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                expression_encoding_dim=self.encoder_params.method_cfg_encoder.cfg_node_expression_encoder.token_encoding_dim,
+                expression_encoding_dim=self.encoder_params.method_cfg_encoder.cfg_node_expression_encoder
+                    .tokens_seq_encoder.token_encoding_dim,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)

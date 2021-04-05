@@ -17,7 +17,6 @@ class CodeExpressionEmbedder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs,
                  encoder_params: CodeExpressionEncoderParams,
                  identifier_embedding_dim: int,
-                 ast_node_embedding_dim: int,
                  nr_final_embeddings_linear_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionEmbedder, self).__init__()
@@ -27,18 +26,19 @@ class CodeExpressionEmbedder(nn.Module):
             self.code_tokens_embedder = CodeTokensEmbedder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
-                token_encoding_dim=self.encoder_params.token_encoding_dim,
-                kos_token_embedding_dim=self.encoder_params.kos_token_embedding_dim,
-                token_type_embedding_dim=self.encoder_params.token_type_embedding_dim,
+                token_encoding_dim=self.encoder_params.tokens_seq_encoder.token_encoding_dim,
+                kos_token_embedding_dim=self.encoder_params.tokens_seq_encoder.kos_token_embedding_dim,
+                token_type_embedding_dim=self.encoder_params.tokens_seq_encoder.token_type_embedding_dim,
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 nr_out_linear_layers=nr_final_embeddings_linear_layers,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.encoder_type in {'ast_paths', 'ast_treelstm'}:
-            self.ast_node_embedding_dim = ast_node_embedding_dim
-            self.primitive_type_embedding_dim = self.ast_node_embedding_dim
-            self.modifier_embedding_dim = self.ast_node_embedding_dim
+        elif self.encoder_params.encoder_type == 'ast':
+            # TODO: put in HPs
+            self.primitive_type_embedding_dim = self.encoder_params.ast_encoder.ast_node_embedding_dim
+            self.modifier_embedding_dim = self.encoder_params.ast_encoder.ast_node_embedding_dim
+
             self.ast_nodes_embedder = ASTNodesEmbedder(
-                ast_node_embedding_dim=self.ast_node_embedding_dim,
+                ast_node_embedding_dim=self.encoder_params.ast_encoder.ast_node_embedding_dim,
                 identifier_encoding_dim=self.identifier_embedding_dim,
                 primitive_type_embedding_dim=self.primitive_type_embedding_dim,
                 modifier_embedding_dim=self.modifier_embedding_dim,
@@ -64,7 +64,7 @@ class CodeExpressionEmbedder(nn.Module):
                 kos_token_index=tokenized_expressions_input.kos_token_index.tensor,
                 identifier_index=tokenized_expressions_input.identifier_index.indices,
                 encoded_identifiers=encoded_identifiers))
-        elif self.encoder_params.encoder_type in {'ast_paths', 'ast_treelstm'}:
+        elif self.encoder_params.encoder_type == 'ast':
             return CodeExpressionEncodingsTensors(ast_nodes=self.ast_nodes_embedder(
                 method_ast_input=method_ast_input,
                 identifiers_encodings=encoded_identifiers))
