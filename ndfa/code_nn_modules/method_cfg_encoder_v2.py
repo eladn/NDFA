@@ -102,13 +102,11 @@ class MethodCFGEncoderV2(nn.Module):
         self.code_expression_combiners_before_macro = nn.ModuleList([
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
-                tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
         self.code_expression_combiners_after_macro = nn.ModuleList([
             CodeExpressionCombiner(
                 encoder_params=self.encoder_params.cfg_node_expression_encoder,
-                tokenized_expression_combiner_params=self.encoder_params.cfg_node_tokenized_expression_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
 

@@ -2,7 +2,6 @@ from typing import Optional
 
 from confclass import confparam
 from dataclasses import dataclass
-from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
@@ -46,12 +45,6 @@ class MethodCFGEncoderParams(HasDispatchableField):
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
 
-    # TODO: dispatch it somehow; not relevant for non tokens-seq encoder
-    cfg_node_tokenized_expression_combiner: SequenceCombinerParams = confparam(
-        default_factory=lambda: SequenceCombinerParams(
-            method='ends', nr_attn_heads=8, nr_dim_reduction_layers=0),
-        arg_prefix='cfg_node_expression_combiner')
-
     cfg_node_control_kinds_embedding_dim: int = confparam(
         default=64,
         description="Embedding size for the CFG node control kind.")
@@ -63,7 +56,7 @@ class MethodCFGEncoderParams(HasDispatchableField):
         # default_description="cfg_node_type_embedding_size + code_expression_encoding_size",
         description="Size of encoded CFG node vector.")
 
-    cfg_paths_sequence_encoder: SequenceEncoderParams = confparam(
+    cfg_paths_sequence_encoder: Optional[SequenceEncoderParams] = confparam(
         default_factory=SequenceEncoderParams,
         arg_prefix='sequence-encoder')
 

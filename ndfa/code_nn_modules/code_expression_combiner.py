@@ -17,7 +17,6 @@ __all__ = ['CodeExpressionCombiner']
 class CodeExpressionCombiner(nn.Module):
     def __init__(self,
                  encoder_params: CodeExpressionEncoderParams,
-                 tokenized_expression_combiner_params: SequenceCombinerParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionCombiner, self).__init__()
         self.encoder_params = encoder_params
@@ -25,7 +24,7 @@ class CodeExpressionCombiner(nn.Module):
             self.tokenized_sequence_combiner = SequenceCombiner(
                 encoding_dim=self.encoder_params.tokens_seq_encoder.token_encoding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,
-                combiner_params=tokenized_expression_combiner_params,
+                combiner_params=self.encoder_params.tokenized_expression_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type == 'ast':
             self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(

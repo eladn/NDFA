@@ -77,7 +77,6 @@ def main():
     experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
     expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest())\
         .strip().decode('ascii').strip('=')
-    print(f'{expr_settings_hash_base64=}')
 
     loaded_checkpoint = None
     if exec_params.should_load_model:
@@ -110,7 +109,7 @@ def main():
         print(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
               f'Ignoring experiment settings from other inputs.')
 
-    print('Experiment setting:')
+    print(f'Experiment setting [hash=`{expr_settings_hash_base64}`]:')
     print(experiment_setting_yaml)
 
     if exec_params.seed is not None:

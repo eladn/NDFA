@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.cfg_sub_ast_expression_combiner_params import CFGSubASTExpressionCombinerParams
 from ndfa.code_nn_modules.params.code_tokens_seq_encoder_params import CodeTokensSeqEncoderParams
+from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField
 
 
@@ -17,8 +18,8 @@ class CodeExpressionEncoderParams(HasDispatchableField):
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'ast': 'ast_encoder',
-                'tokens-seq': 'tokens_seq_encoder'}))
+                'ast': ['ast_encoder', 'cfg_sub_ast_expression_combiner_params'],
+                'tokens-seq': ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
 
     encoder_type: str = confparam(
         default='ast',
@@ -27,7 +28,7 @@ class CodeExpressionEncoderParams(HasDispatchableField):
                     "(part of the architecture of the code-encoder).")
 
     # relevant only if `encoder_type == 'ast_paths'`
-    ast_encoder: ASTEncoderParams = confparam(
+    ast_encoder: Optional[ASTEncoderParams] = confparam(
         default_factory=ASTEncoderParams,
         description="Representation type of the AST of the expression "
                     "(part of the architecture of the code-encoder).",
@@ -42,5 +43,9 @@ class CodeExpressionEncoderParams(HasDispatchableField):
         default=256,
         description="Size of encoded combined code expression.")
 
-    cfg_sub_ast_expression_combiner_params: CFGSubASTExpressionCombinerParams = confparam(
-        default=CFGSubASTExpressionCombinerParams)
+    cfg_sub_ast_expression_combiner_params: Optional[CFGSubASTExpressionCombinerParams] = confparam(
+        default_factory=CFGSubASTExpressionCombinerParams)
+
+    tokenized_expression_combiner: Optional[SequenceCombinerParams] = confparam(
+        default_factory=lambda: SequenceCombinerParams(
+            method='ends', nr_attn_heads=8, nr_dim_reduction_layers=0))
