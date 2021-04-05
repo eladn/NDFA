@@ -1,5 +1,6 @@
 import multiprocessing
 import numpy as np
+import io
 import os
 import base64
 import hashlib
@@ -13,6 +14,7 @@ from warnings import warn
 from omegaconf import OmegaConf
 
 from ndfa.execution_parameters import ModelExecutionParams
+from ndfa.experiment_setting import ExperimentSetting
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
@@ -48,6 +50,16 @@ def load_exec_params() -> ModelExecutionParams:
         with open('ndfa_conf.yaml', 'r') as conf_file:
             conf = OmegaConf.merge(conf, OmegaConf.load(conf_file))
     exec_params = reinstantiate_omegaconf_container(conf, ModelExecutionParams)
+    HasDispatchableField.fix_dispatch_fields(exec_params)
+    return exec_params
+
+
+def load_experiment_setting_from_yaml(yaml: str) -> ExperimentSetting:
+    conf = OmegaConf.structured(ExperimentSetting)
+    with io.StringIO(yaml) as yaml_file:
+        yaml_file.seek(0)
+        conf = OmegaConf.merge(conf, OmegaConf.load(yaml_file))
+    exec_params = reinstantiate_omegaconf_container(conf, ExperimentSetting)
     HasDispatchableField.fix_dispatch_fields(exec_params)
     return exec_params
 
@@ -91,13 +103,13 @@ def main():
                 f'No model to load in dir {exec_params.model_load_path} that matches the chosen experiment setting.')
         with open(exec_params.model_load_path, 'br') as checkpoint_file:
             loaded_checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
-        # TODO: Modify `exec_params.experiment_setting` according to `loaded_checkpoint['experiment_setting']`.
-        #       Verify overridden arguments and raise ArgumentException if needed.
+        exec_params.experiment_setting = load_experiment_setting_from_yaml(loaded_checkpoint['experiment_setting_yaml'])
         experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
         expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest()) \
             .strip().decode('ascii').strip('=')
+        print(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
+              f'Ignoring experiment settings from other inputs.')
 
-    experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
     print('Experiment setting:')
     print(experiment_setting_yaml)
 
@@ -161,7 +173,7 @@ def main():
                 model.state_dict()
                 # FIXME: we might want to modify these params
                 new_ckpt_state_dict = {
-                    'experiment_setting': exec_params.experiment_setting,
+                    'experiment_setting_yaml': experiment_setting_yaml,
                     'epoch_nr': epoch_nr,
                     'step_nr': step_nr,
                     'model_state_dict': model.state_dict(),
