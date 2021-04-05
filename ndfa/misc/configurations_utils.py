@@ -1,14 +1,15 @@
+import abc
 import enum
 import typing
 import argparse
 import omegaconf
 import dataclasses
 from omegaconf import OmegaConf
-from typing import TypeVar, Union, Container, Optional, Type, Tuple, List
+from typing import TypeVar, Union, Container, Optional, Type, Tuple, List, Dict, Any, Collection
 
 
 __all__ = ['create_argparser_from_dataclass_conf_structure', 'reinstantiate_omegaconf_container',
-           'create_conf_dotlist_from_parsed_args']
+           'create_conf_dotlist_from_parsed_args', 'DispatchField', 'HasDispatchableField']
 
 
 @dataclasses.dataclass
@@ -136,3 +137,59 @@ def create_conf_dotlist_from_parsed_args(args: argparse.Namespace) -> List[str]:
             continue
         dotlist.append(f'{key.replace("___", ".")}={value}')
     return dotlist
+
+
+@dataclasses.dataclass
+class DispatchField:
+    dispatch_field_name: str
+    value_to_field_name_map: Dict[Any, Union[str, Collection[str]]]
+
+
+@dataclasses.dataclass
+class HasDispatchableField(abc.ABC):
+    # _dispatch_fields: Dict[str, DispatchField] = field(default_factory=dict, init=False, compare=False, repr=False)
+
+    @classmethod
+    def register_dispatch_field(cls, dispatch_field: DispatchField):
+        if not hasattr(cls, '_dispatch_fields'):
+            cls._dispatch_fields: Dict[str, DispatchField] = {}
+        if dispatch_field.dispatch_field_name in cls._dispatch_fields:
+            return  # dispatch field already set
+        self_field_names = set(fld.name for fld in dataclasses.fields(cls))
+        assert dispatch_field.dispatch_field_name in self_field_names
+        assert all(fld_name in self_field_names for fld_name in dispatch_field.value_to_field_name_map.values())
+        cls._dispatch_fields[dispatch_field.dispatch_field_name] = dispatch_field
+
+    @classmethod
+    @abc.abstractmethod
+    def set_dispatch_fields(cls):
+        ...
+
+    @classmethod
+    def set_dispatch_fields_once(cls):
+        if not hasattr(cls, '_dispatch_fields_set'):
+            return
+        cls.set_dispatch_fields()
+
+    def __post_init__(self):
+        super_cls = super(HasDispatchableField, self)
+        if hasattr(super_cls, '__post_init__'):
+            super_cls.__post_init__()
+        self.set_dispatch_fields()
+
+    def fix_dispatch_fields(self):
+        # TODO: warn if we remove field that is set explicitly (not by default c'tor)
+        if isinstance(self, HasDispatchableField):
+            for dispatch_field in self._dispatch_fields.values():
+                val = getattr(self, dispatch_field.dispatch_field_name)
+                fields_to_keep = set()
+                if val in dispatch_field.value_to_field_name_map:
+                    to_keep = dispatch_field.value_to_field_name_map[val]
+                    fields_to_keep = {to_keep} if isinstance(to_keep, str) else set(to_keep)
+                fields_to_remove = set(dispatch_field.value_to_field_name_map.values()) - fields_to_keep
+                for field_name in fields_to_remove:
+                    setattr(self, field_name, None)
+        for fld in dataclasses.fields(self):
+            val = getattr(self, fld.name, None)
+            if val is not None and dataclasses.is_dataclass(val):
+                HasDispatchableField.fix_dispatch_fields(val)
