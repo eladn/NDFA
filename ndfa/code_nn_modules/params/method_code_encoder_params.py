@@ -35,7 +35,7 @@ class MethodCodeEncoderParams(HasDispatchableField):
         arg_prefix='method_cfg_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
     whole_method_expression_encoder: Optional[CodeExpressionEncoderParams] = confparam(
-        default_factory=lambda: CodeExpressionEncoderParams(encoder_type='tokens-seq'),
+        default_factory=lambda: CodeExpressionEncoderParams(encoder_type='FlatTokensSeq'),
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='whole_method_expression_encoder')

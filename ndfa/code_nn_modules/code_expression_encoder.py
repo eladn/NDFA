@@ -25,7 +25,7 @@ class CodeExpressionEncoder(nn.Module):
         self.encoder_params = encoder_params
         self.is_first_encoder_layer = is_first_encoder_layer
         self.identifier_embedding_dim = identifier_embedding_dim
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             self.code_expression_linear_seq_encoder = CodeExpressionTokensSequenceEncoder(
                 encoder_params=self.encoder_params.tokens_seq_encoder,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
@@ -44,7 +44,7 @@ class CodeExpressionEncoder(nn.Module):
             previous_code_expression_encodings: CodeExpressionEncodingsTensors,
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             sub_ast_input: Optional[SubASTInputTensors] = None) -> CodeExpressionEncodingsTensors:
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             return self.code_expression_linear_seq_encoder(
                 token_seqs_embeddings=previous_code_expression_encodings.token_seqs,
                 expressions_input=tokenized_expressions_input)

@@ -20,7 +20,7 @@ class CodeExpressionCombiner(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionCombiner, self).__init__()
         self.encoder_params = encoder_params
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             self.tokenized_sequence_combiner = SequenceCombiner(
                 encoding_dim=self.encoder_params.tokens_seq_encoder.token_encoding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,
@@ -41,7 +41,7 @@ class CodeExpressionCombiner(nn.Module):
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             cfg_nodes_expressions_ast: Optional[PDGExpressionsSubASTInputTensors] = None,
             cfg_nodes_has_expression_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             return self.tokenized_sequence_combiner(
                 sequence_encodings=encoded_code_expressions.token_seqs,
                 sequence_lengths=tokenized_expressions_input.token_type.sequences_lengths)

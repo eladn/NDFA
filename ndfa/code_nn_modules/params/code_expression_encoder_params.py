@@ -19,11 +19,11 @@ class CodeExpressionEncoderParams(HasDispatchableField):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
                 'ast': ['ast_encoder', 'cfg_sub_ast_expression_combiner_params'],
-                'tokens-seq': ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
+                'FlatTokensSeq': ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
 
     encoder_type: str = confparam(
         default='ast',
-        choices=('tokens-seq', 'ast'),
+        choices=('FlatTokensSeq', 'ast'),
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 

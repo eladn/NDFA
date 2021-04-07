@@ -22,7 +22,7 @@ class CodeExpressionEmbedder(nn.Module):
         super(CodeExpressionEmbedder, self).__init__()
         self.encoder_params = encoder_params
         self.identifier_embedding_dim = identifier_embedding_dim
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             self.code_tokens_embedder = CodeTokensEmbedder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
@@ -58,7 +58,7 @@ class CodeExpressionEmbedder(nn.Module):
             encoded_identifiers: torch.Tensor,
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             method_ast_input: Optional[MethodASTInputTensors] = None) -> CodeExpressionEncodingsTensors:
-        if self.encoder_params.encoder_type == 'tokens-seq':
+        if self.encoder_params.encoder_type == 'FlatTokensSeq':
             return CodeExpressionEncodingsTensors(token_seqs=self.code_tokens_embedder(
                 token_type=tokenized_expressions_input.token_type.sequences,
                 kos_token_index=tokenized_expressions_input.kos_token_index.tensor,

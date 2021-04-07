@@ -110,7 +110,7 @@ class MethodCFGEncoderV2(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
 
-        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
             self.tokenized_expression_context_adder = SeqContextAdder(
                 main_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
                 ctx_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -187,7 +187,7 @@ class MethodCFGEncoderV2(nn.Module):
         # TODO: put in HPs
         expression_encoding_dim = \
             self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim \
-                if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq' else \
+                if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq' else \
                 self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim
 
         self.symbols_encoder = SymbolsEncoder(
@@ -233,7 +233,7 @@ class MethodCFGEncoderV2(nn.Module):
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast)
         if self.use_norm:
-            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoded_code_expressions.token_seqs = self.expressions_norm(
                     encoded_code_expressions.token_seqs, usage_point=1)
             elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
@@ -259,7 +259,7 @@ class MethodCFGEncoderV2(nn.Module):
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             method_ast_input=code_task_input.ast)
         if self.use_norm:
-            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
                 embedded_code_expressions.token_seqs = self.expressions_norm(
                     embedded_code_expressions.token_seqs, usage_point=0)
             elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
@@ -351,7 +351,7 @@ class MethodCFGEncoderV2(nn.Module):
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
         # Add CFG-node macro context to its own sub-AST.
-        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'tokens-seq':
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
             # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
             # FIXME: notice there is a skip-connection built-in here that is not conditioned
             #  by the flag `self.use_skip_connections`.
