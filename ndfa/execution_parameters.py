@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from confclass import confparam
 from typing import Optional
 import argparse
 
 from ndfa.experiment_setting import ExperimentSetting
+from ndfa.misc.configurations_utils import conf_field
 
 
 __all__ = ['ModelExecutionParams']
@@ -11,141 +11,141 @@ __all__ = ['ModelExecutionParams']
 
 @dataclass
 class ModelExecutionParams:
-    model_save_path: Optional[str] = confparam(
+    model_save_path: Optional[str] = conf_field(
         default=None,
         description="Path to save the model file into during and after training.",
         arg_names=['--model-save-path'])
 
-    model_load_path: Optional[str] = confparam(
+    model_load_path: Optional[str] = conf_field(
         default=None,
         description="Path to load the model from.",
         arg_names=['--model-load-path'])
 
-    pp_data_dir_path: Optional[str] = confparam(
+    pp_data_dir_path: Optional[str] = conf_field(
         default=None,
         description="Path to preprocessed dataset.",
         arg_names=['--pp-data'])
 
-    predict_pp_data_path: Optional[str] = confparam(
+    predict_pp_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to preprocessed prediction data.",
         arg_names=['--pred-pp-data-path'])
 
-    predict_raw_data_path: Optional[str] = confparam(
+    predict_raw_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to raw prediction data.",
         arg_names=['--pred-raw-data-path'])
 
-    predict_output_path: Optional[str] = confparam(
+    predict_output_path: Optional[str] = conf_field(
         default=None,
         description="Dir path to prediction outputs.",
         arg_names=['--pred-output-path'])
 
-    perform_training: bool = confparam(
+    perform_training: bool = conf_field(
         default=False,
         description="Train of the model.",
         arg_names=['--train'])
 
-    perform_evaluation: bool = confparam(
+    perform_evaluation: bool = conf_field(
         default=False,
         description="Evaluate of the model. If `--train` has also been set, evaluate during and after the training.",
         arg_names=['--eval'])
 
-    perform_preprocessing: bool = confparam(
+    perform_preprocessing: bool = conf_field(
         default=False,
         description="Perform preprocessing of the raw dataset.",
         arg_names=['--preprocess'])
 
-    pp_nr_processes: Optional[int] = confparam(
+    pp_nr_processes: Optional[int] = conf_field(
         default=4,
         description="Number of processes to use for preprocessing.",
         arg_names=['--pp-nr-processes'])
 
-    pp_override: bool = confparam(
+    pp_override: bool = conf_field(
         default=False,
         description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
         arg_names=['--pp-override'])
 
-    raw_train_data_path: Optional[str] = confparam(
+    raw_train_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to raw train dataset.",
         arg_names=['--raw-train-data-path'])
 
-    raw_validation_data_path: Optional[str] = confparam(
+    raw_validation_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to raw evaluation dataset.",
         arg_names=['--raw-validation-data-path'])
 
-    raw_test_data_path: Optional[str] = confparam(
+    raw_test_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to raw test dataset.",
         arg_names=['--raw-test-data-path'])
 
-    verbose_mode: int = confparam(
+    verbose_mode: int = conf_field(
         default=1,
         choices=(0, 1, 2),
         description="Verbose mode (should be in {0,1,2}).",
         arg_names=['--verbosity', '-v'])
 
-    logs_path: Optional[str] = confparam(
+    logs_path: Optional[str] = conf_field(
         default=None,
         description="Path to store logs into. if not given logs are not saved to file.",
         arg_names=['--logs-path', '-lp'])
 
-    use_tensorboard: bool = confparam(
+    use_tensorboard: bool = conf_field(
         default=False,
         description="Use tensorboard during training.",
         arg_names=['--use-tensorboard'])
 
-    num_train_epochs: int = confparam(
+    num_train_epochs: int = conf_field(
         default=20,
         description="The max number of epochs to train the model. Stopping earlier must be done manually (kill).")
 
-    save_every_epochs: int = confparam(
+    save_every_epochs: int = conf_field(
         default=1,
         description="After how many training iterations a model should be saved.")
 
-    num_batches_to_log_progress: int = confparam(
+    num_batches_to_log_progress: int = conf_field(
         default=100,
         description="Number of batches (during training / evaluating) to complete between two progress-logging "
                     "records.")
 
-    num_train_batches_to_evaluate: int = confparam(
+    num_train_batches_to_evaluate: int = conf_field(
         default=100,
         description="Number of training batches to complete between model evaluations on the test set.")
 
-    max_latest_checkpoints_to_keep: Optional[int] = confparam(
+    max_latest_checkpoints_to_keep: Optional[int] = conf_field(
         default=10,
         description="Keep this number of newest trained versions during training.")
 
-    experiment_setting: ExperimentSetting = confparam(
+    experiment_setting: ExperimentSetting = conf_field(
         default_factory=ExperimentSetting,
         description="Experiment setting.",
         arg_prefix='expr'
     )
 
-    batch_size: int = confparam(
+    batch_size: int = conf_field(
         default=16,
         description="Actual batch size both for training and for evaluating "
                     "(must be a divisor of `experiment_setting.train.eff_batch_size` for training).")
 
-    use_gpu_if_available: bool = confparam(
+    use_gpu_if_available: bool = conf_field(
         default=True,
         description="Use GPU if available.",
         arg_names=['--use-gpu']
     )
 
-    seed: Optional[int] = confparam(
+    seed: Optional[int] = conf_field(
         default=1)
 
-    use_notify: bool = confparam(
+    use_notify: bool = conf_field(
         default=False,
         arg_names=['--use-notify'])
 
-    dataloader_num_workers: Optional[int] = confparam(
+    dataloader_num_workers: Optional[int] = conf_field(
         default=None)
 
-    dataloader_pin_memory: bool = confparam(
+    dataloader_pin_memory: bool = conf_field(
         default=True)
 
     @property

@@ -1,7 +1,8 @@
-from confclass import confparam
 from dataclasses import dataclass
 from typing import Optional
 from .sequence_combiner_params import SequenceCombinerParams
+
+from ndfa.misc.configurations_utils import conf_field
 
 
 __all__ = ['SequenceEncoderParams']
@@ -9,15 +10,15 @@ __all__ = ['SequenceEncoderParams']
 
 @dataclass
 class SequenceEncoderParams:
-    encoder_type: str = confparam(
+    encoder_type: str = conf_field(
         default='rnn',
         choices=('rnn', 'transformer'),
         description="...")
-    rnn_type: str = confparam(
+    rnn_type: str = conf_field(
         default='lstm', choices=('lstm', 'gru'))
-    nr_rnn_layers: int = confparam(
+    nr_rnn_layers: int = conf_field(
         default=1)
-    bidirectional_rnn: bool = confparam(
+    bidirectional_rnn: bool = conf_field(
         default=True)
-    sequence_combiner: Optional[SequenceCombinerParams] = confparam(
+    sequence_combiner: Optional[SequenceCombinerParams] = conf_field(
         default=None)

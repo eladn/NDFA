@@ -5,11 +5,12 @@ import argparse
 import omegaconf
 import dataclasses
 from omegaconf import OmegaConf
-from typing import TypeVar, Union, Container, Optional, Type, Tuple, List, Dict, Any, Collection
+from typing import TypeVar, Union, Container, Optional, Type, Tuple, List, Dict, Any, Collection, Callable
 
 
 __all__ = ['create_argparser_from_dataclass_conf_structure', 'reinstantiate_omegaconf_container',
-           'create_conf_dotlist_from_parsed_args', 'DispatchField', 'HasDispatchableField']
+           'create_conf_dotlist_from_parsed_args', 'DispatchField', 'HasDispatchableField',
+           'conf_field', 'get_conf_field_info', 'ConfFieldInfo']
 
 
 @dataclasses.dataclass
@@ -49,25 +50,40 @@ def create_argparser_from_dataclass_conf_structure(
         required = not original_field_type_info.is_optional and \
                    (field.default is dataclasses.MISSING or field.default is omegaconf.MISSING) and \
                    (field.default_factory is dataclasses.MISSING or field.default_factory is omegaconf.MISSING)
+
+        conf_field_info = get_conf_field_info(field)
+        if conf_field_info is None:
+            conf_field_info = ConfFieldInfo()
+        assert conf_field_info.description is None or isinstance(conf_field_info.description, str)
+
         if dataclasses.is_dataclass(original_field_type_info.original_type):
             create_argparser_from_dataclass_conf_structure(
                 _type=field.type, argparser=argparser, prefix=prefix + (field.name,))
         elif issubclass(original_field_type_info.original_type, bool):
             group = argparser.add_mutually_exclusive_group(required=required)
-            group.add_argument(arg_name, action='store_true', dest=arg_dest, default=None)
-            group.add_argument(arg_negate_name, action='store_false', dest=arg_dest, default=None)
+            group.add_argument(
+                arg_name, action='store_true', dest=arg_dest, default=None,
+                help=conf_field_info.description)
+            group.add_argument(
+                arg_negate_name, action='store_false', dest=arg_dest, default=None,
+                help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, (int, float, str)):
             argparser.add_argument(
                 arg_name, type=original_field_type_info.original_type,
-                required=required, dest=arg_dest)
+                choices=conf_field_info.choices, required=required,
+                dest=arg_dest, help=conf_field_info.description)
         elif original_field_type_info.original_type == typing.Literal:
+            choices = typing.get_args(original_field_type_info.unwrapped_type)
+            assert conf_field_info.choices is None or set(conf_field_info.choices) == set(choices)
             argparser.add_argument(
-                arg_name, choices=typing.get_args(original_field_type_info.unwrapped_type),
-                required=required, dest=arg_dest)
+                arg_name, choices=choices,
+                required=required, dest=arg_dest, help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, enum.Enum):
+            choices = tuple(original_field_type_info.original_type.__members__.keys())
+            assert conf_field_info.choices is None or set(conf_field_info.choices) == set(choices)
             argparser.add_argument(
-                arg_name, choices=tuple(original_field_type_info.original_type.__members__.keys()),
-                required=required, dest=arg_dest)
+                arg_name, choices=choices,
+                required=required, dest=arg_dest, help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, (list, tuple, set, frozenset)):
             item_type = None
             if original_field_type_info.unwrapped_type is not None:
@@ -78,7 +94,9 @@ def create_argparser_from_dataclass_conf_structure(
                 if len(container_typing_args) >= 1:
                     item_type = container_typing_args[0]
             # TODO: finish this case
-        # TODO: support `confparam` meta-data (description & choices)
+        else:
+            assert False
+        # TODO: support `ConfFieldInfo` additional info (arg_prefix, arg_names, ...)
 
     return argparser
 
@@ -201,3 +219,36 @@ class HasDispatchableField(abc.ABC):
             val = getattr(self, fld.name, None)
             if val is not None and dataclasses.is_dataclass(val):
                 HasDispatchableField.fix_dispatch_fields(val)
+
+
+@dataclasses.dataclass
+class ConfFieldInfo:
+    description: Optional[str] = None
+    default_as_other_field: Optional[str] = None
+    default_factory_with_self_access: Optional[Callable] = None
+    default_description: Optional[str] = None
+    init_from_arg: bool = True
+    arg_names: Optional[Collection[str]] = None
+    arg_prefix: Optional[str] = None
+    choices: Optional[Collection[Union[str, int, float]]] = None
+
+
+def conf_field(
+        *, default=dataclasses.MISSING, default_factory=dataclasses.MISSING, init=True, repr=True,
+        hash=None, compare=True, metadata=None, description: Optional[str] = None,
+        arg_names: Optional[Collection[str]] = None, arg_prefix: Optional[str] = None,
+        choices: Optional[Collection[Union[str, int, float]]] = None):
+    metadata = {} if metadata is None else metadata
+    assert '__ConfFieldInfo' not in metadata
+    metadata['__ConfFieldInfo'] = ConfFieldInfo(
+        description=description,
+        arg_names=arg_names,
+        arg_prefix=arg_prefix,
+        choices=choices)
+    return dataclasses.field(
+        default=default, default_factory=default_factory, init=init,
+        repr=repr, hash=hash, compare=compare, metadata=metadata)
+
+
+def get_conf_field_info(field: dataclasses.Field) -> Optional[ConfFieldInfo]:
+    return field.metadata.get('__ConfFieldInfo', None)
