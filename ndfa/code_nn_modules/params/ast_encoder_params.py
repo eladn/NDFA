@@ -17,8 +17,8 @@ class ASTEncoderParams(HasDispatchableField):
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'paths-folded': ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types'],  # TODO: remove 'paths_combiner_params'?
-                'set-of-paths': ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types'],
+                'paths-folded': ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges'],  # TODO: remove 'paths_combiner_params'?
+                'set-of-paths': ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges'],
                 'tree': []}))
     encoder_type: str = confparam(
         default='paths-folded',
@@ -31,6 +31,8 @@ class ASTEncoderParams(HasDispatchableField):
     paths_sequence_encoder_params: SequenceEncoderParams = confparam(
         default_factory=SequenceEncoderParams,
         arg_prefix='paths_sequence_encoder')
+
+    paths_add_traversal_edges: Optional[bool] = True
 
     paths_combiner_params: Optional[SequenceCombinerParams] = confparam(
         default_factory=SequenceCombinerParams)

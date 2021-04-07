@@ -35,18 +35,19 @@ class ASTPathsEncoder(nn.Module):
         self.is_first_encoder_layer = is_first_encoder_layer
 
         if self.is_first_encoder_layer:
-            self.ast_traversal_orientation_vocab = ast_traversal_orientation_vocab
-            self.ast_traversal_orientation_embedding_layer = nn.ModuleDict({
-                ast_paths_type: nn.Embedding(
-                    num_embeddings=len(self.ast_traversal_orientation_vocab),
-                    embedding_dim=self.ast_node_embedding_dim,
-                    padding_idx=self.ast_traversal_orientation_vocab.get_word_idx('<PAD>'))
-                for ast_paths_type in self.encoder_params.ast_paths_types})
-            self.ast_traversal_orientation_linear_projection_layer = nn.ModuleDict({
-                ast_paths_type: nn.Linear(
-                    in_features=2 * self.ast_node_embedding_dim,
-                    out_features=self.ast_node_embedding_dim)
-                for ast_paths_type in self.encoder_params.ast_paths_types})
+            if self.encoder_params.paths_add_traversal_edges:
+                self.ast_traversal_orientation_vocab = ast_traversal_orientation_vocab
+                self.ast_traversal_orientation_embedding_layer = nn.ModuleDict({
+                    ast_paths_type: nn.Embedding(
+                        num_embeddings=len(self.ast_traversal_orientation_vocab),
+                        embedding_dim=self.ast_node_embedding_dim,
+                        padding_idx=self.ast_traversal_orientation_vocab.get_word_idx('<PAD>'))
+                    for ast_paths_type in self.encoder_params.ast_paths_types})
+                self.ast_traversal_orientation_linear_projection_layer = nn.ModuleDict({
+                    ast_paths_type: nn.Linear(
+                        in_features=2 * self.ast_node_embedding_dim,
+                        out_features=self.ast_node_embedding_dim)
+                    for ast_paths_type in self.encoder_params.ast_paths_types})
         else:
             self.nodes_occurrences_update_gate = nn.ModuleDict({
                 ast_paths_type: StateUpdater(
@@ -80,23 +81,25 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_type: str,
             ast_paths_last_states: Optional[ASTPathsEncodingsTensors] = None) -> ASTPathsEncodingsTensors:
         ast_paths_node_indices = sub_ast_input.get_ast_paths_node_indices(ast_paths_type)
-        ast_paths_child_place = sub_ast_input.get_ast_paths_child_place(ast_paths_type)
-        ast_paths_vertical_direction = sub_ast_input.get_ast_paths_vertical_direction(ast_paths_type)
+
         ast_paths_traversal_orientation_encodings_input = None
         if self.is_first_encoder_layer:
-            if ast_paths_child_place is not None:
-                ast_paths_child_place_embeddings = \
-                    self.ast_traversal_orientation_embedding_layer[ast_paths_type](ast_paths_child_place.sequences)
-                if ast_paths_vertical_direction is None:
-                    ast_paths_traversal_orientation_encodings_input = ast_paths_child_place_embeddings
-                else:
-                    ast_paths_vertical_direction_embeddings = \
-                        self.ast_traversal_orientation_embedding_layer[ast_paths_type](ast_paths_vertical_direction.sequences)
-                    ast_paths_traversal_orientation_encodings_input = \
-                        self.ast_traversal_orientation_linear_projection_layer[ast_paths_type](torch.cat([
-                            ast_paths_child_place_embeddings,
-                            ast_paths_vertical_direction_embeddings], dim=-1))
             ast_paths_node_occurrences_encodings_inputs = ast_nodes_encodings[ast_paths_node_indices.sequences]
+            if self.encoder_params.paths_add_traversal_edges:
+                ast_paths_child_place = sub_ast_input.get_ast_paths_child_place(ast_paths_type)
+                ast_paths_vertical_direction = sub_ast_input.get_ast_paths_vertical_direction(ast_paths_type)
+                if ast_paths_child_place is not None:
+                    ast_paths_child_place_embeddings = \
+                        self.ast_traversal_orientation_embedding_layer[ast_paths_type](ast_paths_child_place.sequences)
+                    if ast_paths_vertical_direction is None:
+                        ast_paths_traversal_orientation_encodings_input = ast_paths_child_place_embeddings
+                    else:
+                        ast_paths_vertical_direction_embeddings = \
+                            self.ast_traversal_orientation_embedding_layer[ast_paths_type](ast_paths_vertical_direction.sequences)
+                        ast_paths_traversal_orientation_encodings_input = \
+                            self.ast_traversal_orientation_linear_projection_layer[ast_paths_type](torch.cat([
+                                ast_paths_child_place_embeddings,
+                                ast_paths_vertical_direction_embeddings], dim=-1))
         else:
             # update nodes occurrences (in the path) with the last nodes representation using an update gate.
             ast_paths_node_occurrences_encodings_inputs = self.nodes_occurrences_update_gate[ast_paths_type](
