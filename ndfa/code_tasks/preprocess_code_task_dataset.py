@@ -314,13 +314,14 @@ def preprocess_code_task_example(
         control_flow=True, data_dependency=False,
         group_different_edges_of_single_nodes_pair_in_same_path=False,
         max_nr_paths=model_hps.method_code_encoder.max_nr_control_flow_paths)
-    pdg_paths = get_all_pdg_simple_paths(
-        method_pdg=method_pdg,
-        src_pdg_node_idx=method_pdg.entry_pdg_node_idx, tgt_pdg_node_idx=method_pdg.exit_pdg_node_idx,
-        control_flow=True, data_dependency=True, max_nr_data_dependency_edges_in_path=1,
-        group_different_edges_of_single_nodes_pair_in_same_path=True,
-        max_nr_paths=model_hps.method_code_encoder.max_nr_pdg_paths,
-        remove_data_dependency_edges_from_pdg_nodes_idxs=remove_edges_from_pdg_nodes_idxs)
+    pdg_paths = None
+    # pdg_paths = get_all_pdg_simple_paths(
+    #     method_pdg=method_pdg,
+    #     src_pdg_node_idx=method_pdg.entry_pdg_node_idx, tgt_pdg_node_idx=method_pdg.exit_pdg_node_idx,
+    #     control_flow=True, data_dependency=True, max_nr_data_dependency_edges_in_path=1,
+    #     group_different_edges_of_single_nodes_pair_in_same_path=True,
+    #     max_nr_paths=model_hps.method_code_encoder.max_nr_pdg_paths,
+    #     remove_data_dependency_edges_from_pdg_nodes_idxs=remove_edges_from_pdg_nodes_idxs)
 
     if control_flow_paths is None:
         PreprocessLimitation.enforce_limitations(limitations=[
@@ -336,26 +337,26 @@ def preprocess_code_task_example(
         for path in control_flow_paths]
     control_flow_paths.sort()  # for determinism
 
-    if pdg_paths is None:
-        PreprocessLimitation.enforce_limitations(limitations=[
-            PreprocessLimitation(
-                object_name='#pdg_paths', value=float('inf'),
-                max_val=model_hps.method_code_encoder.max_nr_pdg_paths)])
-    assert pdg_paths is not None
-    def get_most_important_edge_type_from_edges_group(
-            edges_group: Tuple[Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge]]) -> Optional[str]:
-        if len(edges_group) < 1:
-            return None
-        control_flow_edge = next((edge for edge in edges_group if isinstance(edge, SerPDGControlFlowEdge)), None)
-        if control_flow_edge is not None:
-            return control_flow_edge.type.value
-        assert isinstance(edges_group[0], SerPDGDataDependencyEdge)
-        return 'DataDependency'
-    pdg_paths = [
-        tuple((path_node.node_idx, get_most_important_edge_type_from_edges_group(path_node.edges))
-              for path_node in path)
-        for path in pdg_paths]
-    pdg_paths.sort()  # for determinism
+    # if pdg_paths is None:
+    #     PreprocessLimitation.enforce_limitations(limitations=[
+    #         PreprocessLimitation(
+    #             object_name='#pdg_paths', value=float('inf'),
+    #             max_val=model_hps.method_code_encoder.max_nr_pdg_paths)])
+    # assert pdg_paths is not None
+    # def get_most_important_edge_type_from_edges_group(
+    #         edges_group: Tuple[Union[SerPDGControlFlowEdge, SerPDGDataDependencyEdge]]) -> Optional[str]:
+    #     if len(edges_group) < 1:
+    #         return None
+    #     control_flow_edge = next((edge for edge in edges_group if isinstance(edge, SerPDGControlFlowEdge)), None)
+    #     if control_flow_edge is not None:
+    #         return control_flow_edge.type.value
+    #     assert isinstance(edges_group[0], SerPDGDataDependencyEdge)
+    #     return 'DataDependency'
+    # pdg_paths = [
+    #     tuple((path_node.node_idx, get_most_important_edge_type_from_edges_group(path_node.edges))
+    #           for path_node in path)
+    #     for path in pdg_paths]
+    # pdg_paths.sort()  # for determinism
 
     limitations = []
     limitations.append(PreprocessLimitation(
@@ -374,22 +375,22 @@ def preprocess_code_task_example(
     limitations.append(PreprocessLimitation(
         object_name='|longest_control_flow_path|', value=longest_control_flow_path,
         max_val=model_hps.method_code_encoder.max_control_flow_path_len))
-    limitations.append(PreprocessLimitation(
-        object_name='#pdg_paths', value=len(pdg_paths),
-        min_val=model_hps.method_code_encoder.min_nr_pdg_paths,
-        max_val=model_hps.method_code_encoder.max_nr_pdg_paths))
-    shortest_pdg_path = min(
-        (len(path) for path in pdg_paths),
-        default=model_hps.method_code_encoder.min_pdg_path_len)
-    longest_pdg_path = max(
-        (len(path) for path in pdg_paths),
-        default=model_hps.method_code_encoder.max_pdg_path_len)
-    limitations.append(PreprocessLimitation(
-        object_name='|shortest_pdg_path|', value=shortest_pdg_path,
-        min_val=model_hps.method_code_encoder.min_pdg_path_len))
-    limitations.append(PreprocessLimitation(
-        object_name='|longest_pdg_path|', value=longest_pdg_path,
-        max_val=model_hps.method_code_encoder.max_pdg_path_len))
+    # limitations.append(PreprocessLimitation(
+    #     object_name='#pdg_paths', value=len(pdg_paths),
+    #     min_val=model_hps.method_code_encoder.min_nr_pdg_paths,
+    #     max_val=model_hps.method_code_encoder.max_nr_pdg_paths))
+    # shortest_pdg_path = min(
+    #     (len(path) for path in pdg_paths),
+    #     default=model_hps.method_code_encoder.min_pdg_path_len)
+    # longest_pdg_path = max(
+    #     (len(path) for path in pdg_paths),
+    #     default=model_hps.method_code_encoder.max_pdg_path_len)
+    # limitations.append(PreprocessLimitation(
+    #     object_name='|shortest_pdg_path|', value=shortest_pdg_path,
+    #     min_val=model_hps.method_code_encoder.min_pdg_path_len))
+    # limitations.append(PreprocessLimitation(
+    #     object_name='|longest_pdg_path|', value=longest_pdg_path,
+    #     max_val=model_hps.method_code_encoder.max_pdg_path_len))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
     ngrams_min_n, ngrams_max_n = 2, 10  # TODO: make these HPs, which are also part of the pp data properties
@@ -895,7 +896,7 @@ def preprocess_code_task_example(
                         '<PAD>' if edge_type is None else edge_type)
                      for _, edge_type in path])
                     for path in control_flow_paths])),
-        cfg_pdg_paths=CFGPathsInputTensors(
+        cfg_pdg_paths=None if pdg_paths is None else CFGPathsInputTensors(
             nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[torch.LongTensor([node_idx for node_idx, _ in path]) for path in pdg_paths],
                 tgt_indexing_group='cfg_nodes'),
