@@ -18,12 +18,12 @@ class MethodCFGEncoderParams(HasDispatchableField):
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'pdg-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params'],
-                'set-of-control-flow-paths': ['cfg_paths_sequence_encoder'],
-                'control-flow-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params'],
+                'pdg-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params', 'add_cfg_edge_types'],
+                'set-of-control-flow-paths': ['cfg_paths_sequence_encoder', 'add_cfg_edge_types'],
+                'control-flow-paths-folded-to-nodes': ['cfg_paths_sequence_encoder', 'cfg_nodes_folding_params', 'add_cfg_edge_types'],
                 'gnn': ['cfg_gnn_encoder'],
-                'set-of-control-flow-paths-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n'],
-                'control-flow-paths-ngrams-folded-to-nodes': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n', 'cfg_nodes_folding_params'],
+                'set-of-control-flow-paths-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n', 'add_cfg_edge_types'],
+                'control-flow-paths-ngrams-folded-to-nodes': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n', 'cfg_nodes_folding_params', 'add_cfg_edge_types'],
                 'set-of-nodes': [],
                 'all-nodes-single-unstructured-linear-seq': ['cfg_paths_sequence_encoder'],
                 'all-nodes-single-unstructured-linear-seq-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n'],
@@ -63,6 +63,9 @@ class MethodCFGEncoderParams(HasDispatchableField):
     cfg_gnn_encoder: Optional[CFGGNNEncoderParams] = confparam(
         default_factory=CFGGNNEncoderParams,
         arg_prefix='gnn-encoder')
+
+    add_cfg_edge_types: Optional[bool] = confparam(
+        default=True)
 
     create_sub_grams_from_long_gram: Optional[bool] = confparam(
         default=False)

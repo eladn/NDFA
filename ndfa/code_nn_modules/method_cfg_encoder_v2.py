@@ -142,6 +142,7 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                 control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
+                add_edge_types=self.encoder_params.add_cfg_edge_types,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type in \
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
