@@ -188,8 +188,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         if self.model_hps.method_code_encoder.method_encoder_type in {'method-cfg', 'method-cfg-v2'}:
             encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
         elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
-            # TODO: fix this!
-            encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_expression_encoder\
+            # TODO: fix this to support any whole-method encoder (like method-AST)!
+            encoder_output_dim = self.model_hps.method_code_encoder.whole_method_expression_encoder\
                 .tokens_seq_encoder.token_encoding_dim
         else:
             assert False

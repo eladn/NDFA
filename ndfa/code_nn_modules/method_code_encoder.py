@@ -74,7 +74,7 @@ class MethodCodeEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             self.symbols_encoder = SymbolsEncoder(
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                expression_encoding_dim=self.encoder_params.method_cfg_encoder.cfg_node_expression_encoder
+                expression_encoding_dim=self.encoder_params.whole_method_expression_encoder
                     .tokens_seq_encoder.token_encoding_dim,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 encoder_params=self.encoder_params.symbols_encoder_params,
