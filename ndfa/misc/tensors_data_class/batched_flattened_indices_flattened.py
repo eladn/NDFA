@@ -14,9 +14,11 @@ __all__ = [
     'BatchedFlattenedIndicesFlattenedTensorsDataClassMixin',
     'BatchedFlattenedIndicesFlattenedTensorsDataClass',
     'BatchedFlattenedIndicesFlattenedTensor',
+    'batched_flattened_indices_flattened_tensor_field',
     'BatchedFlattenedIndicesFlattenedSequencesDataClassMixin',
     'BatchedFlattenedIndicesFlattenedSequencesDataClass',
-    'BatchedFlattenedIndicesFlattenedSeq']
+    'BatchedFlattenedIndicesFlattenedSeq',
+    'batched_flattened_indices_flattened_seq_field']
 
 
 @dataclasses.dataclass
@@ -89,6 +91,16 @@ class BatchedFlattenedIndicesFlattenedTensor(BatchedFlattenedIndicesFlattenedTen
     pass  # the double inheritance is all the impl needed
 
 
+def batched_flattened_indices_flattened_tensor_field(
+        *,
+        default=dataclasses.MISSING,
+        self_indexing_group: Optional[str] = None,
+        tgt_indexing_group: Optional[str] = None) -> dataclasses.Field:
+    management_fields_defaults = {'self_indexing_group': self_indexing_group, 'tgt_indexing_group': tgt_indexing_group}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)
+
+
 # TODO: check implementation!
 @dataclasses.dataclass
 class BatchedFlattenedIndicesFlattenedSequencesDataClassMixin(
@@ -137,3 +149,13 @@ class BatchedFlattenedIndicesFlattenedSequencesDataClass(
 class BatchedFlattenedIndicesFlattenedSeq(BatchedFlattenedIndicesFlattenedSequencesDataClass,
                                           TensorDataClassWithSingleSequenceFieldMixin):
     pass  # the double inheritance is all the impl needed
+
+
+def batched_flattened_indices_flattened_seq_field(
+        *,
+        default=dataclasses.MISSING,
+        self_indexing_group: Optional[str] = dataclasses.MISSING,
+        tgt_indexing_group: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {'self_indexing_group': self_indexing_group, 'tgt_indexing_group': tgt_indexing_group}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)

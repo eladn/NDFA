@@ -10,7 +10,7 @@ from .mixins import TensorDataClassWithSequencesMixin
 from .misc import seq_lengths_to_mask
 
 
-__all__ = ['BatchFlattenedSeqShuffler']
+__all__ = ['BatchFlattenedSeqShuffler', 'batch_flattened_seq_shuffler_field']
 
 
 def get_random_seed_per_example(
@@ -105,3 +105,17 @@ class BatchFlattenedSeqShuffler(TensorDataClassWithSequencesMixin, TensorsDataCl
         unshuffled_seqs = unshuffled_seqs.masked_fill(
             ~self.sequences_mask.unsqueeze(-1), 0)
         return unshuffled_seqs
+
+
+def batch_flattened_seq_shuffler_field(
+        *,
+        default=dataclasses.MISSING,
+        batch_dependent_seed: bool = dataclasses.MISSING,
+        example_dependent_seed: bool = dataclasses.MISSING,
+        initial_seed_salt: str = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {
+        'batch_dependent_seed': batch_dependent_seed,
+        'example_dependent_seed': example_dependent_seed,
+        'initial_seed_salt': initial_seed_salt}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)

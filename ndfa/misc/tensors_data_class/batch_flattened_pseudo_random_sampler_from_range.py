@@ -8,7 +8,7 @@ from .misc import CollateData
 from .tensors_data_class import TensorsDataClass
 
 
-__all__ = ['BatchFlattenedPseudoRandomSamplerFromRange']
+__all__ = ['BatchFlattenedPseudoRandomSamplerFromRange', 'batch_flattened_pseudo_random_sampler_from_range_field']
 
 
 @final
@@ -67,3 +67,21 @@ class BatchFlattenedPseudoRandomSamplerFromRange(TensorsDataClass):
             replacement=replacement)
         collated.sample = sample
         return collated
+
+
+def batch_flattened_pseudo_random_sampler_from_range_field(
+        *,
+        default=dataclasses.MISSING,
+        sample_size: Union[int, Tuple[int]] = dataclasses.MISSING,
+        tgt_range_start: int = dataclasses.MISSING,
+        tgt_range_end: int = dataclasses.MISSING,
+        initial_seed_salt: str = dataclasses.MISSING,
+        replacement: str = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {
+        'sample_size': sample_size,
+        'tgt_range_start': tgt_range_start,
+        'tgt_range_end': tgt_range_end,
+        'initial_seed_salt': initial_seed_salt,
+        'replacement': replacement}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)

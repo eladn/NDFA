@@ -281,6 +281,8 @@ class TensorsDataClass:
         assert len(inputs) > 0
         if collate_data is None:
             collate_data = CollateData()
+        for inp in inputs:
+            inp.set_class_defaults()  # TODO: it changes the input. is it ok? should we copy it before?
         batched_obj = cls._collate_first_pass(
             inputs, collate_data=collate_data)
         if batched_obj._batch_size is None:
@@ -289,6 +291,20 @@ class TensorsDataClass:
             batched_obj.post_collate_indices_fix((), (), collate_data)
             batched_obj.post_collate_remove_unnecessary_collate_info()
         return batched_obj
+
+    def set_class_defaults(self):
+        for field_name in self.get_all_fields():
+            field_val = self.access_field_wo_applying_lazy_maps(field_name)
+            field = next(fld for fld in dataclasses.fields(self) if fld.name == field_name)
+            if field_val is None or not isinstance(field_val, TensorsDataClass):
+                continue
+            field_val.get_all_fields()
+            for k, v in field.metadata.items():
+                assert k in set(field_val.get_management_fields())
+                assert field_val.access_field_wo_applying_lazy_maps(k) is None
+                if v is not dataclasses.MISSING:
+                    setattr(field_val, k, v)
+            field_val.set_class_defaults()
 
     @classmethod
     def _collate_first_pass(cls, inputs: List['TensorsDataClass'], collate_data: CollateData) -> 'TensorsDataClass':
@@ -338,3 +354,9 @@ class TensorsDataClass:
                 yield child
         if traversal_order == 'postvisit':
             yield self if parents_path is None else (self, parents_path, fields_path)
+
+    def save(self, f):
+        raise NotImplementedError  # TODO: impl
+
+    def load(self, f):
+        raise NotImplementedError  # TODO: impl

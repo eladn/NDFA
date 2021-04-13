@@ -8,7 +8,8 @@ from .batch_flattened import BatchFlattenedTensorsDataClassMixin
 from .tensors_data_class import TensorsDataClass
 
 
-__all__ = ['BatchFlattenedSequencesDataClassMixin', 'BatchFlattenedSequencesDataClass', 'BatchFlattenedSeq']
+__all__ = ['BatchFlattenedSequencesDataClassMixin', 'BatchFlattenedSequencesDataClass', 'BatchFlattenedSeq',
+           'batch_flattened_seq_field']
 
 
 @dataclasses.dataclass
@@ -80,3 +81,12 @@ class BatchFlattenedSequencesDataClass(BatchFlattenedSequencesDataClassMixin, Te
 @dataclasses.dataclass
 class BatchFlattenedSeq(BatchFlattenedSequencesDataClass, TensorDataClassWithSingleSequenceFieldMixin):
     pass  # the double inheritance is all the impl needed
+
+
+def batch_flattened_seq_field(
+        *,
+        default=dataclasses.MISSING,
+        self_indexing_group: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {'self_indexing_group': self_indexing_group}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)

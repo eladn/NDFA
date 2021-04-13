@@ -9,7 +9,7 @@ from .tensors_data_class import TensorsDataClass
 from .mixins import HasTargetIndexingGroupMixin
 
 
-__all__ = ['BatchedFlattenedIndicesPseudoRandomPermutation']
+__all__ = ['BatchedFlattenedIndicesPseudoRandomPermutation', 'batch_flattened_indices_pseudo_random_permutation_field']
 
 
 @final
@@ -90,3 +90,18 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(HasTargetIndexingGroupMixin
             tensors=tuple(inverse_permutations_with_ranges), create_collate_mask=False,
             create_collate_lengths=False, last_variable_dim=0)
 
+
+def batch_flattened_indices_pseudo_random_permutation_field(
+        *,
+        default=dataclasses.MISSING,
+        tgt_indexing_group: Optional[str] = dataclasses.MISSING,
+        batch_dependent_seed: bool = dataclasses.MISSING,
+        example_dependent_seed: bool = dataclasses.MISSING,
+        initial_seed_salt: str = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {
+        'tgt_indexing_group': tgt_indexing_group,
+        'batch_dependent_seed': batch_dependent_seed,
+        'example_dependent_seed': example_dependent_seed,
+        'initial_seed_salt': initial_seed_salt}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)

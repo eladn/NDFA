@@ -7,7 +7,7 @@ from .tensors_data_class import TensorsDataClass
 from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndicesTensorMixin
 
 
-__all__ = ['BatchedFlattenedIndicesTensor']
+__all__ = ['BatchedFlattenedIndicesTensor', 'batch_flattened_indices_tensor_field']
 
 
 @final
@@ -60,3 +60,11 @@ class BatchedFlattenedIndicesTensor(
                 addressed_flattened_tensor.batched_index_offset_additive_fix_per_example.unsqueeze(-1).expand(original_indices.size()))
             setattr(self, field.name, original_indices + offsets_fixes)
 
+
+def batch_flattened_indices_tensor_field(
+        *,
+        default=dataclasses.MISSING,
+        tgt_indexing_group: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {'tgt_indexing_group': tgt_indexing_group}
+    management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
+    return dataclasses.field(default=default, metadata=management_fields_defaults)
