@@ -14,7 +14,8 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
 
 
 __all__ = ['MethodCodeInputPaddedTensors',
-           'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors', 'MethodCodeTokensSequenceInputTensors',
+           'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
+           'MethodCodeTokensSequenceInputTensors', 'CFGCodeExpressionTokensSequenceInputTensors',
            'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
            'PDGInputTensors', 'MethodASTInputTensors', 'SubASTInputTensors', 'IdentifiersInputTensors',
            'PDGExpressionsSubASTInputTensors']
