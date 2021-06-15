@@ -25,9 +25,8 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, Symbols
     CFGPathsInputTensors, CFGPathsNGramsInputTensors, IdentifiersInputTensors, MethodASTInputTensors, \
     PDGExpressionsSubASTInputTensors, MethodCodeTokensSequenceInputTensors, CFGCodeExpressionTokensSequenceInputTensors
 from ndfa.misc.tensors_data_class import BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
-    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
-    BatchFlattenedSeqShuffler, TensorsDataDict
+    BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
+    BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
 
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',

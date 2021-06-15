@@ -24,65 +24,87 @@ __all__ = [
 
 @dataclasses.dataclass
 class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
-    token_type: BatchFlattenedSeq = batch_flattened_seq_field(
-        self_indexing_group='code_expressions')  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    kos_token_index: BatchFlattenedTensor = batch_flattened_tensor_field()  # (nr_kos_tokens_in_all_expressions_in_batch,)
+    # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    token_type: BatchFlattenedSeq = \
+        batch_flattened_seq_field(self_indexing_group='code_expressions')
+    # (nr_kos_tokens_in_all_expressions_in_batch,)
+    kos_token_index: BatchFlattenedTensor = \
+        batch_flattened_tensor_field()
+    # (nr_identifier_tokens_in_all_expressions_in_batch,)
     identifier_index: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(
-        tgt_indexing_group='identifiers')  # (nr_identifier_tokens_in_all_expressions_in_batch,)
+        tgt_indexing_group='identifiers')
+    # (nr_symbol_occurrences_in_all_expressions_in_batch,)
     symbol_index: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(
-        tgt_indexing_group='symbols')  # (nr_symbol_occurrences_in_all_expressions_in_batch,)
-    is_symbol_mask: BatchFlattenedSeq = batch_flattened_seq_field()  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    sequence_shuffler: BatchFlattenedSeqShuffler = batch_flattened_seq_shuffler_field(
-        initial_seed_salt='code_expressions_seq_shuffler')  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    token_idx_to_ast_leaf_idx_mapping_key: Optional[BatchedFlattenedIndicesFlattenedTensor] = batched_flattened_indices_flattened_tensor_field(default=None)
-    token_idx_to_ast_leaf_idx_mapping_value: Optional[BatchedFlattenedIndicesFlattenedTensor] = batched_flattened_indices_flattened_tensor_field(default=None)
+        tgt_indexing_group='symbols')
+    # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    is_symbol_mask: BatchFlattenedSeq = batch_flattened_seq_field()
+    # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    sequence_shuffler: BatchFlattenedSeqShuffler = \
+        batch_flattened_seq_shuffler_field(initial_seed_salt='code_expressions_seq_shuffler')
+    token_idx_to_ast_leaf_idx_mapping_key: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
+        batched_flattened_indices_flattened_tensor_field(default=None)
+    token_idx_to_ast_leaf_idx_mapping_value: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
+        batched_flattened_indices_flattened_tensor_field(default=None)
 
 
 @dataclasses.dataclass
 class MethodCodeTokensSequenceInputTensors(CodeExpressionTokensSequenceInputTensors):
-    token_type: BatchFlattenedSeq = batch_flattened_seq_field(
-        self_indexing_group='method_code')  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    token_type: BatchFlattenedSeq = \
+        batch_flattened_seq_field(self_indexing_group='method_code')
 
 
 @dataclasses.dataclass
 class CFGCodeExpressionTokensSequenceInputTensors(CodeExpressionTokensSequenceInputTensors):
-    token_type: BatchFlattenedSeq = batch_flattened_seq_field(
-        self_indexing_group='cfg_code_expressions')  # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
+    token_type: BatchFlattenedSeq = \
+        batch_flattened_seq_field(self_indexing_group='cfg_code_expressions')
 
 
 @dataclasses.dataclass
 class SymbolsInputTensors(TensorsDataClass):
-    symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(
-        self_indexing_group='symbols', tgt_indexing_group='identifiers')  # (nr_symbols_in_batch,);  value meaning: identifier batched index
-    symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(
-        tgt_indexing_group='symbols')  # (nr_symbols_appearances,);
-    symbols_appearances_expression_token_idx: Optional[BatchFlattenedTensor] = batch_flattened_tensor_field(default=None)  # (nr_symbols_appearances,);
+    # (nr_symbols_in_batch,)
+    # value meaning: identifier batched index
+    symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(
+            self_indexing_group='symbols', tgt_indexing_group='identifiers')
+    # (nr_symbols_appearances,)
+    symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
+    # (nr_symbols_appearances,)
+    symbols_appearances_expression_token_idx: Optional[BatchFlattenedTensor] = \
+        batch_flattened_tensor_field(default=None)
+    # (nr_symbols_appearances,)
     symbols_appearances_cfg_expression_idx: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
         batched_flattened_indices_flattened_tensor_field(
-            default=None, tgt_indexing_group='cfg_code_expressions')  # (nr_symbols_appearances,);
+            default=None, tgt_indexing_group='cfg_code_expressions')
 
 
 @dataclasses.dataclass
 class CFGPathsInputTensors(TensorsDataClass):
-    nodes_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(
-        tgt_indexing_group='cfg_nodes')
+    nodes_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='cfg_nodes')
     edges_types: BatchFlattenedSeq = batch_flattened_seq_field()
 
 
 @dataclasses.dataclass
 class CFGPathsNGramsInputTensors(TensorsDataClass):
-    nodes_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(
-        tgt_indexing_group='cfg_nodes')
+    nodes_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='cfg_nodes')
     edges_types: BatchFlattenedSeq = batch_flattened_seq_field()
 
 
 @dataclasses.dataclass
 class PDGInputTensors(TensorsDataClass):
-    cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = batch_flattened_tensor_field(
-        default=None, self_indexing_group='cfg_nodes')  # (nr_cfg_nodes_in_batch, )
-    cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = batch_flattened_tensor_field(default=None)  # (nr_cfg_nodes_in_batch, )
+    # (nr_cfg_nodes_in_batch, )
+    cfg_nodes_control_kind: Optional[BatchFlattenedTensor] = \
+        batch_flattened_tensor_field(default=None, self_indexing_group='cfg_nodes')
+    # (nr_cfg_nodes_in_batch, )
+    cfg_nodes_has_expression_mask: Optional[BatchFlattenedTensor] = \
+        batch_flattened_tensor_field(default=None)
     cfg_nodes_tokenized_expressions: Optional[CFGCodeExpressionTokensSequenceInputTensors] = None
-    # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = batch_flattened_tensor_field(default=None)
+    # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = \
+    #     batch_flattened_tensor_field(default=None)
     cfg_nodes_expressions_ast: Optional['PDGExpressionsSubASTInputTensors'] = None
 
     # cfg_edges: Optional[torch.LongTensor] = None
@@ -107,23 +129,34 @@ class PDGInputTensors(TensorsDataClass):
 
 @dataclasses.dataclass
 class IdentifiersInputTensors(TensorsDataClass):
-    sub_parts_batch: BatchFlattenedTensor = batch_flattened_tensor_field(
-        self_indexing_group='identifiers_sub_parts')  # (nr_sub_parts_in_batch, )  # TODO: is it necessary?
-    sub_parts_vocab_word_index: BatchFlattenedTensor = batch_flattened_tensor_field(
-        self_indexing_group='identifiers_sub_parts')  # (nr_sub_parts_in_batch, )
+    # (nr_sub_parts_in_batch, )  # TODO: is it necessary?
+    sub_parts_batch: BatchFlattenedTensor = \
+        batch_flattened_tensor_field(self_indexing_group='identifiers_sub_parts')
+    # (nr_sub_parts_in_batch, )
+    sub_parts_vocab_word_index: BatchFlattenedTensor = \
+        batch_flattened_tensor_field(self_indexing_group='identifiers_sub_parts')
 
-    identifier_sub_parts_index: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(
-        self_indexing_group='identifiers', tgt_indexing_group='identifiers_sub_parts')  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
-    identifier_sub_parts_vocab_word_index: BatchFlattenedSeq = batch_flattened_seq_field(
-        self_indexing_group='identifiers')  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
-    identifiers_vocab_word_index: BatchFlattenedTensor = batch_flattened_tensor_field(
-        self_indexing_group='identifiers')  # (nr_identifiers_in_batch, )
-    identifier_sub_parts_hashings: BatchFlattenedSeq = batch_flattened_seq_field(
-        self_indexing_group='identifiers')  # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
-    sub_parts_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange = batch_flattened_pseudo_random_sampler_from_range_field(
-        initial_seed_salt='idntf', replacement='wo_replacement_within_example')  # (nr_sub_parts_obfuscation_embeddings)
-    identifiers_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange = batch_flattened_pseudo_random_sampler_from_range_field(
-        initial_seed_salt='idntf', replacement='wo_replacement_within_example')  # (nr_identifiers_obfuscation_embeddings)
+    # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifier_sub_parts_index: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(
+            self_indexing_group='identifiers', tgt_indexing_group='identifiers_sub_parts')
+    # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
+    identifier_sub_parts_vocab_word_index: BatchFlattenedSeq = \
+        batch_flattened_seq_field(self_indexing_group='identifiers')
+    # (nr_identifiers_in_batch, )
+    identifiers_vocab_word_index: BatchFlattenedTensor = \
+        batch_flattened_tensor_field(self_indexing_group='identifiers')
+    # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
+    identifier_sub_parts_hashings: BatchFlattenedSeq = \
+        batch_flattened_seq_field(self_indexing_group='identifiers')
+    # (nr_sub_parts_obfuscation_embeddings)
+    sub_parts_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange = \
+        batch_flattened_pseudo_random_sampler_from_range_field(
+            initial_seed_salt='idntf', replacement='wo_replacement_within_example')
+    # (nr_identifiers_obfuscation_embeddings)
+    identifiers_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange = \
+        batch_flattened_pseudo_random_sampler_from_range_field(
+            initial_seed_salt='idntf', replacement='wo_replacement_within_example')
 
 
 # To avoid IDE errors
@@ -133,14 +166,22 @@ def dataclasses_field_wo_defaults():
 
 @dataclasses.dataclass
 class SubASTInputTensors(TensorsDataClass):
-    ast_leaf_to_leaf_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    ast_leaf_to_leaf_paths_child_place: BatchFlattenedSeq = batch_flattened_seq_field()
-    ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq = batch_flattened_seq_field()
-    ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    ast_leaf_to_root_paths_child_place: BatchFlattenedSeq = batch_flattened_seq_field()
-    ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    siblings_w_parent_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    ast_leaf_to_leaf_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    ast_leaf_to_leaf_paths_child_place: BatchFlattenedSeq = \
+        batch_flattened_seq_field()
+    ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq = \
+        batch_flattened_seq_field()
+    ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    ast_leaf_to_root_paths_child_place: BatchFlattenedSeq = \
+        batch_flattened_seq_field()
+    ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    siblings_w_parent_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+        batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
     dgl_tree: dgl.DGLGraph = dataclasses_field_wo_defaults()  # To avoid IDE errors
 
     def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
@@ -185,29 +226,44 @@ class MethodASTInputTensors(SubASTInputTensors):
     ast_node_child_rtl_position: BatchFlattenedTensor = batch_flattened_tensor_field()
     ast_node_nr_children: BatchFlattenedTensor = batch_flattened_tensor_field()
 
-    ast_nodes_with_identifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_nodes_with_identifier_leaf_identifier_idx: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='identifiers')
+    ast_nodes_with_identifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_nodes_with_identifier_leaf_identifier_idx: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='identifiers')
 
-    ast_nodes_with_symbol_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_nodes_with_symbol_leaf_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
+    ast_nodes_with_symbol_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_nodes_with_symbol_leaf_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
 
-    ast_nodes_with_primitive_type_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_nodes_with_primitive_type_leaf_primitive_type: BatchFlattenedTensor = batch_flattened_tensor_field()
+    ast_nodes_with_primitive_type_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_nodes_with_primitive_type_leaf_primitive_type: BatchFlattenedTensor = \
+        batch_flattened_tensor_field()
 
-    ast_nodes_with_modifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_nodes_with_modifier_leaf_modifier: BatchFlattenedTensor = batch_flattened_tensor_field()
+    ast_nodes_with_modifier_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_nodes_with_modifier_leaf_modifier: BatchFlattenedTensor = \
+        batch_flattened_tensor_field()
 
 
 @dataclasses.dataclass
 class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
-    ast_leaf_to_leaf_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
-    ast_leaf_to_root_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
-    siblings_sequences_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+    ast_leaf_to_leaf_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+    ast_leaf_to_root_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+    siblings_sequences_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
 
-    pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
-    pdg_node_idx_to_sub_ast_root_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_node_idx_to_pdg_node_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
-    ast_node_idx_to_pdg_node_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor = batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+    pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+    pdg_node_idx_to_sub_ast_root_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_node_idx_to_pdg_node_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
+    ast_node_idx_to_pdg_node_idx_mapping_value: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
 
     def get_ast_paths_pdg_node_indices(self, path_type: str) -> Optional[BatchedFlattenedIndicesFlattenedTensor]:
         if path_type == 'leaf_to_leaf':
