@@ -5,7 +5,7 @@ from torch_geometric.data import Data as TGData
 import dgl
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
-    TensorWithCollateMask, BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
+    BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
     batched_flattened_indices_flattened_tensor_field, batched_flattened_indices_flattened_seq_field, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
     batch_flattened_pseudo_random_sampler_from_range_field, BatchFlattenedSeqShuffler, \
@@ -13,31 +13,13 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     batch_flattened_indices_pseudo_random_permutation_field
 
 
-__all__ = ['MethodCodeInputPaddedTensors',
-           'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
-           'MethodCodeTokensSequenceInputTensors', 'CFGCodeExpressionTokensSequenceInputTensors',
-           'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
-           'PDGInputTensors', 'MethodASTInputTensors', 'SubASTInputTensors', 'IdentifiersInputTensors',
-           'PDGExpressionsSubASTInputTensors']
-
-
-# TODO: this is an old impl - REMOVE!
-@dataclasses.dataclass
-class MethodCodeInputPaddedTensors(TensorsDataClass):
-    method_hash: str
-    identifiers: torch.LongTensor
-    sub_identifiers_mask: torch.BoolTensor
-    cfg_nodes_mask: torch.BoolTensor
-    cfg_nodes_control_kind: torch.LongTensor
-    cfg_nodes_expressions: torch.LongTensor
-    cfg_nodes_expressions_mask: torch.BoolTensor
-    cfg_edges: torch.LongTensor
-    cfg_edges_mask: torch.BoolTensor
-    cfg_edges_attrs: torch.LongTensor
-    identifiers_idxs_of_all_symbols: torch.LongTensor
-    identifiers_idxs_of_all_symbols_mask: torch.BoolTensor
-    indices_of_symbols_occurrences_in_cfg_nodes_expressions: TensorWithCollateMask
-    symbols_idxs_of_symbols_occurrences_in_cfg_nodes_expressions: TensorWithCollateMask
+__all__ = [
+   'MethodCodeInputTensors', 'CodeExpressionTokensSequenceInputTensors',
+   'MethodCodeTokensSequenceInputTensors', 'CFGCodeExpressionTokensSequenceInputTensors',
+   'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
+   'PDGInputTensors', 'MethodASTInputTensors', 'SubASTInputTensors', 'IdentifiersInputTensors',
+   'PDGExpressionsSubASTInputTensors'
+]
 
 
 @dataclasses.dataclass
