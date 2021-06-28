@@ -7,7 +7,7 @@ import dataclasses
 import multiprocessing as mp
 from collections import defaultdict, namedtuple
 from warnings import warn
-from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union, Tuple
+from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union, Sequence, TypeVar
 from typing_extensions import Protocol
 from sklearn.feature_extraction.text import HashingVectorizer
 from torch_geometric.data import Data as TGData
@@ -31,6 +31,35 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
     'PreprocessLimitation']
+
+
+NGrams = namedtuple('NGrams', ['exact_ngrams', 'partial_ngrams'])
+T = TypeVar('T')
+
+
+def extract_ngrams_from_sequence(
+        sequences: Collection[Sequence[T]], ngrams_min_n: int = 2, ngrams_max_n: int = 6) -> NGrams:
+    exact_ngrams = defaultdict(set)
+    partial_ngrams = defaultdict(set)
+    for sequence in sequences:
+        if len(sequence) < ngrams_min_n:
+            continue
+        if ngrams_min_n <= len(sequence) <= ngrams_max_n:
+            exact_ngrams[len(sequence)].add(sequence)
+        for ngrams_n in range(ngrams_min_n, min(ngrams_max_n, len(sequence) - 1) + 1):
+            for path_ngram_start_idx in range(len(sequence) - ngrams_n + 1):
+                ngram = sequence[path_ngram_start_idx: path_ngram_start_idx + ngrams_n]
+                partial_ngrams[ngrams_n].add(ngram)
+    # sort for determinism, and remove empty
+    exact_ngrams = {
+        ngrams_n: sorted(list(ngrams))
+        for ngrams_n, ngrams in exact_ngrams.items()
+        if len(ngrams) > 0}
+    partial_ngrams = {
+        ngrams_n: sorted(list(ngrams))
+        for ngrams_n, ngrams in partial_ngrams.items()
+        if len(ngrams) > 0}
+    return NGrams(exact_ngrams=exact_ngrams, partial_ngrams=partial_ngrams)
 
 
 def token_to_input_vector(token: SerToken, vocabs: CodeTaskVocabs):
@@ -312,7 +341,7 @@ def preprocess_cfg_nodes_tokenized_expressions(
 
 CFGPaths = namedtuple(
     'CFGPaths',
-    ['control_flow_paths', 'pdg_paths', 'control_flow_paths_exact_ngrams', 'control_flow_paths_partial_ngrams'])
+    ['control_flow_paths', 'pdg_paths', 'control_flow_paths_ngrams'])
 
 
 def preprocess_control_flow_paths(
@@ -404,26 +433,8 @@ def preprocess_control_flow_paths(
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
     ngrams_min_n, ngrams_max_n = 2, 10  # TODO: make these HPs, which are also part of the pp data properties
-    control_flow_paths_exact_ngrams = defaultdict(set)
-    control_flow_paths_partial_ngrams = defaultdict(set)
-    for control_flow_path in control_flow_paths:
-        if len(control_flow_path) < ngrams_min_n:
-            continue
-        if ngrams_min_n <= len(control_flow_path) <= ngrams_max_n:
-            control_flow_paths_exact_ngrams[len(control_flow_path)].add(control_flow_path)
-        for ngrams_n in range(ngrams_min_n, min(ngrams_max_n, len(control_flow_path) - 1) + 1):
-            for path_ngram_start_idx in range(len(control_flow_path) - ngrams_n + 1):
-                ngram = control_flow_path[path_ngram_start_idx: path_ngram_start_idx + ngrams_n]
-                control_flow_paths_partial_ngrams[ngrams_n].add(ngram)
-    # sort for determinism
-    control_flow_paths_exact_ngrams = {
-        ngrams_n: sorted(list(ngrams))
-        for ngrams_n, ngrams in control_flow_paths_exact_ngrams.items()
-        if len(ngrams) > 0}
-    control_flow_paths_partial_ngrams = {
-        ngrams_n: sorted(list(ngrams))
-        for ngrams_n, ngrams in control_flow_paths_partial_ngrams.items()
-        if len(ngrams) > 0}
+    control_flow_paths_ngrams = extract_ngrams_from_sequence(
+        sequences=control_flow_paths, ngrams_min_n=ngrams_min_n, ngrams_max_n=ngrams_max_n)
 
     control_flow_paths_node_idxs_set = {node_idx for path in control_flow_paths for node_idx, _ in path}
     cfg_node_idxs_not_in_any_cfg_path = (set(
@@ -436,8 +447,7 @@ def preprocess_control_flow_paths(
     return CFGPaths(
         control_flow_paths=control_flow_paths,
         pdg_paths=pdg_paths,
-        control_flow_paths_exact_ngrams=control_flow_paths_exact_ngrams,
-        control_flow_paths_partial_ngrams=control_flow_paths_partial_ngrams)
+        control_flow_paths_ngrams=control_flow_paths_ngrams)
 
     # FOR DEBUG:
     # from ndfa.misc.example_formatter import format_example, RawExtractedExample
@@ -1102,7 +1112,7 @@ def preprocess_pdg(
                         '<PAD>' if edge_type is None else edge_type)
                         for _, edge_type in path])
                     for path in cfg_paths.pdg_paths])),
-        cfg_control_flow_paths_exact_ngrams=TensorsDataDict({
+        cfg_control_flow_paths_exact_ngrams=TensorsDataDict[int, CFGPathsNGramsInputTensors]({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                     sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
@@ -1113,8 +1123,8 @@ def preprocess_pdg(
                             '<PAD>' if edge_type is None else edge_type)
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
-            for key, ngrams in cfg_paths.control_flow_paths_exact_ngrams.items()}),
-        cfg_control_flow_paths_partial_ngrams=TensorsDataDict({
+            for key, ngrams in cfg_paths.control_flow_paths_ngrams.exact_ngrams.items()}),
+        cfg_control_flow_paths_partial_ngrams=TensorsDataDict[int, CFGPathsNGramsInputTensors]({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                     sequences=[torch.LongTensor([node_idx for node_idx, _ in ngram]) for ngram in ngrams],
@@ -1125,7 +1135,7 @@ def preprocess_pdg(
                             '<PAD>' if edge_type is None else edge_type)
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
-            for key, ngrams in cfg_paths.control_flow_paths_partial_ngrams.items()}),
+            for key, ngrams in cfg_paths.control_flow_paths_ngrams.partial_ngrams.items()}),
         cfg_control_flow_graph=cfg_control_flow_graph)
     return pdg_input_tensors
 
@@ -1220,6 +1230,7 @@ def preprocess_code_task_dataset(
                     iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
                 assert pp_example_as_bytes is not None
                 if isinstance(pp_example_as_bytes, list):
+                    assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in pp_example_as_bytes)
                     pass  # TODO: add to limit exceed statistics
                 else:
                     with io.BytesIO(pp_example_as_bytes) as pp_example_as_bytes_io_stream:
