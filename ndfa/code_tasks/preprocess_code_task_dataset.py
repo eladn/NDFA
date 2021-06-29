@@ -1,6 +1,7 @@
 import os
 import io
 import torch
+import random
 import itertools
 import functools
 import dataclasses
@@ -31,6 +32,14 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
 __all__ = [
     'preprocess_code_task_dataset', 'preprocess_code_task_example', 'truncate_and_pad', 'PreprocessLimitExceedError',
     'PreprocessLimitation']
+
+
+# just for debugging purposes..
+def _dbg_get_size_of_pickled_obj(a):
+    with io.BytesIO() as out:
+        torch.save(a, out)
+        out.seek(0)
+        return len(out.getvalue())
 
 
 NGrams = namedtuple('NGrams', ['exact_ngrams', 'partial_ngrams'])
@@ -212,8 +221,9 @@ def preprocess_identifiers(method_pdg: SerMethodPDG, code_task_vocabs: CodeTaskV
         )  # self_indexing_group='identifiers')
 
     # TODO: plug HP for hasher `n_features`
+    pp_identifiers_sub_parts_hashings = False  # TODO: add to HPs.
     sub_identifiers_hasher = HashingVectorizer(analyzer='char', n_features=256, ngram_range=(1, 3))
-    identifiers_sub_parts_hashings = BatchFlattenedSeq(
+    identifiers_sub_parts_hashings = None if not pp_identifiers_sub_parts_hashings else BatchFlattenedSeq(
         sequences=[
             torch.stack([
                 torch.tensor(sub_identifiers_hasher.transform([sub_part]).toarray(), dtype=torch.float32).squeeze()
@@ -367,12 +377,19 @@ def preprocess_control_flow_paths(
                 object_name='#control_flow_paths', value=float('inf'),
                 max_val=model_hps.method_code_encoder.max_nr_control_flow_paths)])
     assert control_flow_paths is not None
+
+    if model_hps.method_code_encoder.nr_control_flow_paths_to_sample_during_pp is not None and \
+            len(control_flow_paths) > model_hps.method_code_encoder.nr_control_flow_paths_to_sample_during_pp:
+        control_flow_paths = random.sample(
+            control_flow_paths, model_hps.method_code_encoder.nr_control_flow_paths_to_sample_during_pp)
+
     # We didn't grouped edges so there is a single edge between two nodes in a path,
     # and actually even if we had been grouping, there is at most one control-flow edge between 2 cfg nodes.
     assert all(len(path_node.edges) <= 1 for path in control_flow_paths for path_node in path)
     control_flow_paths = [
-        tuple((path_node.node_idx, None if len(path_node.edges) < 1 else path_node.edges[0].type.value) for path_node in
-              path)
+        tuple(
+            (path_node.node_idx, None if len(path_node.edges) < 1 else path_node.edges[0].type.value)
+            for path_node in path)
         for path in control_flow_paths]
     control_flow_paths.sort()  # for determinism
 
@@ -432,7 +449,7 @@ def preprocess_control_flow_paths(
     #     max_val=model_hps.method_code_encoder.max_pdg_path_len))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    ngrams_min_n, ngrams_max_n = 2, 10  # TODO: make these HPs, which are also part of the pp data properties
+    ngrams_min_n, ngrams_max_n = 2, 7  # TODO: make these HPs, which are also part of the pp data properties
     control_flow_paths_ngrams = extract_ngrams_from_sequence(
         sequences=control_flow_paths, ngrams_min_n=ngrams_min_n, ngrams_max_n=ngrams_max_n)
 
@@ -508,11 +525,43 @@ def sanitize_sub_asts_to_ignore_or_to_mask(
     return masked_sub_asts_nodes_without_root, ast_nodes_indices_to_ignore
 
 
+def enforce_limits_and_sample_ast_paths(
+        ast_paths: ASTPaths,
+        max_nr_ast_leaf_to_leaf_paths: Optional[int] = None,
+        max_nr_ast_leaf_to_root_paths: Optional[int] = None,
+        nr_ast_leaf_to_leaf_paths_to_sample: Optional[int] = None,
+        nr_ast_leaf_to_root_paths_to_sample: Optional[int] = None):
+    if max_nr_ast_leaf_to_leaf_paths is not None:
+        PreprocessLimitation.enforce_limitations(limitations=[
+            PreprocessLimitation(
+                object_name='max_nr_ast_leaf_to_leaf_paths',
+                value=len(ast_paths.leaf_to_leaf_paths),
+                max_val=max_nr_ast_leaf_to_leaf_paths)])
+    if max_nr_ast_leaf_to_root_paths is not None:
+        PreprocessLimitation.enforce_limitations(limitations=[
+            PreprocessLimitation(
+                object_name='max_nr_ast_leaf_to_root_paths',
+                value=len(ast_paths.leaf_to_root_paths),
+                max_val=max_nr_ast_leaf_to_root_paths)])
+    if nr_ast_leaf_to_leaf_paths_to_sample is not None and \
+            len(ast_paths.leaf_to_leaf_paths) > nr_ast_leaf_to_leaf_paths_to_sample:
+        sampled_keys = random.sample(ast_paths.leaf_to_leaf_paths.keys(), nr_ast_leaf_to_leaf_paths_to_sample)
+        leaf_to_leaf_paths = {key: ast_paths.leaf_to_leaf_paths[key] for key in sampled_keys}
+        ast_paths = dataclasses.replace(ast_paths, leaf_to_leaf_paths=leaf_to_leaf_paths)
+    if nr_ast_leaf_to_root_paths_to_sample is not None and \
+            len(ast_paths.leaf_to_root_paths) > nr_ast_leaf_to_root_paths_to_sample:
+        sampled_keys = random.sample(ast_paths.leaf_to_root_paths.keys(), nr_ast_leaf_to_root_paths_to_sample)
+        leaf_to_root_paths = {key: ast_paths.leaf_to_root_paths[key] for key in sampled_keys}
+        ast_paths = dataclasses.replace(ast_paths, leaf_to_root_paths=leaf_to_root_paths)
+    return ast_paths
+
+
 def preprocess_method_ast(
-        code_task_vocabs: CodeTaskVocabs, method: SerMethod, method_ast: SerMethodAST,
+        model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+        method: SerMethod, method_ast: SerMethodAST,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None,
         sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None) -> MethodASTInputTensors:
-    pp_method_ast_paths = False  # TODO: make it a preprocess parameter
+    pp_method_ast_paths = True  # TODO: make it a preprocess parameter
     method_ast_paths: Optional[ASTPaths] = None
 
     # Note: For some sub-AST that have to be masked-out:
@@ -539,6 +588,15 @@ def preprocess_method_ast(
         assert set(method_ast_paths.leaves_sequence) & sub_ast_root_indices_to_mask.keys() == \
                sub_ast_root_indices_to_mask.keys()
         assert len(set(method_ast_paths.postorder_traversal_sequence) & ast_nodes_indices_to_ignore) == 0
+
+        method_ast_paths = enforce_limits_and_sample_ast_paths(
+            ast_paths=method_ast_paths,
+            max_nr_ast_leaf_to_leaf_paths=model_hps.method_code_encoder.max_nr_method_ast_leaf_to_leaf_paths,
+            max_nr_ast_leaf_to_root_paths=model_hps.method_code_encoder.max_nr_method_ast_leaf_to_root_paths,
+            nr_ast_leaf_to_leaf_paths_to_sample=
+            model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_pp,
+            nr_ast_leaf_to_root_paths_to_sample=
+            model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_pp)
 
     dgl_ast_edges = torch.LongTensor(
         [[ast_node.idx, child_node_idx]
@@ -732,8 +790,8 @@ def preprocess_method_ast(
 
 
 def preprocess_sub_ast_for_cfg_expressions(
-        code_task_vocabs: CodeTaskVocabs, method_pdg: SerMethodPDG,
-        method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
+        model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+        method_pdg: SerMethodPDG, method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
         sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None) -> PDGExpressionsSubASTInputTensors:
     # Note: For some sub-AST that have to be masked-out:
@@ -815,6 +873,18 @@ def preprocess_sub_ast_for_cfg_expressions(
            pdg_node.code_sub_token_range_ref is not None and
            pdg_node.idx not in pdg_nodes_to_mask and
            pdg_node.ast_node_idx not in ast_nodes_indices_to_ignore_or_to_mask}  # FIXME: should it be ignored only?
+
+    ast_paths_per_pdg_node = {
+        pdg_node_idx: enforce_limits_and_sample_ast_paths(
+            ast_paths=sub_ast_paths,
+            max_nr_ast_leaf_to_leaf_paths=model_hps.method_code_encoder.max_nr_cfg_node_sub_ast_leaf_to_leaf_paths,
+            max_nr_ast_leaf_to_root_paths=model_hps.method_code_encoder.max_nr_cfg_node_sub_ast_leaf_to_root_paths,
+            nr_ast_leaf_to_leaf_paths_to_sample=
+            model_hps.method_code_encoder.nr_cfg_node_sub_ast_leaf_to_leaf_paths_to_sample_during_pp,
+            nr_ast_leaf_to_root_paths_to_sample=
+            model_hps.method_code_encoder.nr_cfg_node_sub_ast_leaf_to_root_paths_to_sample_during_pp)
+        for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
+    }
 
     # FOR DEBUG:
     # from ndfa.misc.code_data_structure_utils import print_ast, get_ast_node_expression_str, get_pdg_node_expression_str
@@ -1055,7 +1125,7 @@ def preprocess_pdg(
 
     cfg_paths = preprocess_control_flow_paths(model_hps=model_hps, method_pdg=method_pdg)
     cfg_nodes_expressions_sub_ast_input_tensors = preprocess_sub_ast_for_cfg_expressions(
-        code_task_vocabs=code_task_vocabs, method_pdg=method_pdg, method_ast=method_ast,
+        model_hps=model_hps, code_task_vocabs=code_task_vocabs, method_pdg=method_pdg, method_ast=method_ast,
         pdg_nodes_to_mask=pdg_nodes_to_mask, sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
 
     cfg_control_flow_graph = TGData(
@@ -1161,7 +1231,8 @@ def preprocess_code_task_example(
         for pdg_node_idx, mask_str in pdg_nodes_to_mask.items()
         if method_pdg.pdg_nodes[pdg_node_idx].ast_node_idx is not None}
     method_ast_input_tensors = preprocess_method_ast(
-        code_task_vocabs=code_task_vocabs, method=method, method_ast=method_ast,
+        model_hps=model_hps, code_task_vocabs=code_task_vocabs,
+        method=method, method_ast=method_ast,
         sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
 
     pdg_input_tensors = preprocess_pdg(
