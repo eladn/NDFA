@@ -25,7 +25,7 @@ class KeyValueStoreInterface(abc.ABC):
         ...
 
     @abc.abstractmethod
-    def write_member(self, key: str, value: bytes):
+    def write_member(self, key: str, value: bytes) -> int:
         ...
 
     @abc.abstractmethod
@@ -52,8 +52,9 @@ class DBMKeyValueStore(KeyValueStoreInterface):
     def get_value_by_key(self, key: str) -> bytes:
         return self.dbm[key.encode('ascii')]
 
-    def write_member(self, key: str, value: bytes):
+    def write_member(self, key: str, value: bytes) -> int:
         self.dbm[key.encode('ascii')] = value
+        return len(value)
 
     @classmethod
     def get_new_and_truncate_write_mode(cls) -> 'str':
@@ -74,8 +75,10 @@ class ZIPKeyValueStore(KeyValueStoreInterface):
     def get_value_by_key(self, key: str) -> bytes:
         return self.zip_file.read(key)
 
-    def write_member(self, key: str, value: bytes):
+    def write_member(self, key: str, value: bytes) -> int:
         self.zip_file.writestr(key, value)
+        zip_info = self.zip_file.getinfo(key)
+        return zip_info.compress_size
 
     @classmethod
     def get_new_and_truncate_write_mode(cls) -> 'str':
@@ -114,15 +117,17 @@ class ChunkedRandomAccessDatasetWriter:
                 torch.save(example, bytes_io_stream)
                 binary_serialized_example = bytes_io_stream.getvalue()
         # now the example is already serialized (into bytes) and we directly export it as-is to `dbm` KV-store.
-        example_size_in_bytes = len(binary_serialized_example)
-        chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
-        chunk_file.write_member(str(self.next_example_idx), binary_serialized_example)
+        avg_example_size = self.cur_chunk_size_in_bytes / self.cur_chunk_nr_examples \
+            if self.cur_chunk_nr_examples is not None and self.cur_chunk_nr_examples > 0 else 0
+        chunk_file = self.get_cur_chunk_to_write_example_into(avg_example_size)
+        example_size_in_bytes = chunk_file.write_member(str(self.next_example_idx), binary_serialized_example)
         self.next_example_idx += 1
         self.cur_chunk_nr_examples += 1
         self.cur_chunk_size_in_bytes += example_size_in_bytes
-        assert self.cur_chunk_size_in_bytes <= self.max_chunk_size_in_bytes
+        assert self.cur_chunk_size_in_bytes <= \
+               self.max_chunk_size_in_bytes + max(0, example_size_in_bytes - avg_example_size)
 
-    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) \
+    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int = 0) \
             -> KeyValueStoreInterface:
         assert example_size_in_bytes < self.max_chunk_size_in_bytes
         if self.cur_chunk_file is None or \
