@@ -55,9 +55,15 @@ class BatchFlattenedSequencesDataClassMixin(BatchFlattenedTensorsDataClassMixin,
                     if nr_tensors > inputs[0].nr_sequences_to_sample_per_example:
                         sampled_items_indices = random_state.choice(
                             nr_tensors, size=inputs[0].nr_sequences_to_sample_per_example)
-                        sampled_items = tensors[sampled_items_indices]  # TODO: check!
-                        assert sampled_items.shape[1:] == tensors.shape[1:]
-                        assert sampled_items.size(0) == inputs[0].nr_sequences_to_sample_per_example
+                        if isinstance(tensors, torch.Tensor):
+                            sampled_items = torch.index_select(
+                                tensors, 0, torch.LongTensor(sampled_items_indices))  # TODO: check!
+                            assert sampled_items.shape[1:] == tensors.shape[1:]
+                            assert sampled_items.size(0) == inputs[0].nr_sequences_to_sample_per_example
+                        else:
+                            assert isinstance(tensors, (list, tuple))
+                            sampled_items = [tensors[index] for index in sampled_items_indices]
+                            assert len(sampled_items) == inputs[0].nr_sequences_to_sample_per_example
                         fixed_input_dict[sequences_field.name] = sampled_items
             inputs = [
                 dataclasses.replace(orig_inp, **fixed_inp_dict)

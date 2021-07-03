@@ -71,4 +71,5 @@ class TensorDataClassWithSequencesMixin:
     def get_management_fields(cls) -> Tuple[str, ...]:
         supers = super(TensorDataClassWithSequencesMixin, cls).get_management_fields() \
             if hasattr(super(TensorDataClassWithSequencesMixin, cls), 'get_management_fields') else ()
-        return supers + ('batch_first', 'sequences_lengths', 'sequences_mask', 'max_sequence_length')
+        return supers + ('batch_first', 'nr_sequences_to_sample_per_example', 'sequences_sampling_initial_seed_salt',
+                         'sequences_lengths', 'sequences_mask', 'max_sequence_length')
