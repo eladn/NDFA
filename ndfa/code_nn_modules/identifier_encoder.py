@@ -62,7 +62,8 @@ class IdentifierEncoder(nn.Module):
 
             identifiers_sub_parts_embeddings = self.sub_identifiers_embedding(
                 vocab_word_idx=identifiers_input.identifier_sub_parts_vocab_word_index.sequences,
-                word_hashes=identifiers_input.identifier_sub_parts_hashings.sequences,
+                word_hashes=identifiers_input.identifier_sub_parts_hashings.sequences
+                if identifiers_input.identifier_sub_parts_hashings is not None else None,
                 batch_unique_word_idx=identifiers_input.identifier_sub_parts_index.sequences,
                 obfuscation_vocab_random_indices_shuffle=identifiers_input.sub_parts_obfuscation.sample)
             identifiers_sub_parts_embeddings = identifiers_sub_parts_embeddings.masked_fill(
