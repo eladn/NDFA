@@ -62,7 +62,7 @@ class DBMKeyValueStore(KeyValueStoreInterface):
 
 class ZIPKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode):
-        self.zip_file = zipfile.ZipFile(path, mode)
+        self.zip_file = zipfile.ZipFile(path, mode, compression=zipfile.ZIP_LZMA)
 
     @classmethod
     def open(cls, path, mode) -> 'ZIPKeyValueStore':
