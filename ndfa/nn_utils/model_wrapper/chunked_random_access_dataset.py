@@ -1,10 +1,8 @@
 import os
 import io
 import abc
-import dbm
 import math
 import torch
-import zipfile
 import itertools
 import numpy as np
 from warnings import warn
@@ -48,10 +46,16 @@ class KeyValueStoreInterface(abc.ABC):
     def get_new_and_truncate_write_mode(cls) -> 'str':
         ...
 
+    @classmethod
+    @abc.abstractmethod
+    def get_read_mode(cls) -> 'str':
+        ...
+
 
 class DBMKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode):
-        self.dbm = dbm.open(path, mode)
+        from dbm import open as dbm_open
+        self.dbm = dbm_open(path, mode)
 
     @classmethod
     def open(cls, path, mode) -> 'DBMKeyValueStore':
@@ -71,14 +75,19 @@ class DBMKeyValueStore(KeyValueStoreInterface):
     def get_new_and_truncate_write_mode(cls) -> 'str':
         return 'n'
 
+    @classmethod
+    def get_read_mode(cls) -> 'str':
+        return 'r'
 
-class ZIPKeyValueStore(KeyValueStoreInterface):
+
+class ZipKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode):
-        self.zip_file = zipfile.ZipFile(path, mode, compression=zipfile.ZIP_LZMA)
+        from zipfile import ZipFile, ZIP_LZMA
+        self.zip_file = ZipFile(path, mode, compression=ZIP_LZMA)
 
     @classmethod
-    def open(cls, path, mode) -> 'ZIPKeyValueStore':
-        return ZIPKeyValueStore(path=path, mode=mode)
+    def open(cls, path, mode) -> 'ZipKeyValueStore':
+        return ZipKeyValueStore(path=path, mode=mode)
 
     def close(self):
         self.zip_file.close()
@@ -95,6 +104,47 @@ class ZIPKeyValueStore(KeyValueStoreInterface):
     def get_new_and_truncate_write_mode(cls) -> 'str':
         return 'x'
 
+    @classmethod
+    def get_read_mode(cls) -> 'str':
+        return 'r'
+
+
+class TarKeyValueStore(KeyValueStoreInterface):
+    def __init__(self, path, mode):
+        from tarfile import TarFile
+        self.tar_file = TarFile.open(path, mode)
+
+    @classmethod
+    def open(cls, path, mode) -> 'TarKeyValueStore':
+        return TarKeyValueStore(path=path, mode=mode)
+
+    def close(self):
+        self.tar_file.close()
+
+    def get_value_by_key(self, key: str) -> bytes:
+        with self.tar_file.extractfile(key) as file_stream:
+            file_stream.seek(0)
+            return file_stream.read()
+
+    def write_member(self, key: str, value: bytes) -> int:
+        with io.BytesIO(value) as value_as_bytes_stream:
+            # value_as_bytes_stream.seek(0)
+            tar_info = self.tar_file.tarinfo(name=key)
+            tar_info.size = len(value)
+            # tar_info = self.tar_file.gettarinfo(arcname=key, fileobj=value_as_bytes_stream)
+            value_as_bytes_stream.seek(0)
+            self.tar_file.addfile(tar_info, value_as_bytes_stream)
+        tar_info = self.tar_file.getmember(key)
+        return tar_info.size  # it is not the compressed size :(
+
+    @classmethod
+    def get_new_and_truncate_write_mode(cls) -> 'str':
+        return 'x:gz'
+
+    @classmethod
+    def get_read_mode(cls) -> 'str':
+        return 'r:gz'
+
 
 class ChunkedRandomAccessDatasetWriter:
     KB_IN_BYTES = 1024
@@ -104,7 +154,7 @@ class ChunkedRandomAccessDatasetWriter:
     def __init__(self, pp_data_path_prefix: str,
                  max_chunk_size_in_bytes: int = GB_IN_BYTES,
                  override: bool = False,
-                 key_value_store_type: Type[KeyValueStoreInterface] = ZIPKeyValueStore):
+                 key_value_store_type: Type[KeyValueStoreInterface] = TarKeyValueStore):
         self.pp_data_path_prefix: str = pp_data_path_prefix
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
         self.override: bool = override
@@ -198,7 +248,7 @@ class ChunkedRandomAccessDatasetWriter:
 
 class ChunkedRandomAccessDataset(Dataset):
     def __init__(self, pp_data_path_prefix: str,
-                 key_value_store_type: Type[KeyValueStoreInterface] = ZIPKeyValueStore):
+                 key_value_store_type: Type[KeyValueStoreInterface] = TarKeyValueStore):
         self.pp_data_path_prefix = pp_data_path_prefix
         self.key_value_store_type = key_value_store_type
         self._pp_data_chunks_filepaths = []
@@ -212,7 +262,7 @@ class ChunkedRandomAccessDataset(Dataset):
                 else:
                     break
             self._pp_data_chunks_filepaths.append(filepath)
-            kvstore = self.key_value_store_type.open(filepath, 'r')
+            kvstore = self.key_value_store_type.open(filepath, self.key_value_store_type.get_read_mode())
             self._kvstore_chunks.append(kvstore)
             self._kvstore_chunks_lengths.append(int.from_bytes(kvstore.get_value_by_key('len'), 'little'))
         self._len = sum(self._kvstore_chunks_lengths)
