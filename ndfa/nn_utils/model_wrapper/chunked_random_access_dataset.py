@@ -1,15 +1,85 @@
 import os
 import io
-import torch
+import abc
 import dbm
+import torch
+import zipfile
 import itertools
 import numpy as np
 from warnings import warn
-from typing import Optional, Mapping, ByteString
+from typing import Optional, Type
 from torch.utils.data.dataset import Dataset
 
 
 __all__ = ['ChunkedRandomAccessDatasetWriter', 'ChunkedRandomAccessDataset']
+
+
+class KeyValueStoreInterface(abc.ABC):
+    @classmethod
+    @abc.abstractmethod
+    def open(cls, path, mode) -> 'KeyValueStoreInterface':
+        ...
+
+    @abc.abstractmethod
+    def get_value_by_key(self, key: str) -> bytes:
+        ...
+
+    @abc.abstractmethod
+    def write_member(self, key: str, value: bytes):
+        ...
+
+    @abc.abstractmethod
+    def close(self):
+        ...
+
+    @classmethod
+    @abc.abstractmethod
+    def get_new_and_truncate_write_mode(cls) -> 'str':
+        ...
+
+
+class DBMKeyValueStore(KeyValueStoreInterface):
+    def __init__(self, path, mode):
+        self.dbm = dbm.open(path, mode)
+
+    @classmethod
+    def open(cls, path, mode) -> 'DBMKeyValueStore':
+        return DBMKeyValueStore(path=path, mode=mode)
+
+    def close(self):
+        self.dbm.close()
+
+    def get_value_by_key(self, key: str) -> bytes:
+        return self.dbm[key.encode('ascii')]
+
+    def write_member(self, key: str, value: bytes):
+        self.dbm[key.encode('ascii')] = value
+
+    @classmethod
+    def get_new_and_truncate_write_mode(cls) -> 'str':
+        return 'n'
+
+
+class ZIPKeyValueStore(KeyValueStoreInterface):
+    def __init__(self, path, mode):
+        self.zip_file = zipfile.ZipFile(path, mode)
+
+    @classmethod
+    def open(cls, path, mode) -> 'ZIPKeyValueStore':
+        return ZIPKeyValueStore(path=path, mode=mode)
+
+    def close(self):
+        self.zip_file.close()
+
+    def get_value_by_key(self, key: str) -> bytes:
+        return self.zip_file.read(key)
+
+    def write_member(self, key: str, value: bytes):
+        self.zip_file.writestr(key, value)
+
+    @classmethod
+    def get_new_and_truncate_write_mode(cls) -> 'str':
+        return 'x'
 
 
 class ChunkedRandomAccessDatasetWriter:
@@ -19,7 +89,8 @@ class ChunkedRandomAccessDatasetWriter:
 
     def __init__(self, pp_data_path_prefix: str,
                  max_chunk_size_in_bytes: int = GB_IN_BYTES,
-                 override: bool = False):
+                 override: bool = False,
+                 key_value_store_type: Type[KeyValueStoreInterface] = ZIPKeyValueStore):
         self.pp_data_path_prefix: str = pp_data_path_prefix
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
         self.override: bool = override
@@ -27,8 +98,9 @@ class ChunkedRandomAccessDatasetWriter:
         self.cur_chunk_idx: Optional[int] = None
         self.cur_chunk_size_in_bytes: Optional[int] = None
         self.cur_chunk_nr_examples: Optional[int] = None
-        self.cur_chunk_file: Optional[Mapping[ByteString, ByteString]] = None
+        self.cur_chunk_file: Optional[KeyValueStoreInterface] = None
         self.cur_chunk_filepath: Optional[str] = None
+        self.key_value_store_type = key_value_store_type
 
     @property
     def total_nr_examples(self) -> int:
@@ -44,13 +116,14 @@ class ChunkedRandomAccessDatasetWriter:
         # now the example is already serialized (into bytes) and we directly export it as-is to `dbm` KV-store.
         example_size_in_bytes = len(binary_serialized_example)
         chunk_file = self.get_cur_chunk_to_write_example_into(example_size_in_bytes)
-        chunk_file[str(self.next_example_idx).encode('ascii')] = binary_serialized_example
+        chunk_file.write_member(str(self.next_example_idx), binary_serialized_example)
         self.next_example_idx += 1
         self.cur_chunk_nr_examples += 1
         self.cur_chunk_size_in_bytes += example_size_in_bytes
         assert self.cur_chunk_size_in_bytes <= self.max_chunk_size_in_bytes
 
-    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) -> Mapping[ByteString, ByteString]:
+    def get_cur_chunk_to_write_example_into(self, example_size_in_bytes: int) \
+            -> KeyValueStoreInterface:
         assert example_size_in_bytes < self.max_chunk_size_in_bytes
         if self.cur_chunk_file is None or \
                 self.cur_chunk_size_in_bytes + example_size_in_bytes >= self.max_chunk_size_in_bytes:
@@ -75,7 +148,8 @@ class ChunkedRandomAccessDatasetWriter:
                          f'in dir `{os.path.dirname(self.cur_chunk_filepath)}`.')
                     for filename in cur_chunk_files_found_in_pp_dir:
                         os.remove(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
-            self.cur_chunk_file = dbm.open(self.cur_chunk_filepath, 'n')
+            self.cur_chunk_file = self.key_value_store_type.open(
+                self.cur_chunk_filepath, self.key_value_store_type.get_new_and_truncate_write_mode())
             self.cur_chunk_size_in_bytes = 0
             self.cur_chunk_nr_examples = 0
         return self.cur_chunk_file
@@ -84,7 +158,7 @@ class ChunkedRandomAccessDatasetWriter:
         assert self.cur_chunk_nr_examples > 0
         print(f'Closing chunk #{self.cur_chunk_idx} with {self.cur_chunk_nr_examples:,} examples '
               f'and total size of {self.cur_chunk_size_in_bytes:,} bytes.')
-        self.cur_chunk_file[b'len'] = int(self.cur_chunk_nr_examples).to_bytes(8, 'little')
+        self.cur_chunk_file.write_member('len', int(self.cur_chunk_nr_examples).to_bytes(8, 'little'))
         self.cur_chunk_file.close()
         self.cur_chunk_file = None
 
@@ -107,8 +181,10 @@ class ChunkedRandomAccessDatasetWriter:
 
 
 class ChunkedRandomAccessDataset(Dataset):
-    def __init__(self, pp_data_path_prefix: str):
+    def __init__(self, pp_data_path_prefix: str,
+                 key_value_store_type: Type[KeyValueStoreInterface] = ZIPKeyValueStore):
         self.pp_data_path_prefix = pp_data_path_prefix
+        self.key_value_store_type = key_value_store_type
         self._pp_data_chunks_filepaths = []
         self._kvstore_chunks = []
         self._kvstore_chunks_lengths = []
@@ -120,9 +196,9 @@ class ChunkedRandomAccessDataset(Dataset):
                 else:
                     break
             self._pp_data_chunks_filepaths.append(filepath)
-            kvstore = dbm.open(filepath, 'r')
+            kvstore = self.key_value_store_type.open(filepath, 'r')
             self._kvstore_chunks.append(kvstore)
-            self._kvstore_chunks_lengths.append(int.from_bytes(kvstore[b'len'], 'little'))
+            self._kvstore_chunks_lengths.append(int.from_bytes(kvstore.get_value_by_key('len'), 'little'))
         self._len = sum(self._kvstore_chunks_lengths)
         print(f'Loaded dataset `{os.path.basename(pp_data_path_prefix)}` of size {self._len} with {len(self._kvstore_chunks)} chunks.')
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
@@ -147,7 +223,7 @@ class ChunkedRandomAccessDataset(Dataset):
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len
         chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
-        binary_serialized_example = chunk_kvstore[str(idx).encode('ascii')]
+        binary_serialized_example = chunk_kvstore.get_value_by_key(str(idx))
         with io.BytesIO(binary_serialized_example) as bytes_io_stream:
             bytes_io_stream.seek(0)
             return torch.load(bytes_io_stream)
