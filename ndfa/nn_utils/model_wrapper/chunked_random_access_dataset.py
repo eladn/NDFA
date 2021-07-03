@@ -2,6 +2,7 @@ import os
 import io
 import abc
 import dbm
+import math
 import torch
 import zipfile
 import itertools
@@ -12,6 +13,16 @@ from torch.utils.data.dataset import Dataset
 
 
 __all__ = ['ChunkedRandomAccessDatasetWriter', 'ChunkedRandomAccessDataset']
+
+
+def prettyprint_filesize(size_bytes: int):
+    if size_bytes == 0:
+        return "0B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = int(math.floor(math.log(size_bytes, 1024)))
+    p = math.pow(1024, i)
+    s = round(size_bytes / p, 2)
+    return "%s %s" % (s, size_name[i])
 
 
 class KeyValueStoreInterface(abc.ABC):
@@ -162,7 +173,7 @@ class ChunkedRandomAccessDatasetWriter:
     def close_last_written_chunk(self):
         assert self.cur_chunk_nr_examples > 0
         print(f'Closing chunk #{self.cur_chunk_idx} with {self.cur_chunk_nr_examples:,} examples '
-              f'and total size of {self.cur_chunk_size_in_bytes:,} bytes.')
+              f'and total size of {prettyprint_filesize(self.cur_chunk_size_in_bytes)}.')
         self.cur_chunk_file.write_member('len', int(self.cur_chunk_nr_examples).to_bytes(8, 'little'))
         self.cur_chunk_file.close()
         self.cur_chunk_file = None
@@ -205,7 +216,8 @@ class ChunkedRandomAccessDataset(Dataset):
             self._kvstore_chunks.append(kvstore)
             self._kvstore_chunks_lengths.append(int.from_bytes(kvstore.get_value_by_key('len'), 'little'))
         self._len = sum(self._kvstore_chunks_lengths)
-        print(f'Loaded dataset `{os.path.basename(pp_data_path_prefix)}` of size {self._len} with {len(self._kvstore_chunks)} chunks.')
+        print(f'Loaded dataset `{os.path.basename(pp_data_path_prefix)}` of {self._len:,} examples '
+              f'over {len(self._kvstore_chunks)} chunk{"" if len(self._kvstore_chunks) == 1 else "s"}.')
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
