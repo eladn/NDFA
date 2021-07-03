@@ -1,4 +1,6 @@
 import torch
+import typing
+import hashlib
 import functools
 import dataclasses
 from typing import List, Union, Optional, Tuple, Dict, Any
@@ -6,7 +8,8 @@ from typing_extensions import Protocol
 
 
 __all__ = ['seq_lengths_to_mask', 'compose_fns', 'collate_tensors_with_variable_shapes',
-           'CollateData', 'CollatableValuesTuple', 'MapFn', 'inverse_permutation']
+           'CollateData', 'CollatableValuesTuple', 'MapFn', 'inverse_permutation',
+           'OriginalTypeInfo', 'get_original_type', 'get_random_seed_per_example']
 
 
 def seq_lengths_to_mask(seq_lengths: torch.LongTensor, max_seq_len: int, batch_first: bool = True):
@@ -118,3 +121,49 @@ def inverse_permutation(permutation: torch.LongTensor) -> torch.LongTensor:
     inverse = torch.empty_like(permutation)
     inverse[permutation] = torch.arange(len(permutation))
     return inverse
+
+
+@dataclasses.dataclass
+class OriginalTypeInfo:
+    original_type: typing.Type
+    unwrapped_type: typing.Optional[typing.Type] = None
+    is_optional: bool = False
+
+
+def get_original_type(_type: typing.Type) -> OriginalTypeInfo:
+    origin_type = typing.get_origin(_type)
+    if origin_type is None:
+        return OriginalTypeInfo(original_type=_type)
+    if origin_type == typing.Union or _type == typing.Union:
+        union_types = typing.get_args(_type)
+        assert len(union_types) == 2 and union_types[1] == type(None)
+        original_type_info = get_original_type(union_types[0])
+        original_type_info.is_optional = True
+        return original_type_info
+    assert typing.get_origin(origin_type) is None
+    return OriginalTypeInfo(original_type=origin_type, unwrapped_type=_type)
+
+
+def get_random_seed_per_example(
+        batch_dependent_seed: bool, example_dependent_seed: bool,
+        initial_seed_salt: str, collate_data: CollateData) -> List[int]:
+    if batch_dependent_seed and example_dependent_seed:
+        return [
+            int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}|{example_idx}'
+                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+            for example_idx, _ in enumerate(collate_data.example_hashes)]
+    elif not batch_dependent_seed and example_dependent_seed:
+        return [
+            int(hashlib.sha256(f'{initial_seed_salt}|{example_hash}'
+                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+            for example_hash in collate_data.example_hashes]
+    elif batch_dependent_seed and not example_dependent_seed:
+        return [
+            int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}'
+                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+            for _ in collate_data.example_hashes]
+    else:
+        return [
+            int(hashlib.sha256(f'{initial_seed_salt}'
+                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
+            for _ in collate_data.example_hashes]

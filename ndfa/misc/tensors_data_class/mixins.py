@@ -61,6 +61,7 @@ class TensorDataClassWithSingleSequenceFieldMixin:
 @dataclasses.dataclass
 class TensorDataClassWithSequencesMixin:
     batch_first: bool = True
+    nr_sequences_to_sample_per_example: Optional[int] = dataclasses.field(default=None)
     sequences_lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
     sequences_mask: Optional[torch.BoolTensor] = dataclasses.field(default=None, init=False)
     max_sequence_length: Optional[int] = dataclasses.field(default=None, init=False)

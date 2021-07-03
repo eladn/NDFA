@@ -1,41 +1,15 @@
 import torch
-import hashlib
 import dataclasses
 import numpy as np
 from typing import List, Tuple, final
 
-from .misc import collate_tensors_with_variable_shapes, CollateData, inverse_permutation
+from .misc import collate_tensors_with_variable_shapes, CollateData, inverse_permutation, \
+    seq_lengths_to_mask, get_random_seed_per_example
 from .tensors_data_class import TensorsDataClass
 from .mixins import TensorDataClassWithSequencesMixin
-from .misc import seq_lengths_to_mask
 
 
 __all__ = ['BatchFlattenedSeqShuffler', 'batch_flattened_seq_shuffler_field']
-
-
-def get_random_seed_per_example(
-        batch_dependent_seed: bool, example_dependent_seed: bool,
-        initial_seed_salt: str, collate_data: CollateData) -> List[int]:
-    if batch_dependent_seed and example_dependent_seed:
-        return [
-            int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}|{example_idx}'
-                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
-            for example_idx, _ in enumerate(collate_data.example_hashes)]
-    elif not batch_dependent_seed and example_dependent_seed:
-        return [
-            int(hashlib.sha256(f'{initial_seed_salt}|{example_hash}'
-                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
-            for example_hash in collate_data.example_hashes]
-    elif batch_dependent_seed and not example_dependent_seed:
-        return [
-            int(hashlib.sha256(f'{initial_seed_salt}|{"-".join(collate_data.example_hashes)}'
-                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
-            for _ in collate_data.example_hashes]
-    else:
-        return [
-            int(hashlib.sha256(f'{initial_seed_salt}'
-                               .encode('ascii')).hexdigest(), 16) % (2 ** 32)
-            for _ in collate_data.example_hashes]
 
 
 @final

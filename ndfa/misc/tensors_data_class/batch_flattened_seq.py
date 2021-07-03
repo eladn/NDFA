@@ -1,8 +1,10 @@
 import torch
 import dataclasses
+import numpy as np
 from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 
-from .misc import seq_lengths_to_mask, collate_tensors_with_variable_shapes, CollateData
+from .misc import seq_lengths_to_mask, collate_tensors_with_variable_shapes, CollateData, \
+    get_random_seed_per_example
 from .mixins import TensorDataClassWithSequencesMixin, TensorDataClassWithSingleSequenceFieldMixin
 from .batch_flattened import BatchFlattenedTensorsDataClassMixin
 from .tensors_data_class import TensorsDataClass
@@ -35,6 +37,32 @@ class BatchFlattenedSequencesDataClassMixin(BatchFlattenedTensorsDataClassMixin,
         assert all(seq1.size(0) == seq2.size(0)
                    for field in sequences_fields for inp in inputs
                    for seq1, seq2 in zip(getattr(inp, sequences_fields[0].name), getattr(inp, field.name)))
+
+        if inputs[0].nr_sequences_to_sample_per_example is not None:
+            random_seed_per_example = get_random_seed_per_example(
+                batch_dependent_seed=True,
+                example_dependent_seed=True,
+                initial_seed_salt='',  # TODO: use `inputs[0].initial_seed_salt`
+                collate_data=collate_data)
+            fixed_inputs_dicts = []
+            for example_idx, inp in enumerate(inputs):
+                fixed_input_dict = {}
+                fixed_inputs_dicts.append(fixed_input_dict)
+                for sequences_field in sequences_fields:
+                    random_state = np.random.RandomState(random_seed_per_example[example_idx])
+                    tensors = getattr(inp, sequences_field.name)
+                    nr_tensors = tensors.size(0) if isinstance(tensors, torch.Tensor) else len(tensors)
+                    if nr_tensors > inputs[0].nr_sequences_to_sample_per_example:
+                        sampled_items_indices = random_state.choice(
+                            nr_tensors, size=inputs[0].nr_sequences_to_sample_per_example)
+                        sampled_items = tensors[sampled_items_indices]  # TODO: check!
+                        assert sampled_items.shape[1:] == tensors.shape[1:]
+                        assert sampled_items.size(0) == inputs[0].nr_sequences_to_sample_per_example
+                        fixed_input_dict[sequences_field.name] = sampled_items
+            inputs = [
+                dataclasses.replace(orig_inp, **fixed_inp_dict)
+                for orig_inp, fixed_inp_dict in zip(inputs, fixed_inputs_dicts)]
+
         seq_lengths = [seq.size(0) for inp in inputs for seq in getattr(inp, sequences_fields[0].name)]
 
         if any(isinstance(getattr(inputs[0], field.name), list) for field in sequences_fields):

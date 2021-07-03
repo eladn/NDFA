@@ -607,6 +607,11 @@ def preprocess_method_ast(
     dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
     dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
 
+    nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading = \
+        model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading
+    nr_ast_leaf_to_root_paths_to_sample_during_dataloading = \
+        model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading
+
     method_ast_input_tensors = MethodASTInputTensors(
         ast_node_types=BatchFlattenedTensor(
             torch.LongTensor([
@@ -737,6 +742,7 @@ def preprocess_method_ast(
         ast_leaf_to_leaf_paths_node_indices=None if not pp_method_ast_paths else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for path in method_ast_paths.leaf_to_leaf_paths.values()],
+            nr_sequences_to_sample_per_example=nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading
         ),  # tgt_indexing_group='ast_nodes'),
         ast_leaf_to_leaf_paths_child_place=None if not pp_method_ast_paths else BatchFlattenedSeq(
             sequences=[
@@ -745,17 +751,20 @@ def preprocess_method_ast(
                         'child_place=UNK' if path_node.child_place_in_parent is None else
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
-                for path in method_ast_paths.leaf_to_leaf_paths.values()]),
+                for path in method_ast_paths.leaf_to_leaf_paths.values()],
+            nr_sequences_to_sample_per_example=nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading),
         ast_leaf_to_leaf_paths_vertical_direction=None if not pp_method_ast_paths else BatchFlattenedSeq(
             sequences=[
                 torch.LongTensor([
                     code_task_vocabs.ast_traversal_orientation.get_word_idx(
                         f'DIR={path_node.direction.value}')
                     for path_node in path])
-                for path in method_ast_paths.leaf_to_leaf_paths.values()]),
+                for path in method_ast_paths.leaf_to_leaf_paths.values()],
+            nr_sequences_to_sample_per_example=nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading),
         ast_leaf_to_root_paths_node_indices=None if not pp_method_ast_paths else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                        for path in method_ast_paths.leaf_to_root_paths.values()],
+            nr_sequences_to_sample_per_example=nr_ast_leaf_to_root_paths_to_sample_during_dataloading
         ),  # tgt_indexing_group='ast_nodes'),
         ast_leaf_to_root_paths_child_place=None if not pp_method_ast_paths else BatchFlattenedSeq(
             sequences=[
@@ -764,7 +773,8 @@ def preprocess_method_ast(
                         'child_place=UNK' if path_node.child_place_in_parent is None else
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
-                for path in method_ast_paths.leaf_to_root_paths.values()]),
+                for path in method_ast_paths.leaf_to_root_paths.values()],
+            nr_sequences_to_sample_per_example=nr_ast_leaf_to_root_paths_to_sample_during_dataloading),
         ast_leaves_sequence_node_indices=None if not pp_method_ast_paths else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor(method_ast_paths.leaves_sequence)],
         ),  # tgt_indexing_group='ast_nodes'),

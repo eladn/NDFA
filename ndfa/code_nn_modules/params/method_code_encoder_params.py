@@ -71,6 +71,12 @@ class MethodCodeEncoderParams(HasDispatchableField):
     nr_method_ast_leaf_to_root_paths_to_sample_during_pp: Optional[int] = conf_field(
         default=150,
         description="The number of .")
+    nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading: Optional[int] = conf_field(
+        default=200,
+        description="The number of .")
+    nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading: Optional[int] = conf_field(
+        default=50,
+        description="The number of .")
     max_nr_cfg_node_sub_ast_leaf_to_leaf_paths: Optional[int] = conf_field(
         default=None,
         description="The max number of .")
