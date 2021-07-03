@@ -111,8 +111,8 @@ class ZipKeyValueStore(KeyValueStoreInterface):
 
 class TarKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode):
-        from tarfile import TarFile
-        self.tar_file = TarFile.open(path, mode)
+        from tarfile import open as tarfile_open
+        self.tar_file = tarfile_open(path, mode, compresslevel=9)
 
     @classmethod
     def open(cls, path, mode) -> 'TarKeyValueStore':
@@ -127,23 +127,24 @@ class TarKeyValueStore(KeyValueStoreInterface):
             return file_stream.read()
 
     def write_member(self, key: str, value: bytes) -> int:
-        with io.BytesIO(value) as value_as_bytes_stream:
-            # value_as_bytes_stream.seek(0)
-            tar_info = self.tar_file.tarinfo(name=key)
-            tar_info.size = len(value)
-            # tar_info = self.tar_file.gettarinfo(arcname=key, fileobj=value_as_bytes_stream)
-            value_as_bytes_stream.seek(0)
-            self.tar_file.addfile(tar_info, value_as_bytes_stream)
+        from tarfile import TarInfo
+        value_as_bytes_stream = io.BytesIO(value)
+        value_as_bytes_stream.seek(0)
+        tar_info = TarInfo(name=key)
+        tar_info.size = len(value)
+        # tar_info = self.tar_file.gettarinfo(arcname=key, fileobj=value_as_bytes_stream)
+        value_as_bytes_stream.seek(0)
+        self.tar_file.addfile(tar_info, value_as_bytes_stream)
         tar_info = self.tar_file.getmember(key)
         return tar_info.size  # it is not the compressed size :(
 
     @classmethod
     def get_new_and_truncate_write_mode(cls) -> 'str':
-        return 'x:gz'
+        return 'x:bz2'
 
     @classmethod
     def get_read_mode(cls) -> 'str':
-        return 'r:gz'
+        return 'r:bz2'
 
 
 class ChunkedRandomAccessDatasetWriter:
