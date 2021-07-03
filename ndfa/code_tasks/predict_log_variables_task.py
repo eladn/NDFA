@@ -36,7 +36,8 @@ class PredictLogVarsTask(CodeTaskBase):
 
     def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) \
             -> typing.Iterable[RawExtractedExample]:
-        return iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_extracted_data_dir)
+        return iter_raw_extracted_examples_and_verify(
+            raw_extracted_data_dir=raw_extracted_data_dir, show_progress_bar=True)
 
     def preprocess_raw_example(
             self, model_hps: NDFAModelHyperParams,

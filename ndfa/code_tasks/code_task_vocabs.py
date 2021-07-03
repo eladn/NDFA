@@ -37,7 +37,8 @@ class CodeTaskVocabs(NamedTuple):
 
         identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
             identifier
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for identifier in example.method_pdg.identifier_by_idx)
         identifiers_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='identifiers',
@@ -47,7 +48,8 @@ class CodeTaskVocabs(NamedTuple):
 
         sub_identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
             sub_identifier
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for identifier_as_sub_identifiers in example.method_pdg.sub_identifiers_by_idx
             for sub_identifier in identifier_as_sub_identifiers)
         sub_identifiers_vocab = Vocabulary.load_or_create(
@@ -58,7 +60,8 @@ class CodeTaskVocabs(NamedTuple):
 
         kos_tokens_carpus_generator = None if raw_train_data_path is None else lambda: (
             kos_token_to_kos_token_vocab_word(token)
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for pdg_node in example.method_pdg.pdg_nodes
             if pdg_node.code_sub_token_range_ref is not None
             for token in get_pdg_node_tokenized_expression(example.method, pdg_node)
@@ -70,7 +73,8 @@ class CodeTaskVocabs(NamedTuple):
 
         pdg_node_control_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
             pdg_node.control_kind.value
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for pdg_node in example.method_pdg.pdg_nodes)
         # TODO: '<LOG_PRED>' special word is specific to LoggingCalls task. make it more generic here.
         pdg_node_control_kinds_vocab = Vocabulary.load_or_create(
@@ -80,7 +84,8 @@ class CodeTaskVocabs(NamedTuple):
 
         tokens_kinds_carpus_generator = None if raw_train_data_path is None else lambda: (
             token.kind.value
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for pdg_node in example.method_pdg.pdg_nodes
             if pdg_node.code_sub_token_range_ref is not None
             for token in get_pdg_node_tokenized_expression(example.method, pdg_node))
@@ -93,7 +98,8 @@ class CodeTaskVocabs(NamedTuple):
         # FIXME: It actually contains 'DataDependency' edge type, but the vocab is called `control_flow_edge`.
         pdg_control_flow_edge_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             edge.type.value
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for pdg_node in example.method_pdg.pdg_nodes
             for edge in pdg_node.control_flow_out_edges)
         pdg_control_flow_edge_types_vocab = Vocabulary.load_or_create(
@@ -103,7 +109,8 @@ class CodeTaskVocabs(NamedTuple):
 
         ast_node_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.type.value
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for ast_node in example.method_ast.nodes)
         ast_node_types_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_types',
@@ -112,7 +119,8 @@ class CodeTaskVocabs(NamedTuple):
 
         ast_node_major_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.type.value.split('_')[0]
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for ast_node in example.method_ast.nodes)
         ast_node_major_types_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_major_types',
@@ -121,7 +129,8 @@ class CodeTaskVocabs(NamedTuple):
 
         ast_node_minor_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.type.value[ast_node.type.value.find('_') + 1:]
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for ast_node in example.method_ast.nodes
             if '_' in ast_node.type.value)
         ast_node_minor_types_vocab = Vocabulary.load_or_create(
@@ -131,7 +140,8 @@ class CodeTaskVocabs(NamedTuple):
 
         primitive_types_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.type_name
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for ast_node in example.method_ast.nodes
             if ast_node.type == SerASTNodeType.PRIMITIVE_TYPE and ast_node.type_name is not None)
         primitive_types_vocab = Vocabulary.load_or_create(
@@ -141,7 +151,8 @@ class CodeTaskVocabs(NamedTuple):
 
         modifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
             ast_node.modifier
-            for example in iter_raw_extracted_examples_and_verify(raw_extracted_data_dir=raw_train_data_path)
+            for example in iter_raw_extracted_examples_and_verify(
+                raw_extracted_data_dir=raw_train_data_path, show_progress_bar=True)
             for ast_node in example.method_ast.nodes
             if ast_node.modifier is not None)
         modifiers_vocab = Vocabulary.load_or_create(

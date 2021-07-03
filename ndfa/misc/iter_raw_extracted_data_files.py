@@ -170,8 +170,10 @@ def count_lines_in_file(file_path: str):
         return sum(buf.count(b'\n') for buf in bufgen)
 
 
-def iter_raw_extracted_examples_and_verify(raw_extracted_data_dir: str) -> typing.Iterable[RawExtractedExample]:
-    for example_idx, example in enumerate(iter_raw_extracted_examples(raw_extracted_data_dir=raw_extracted_data_dir)):
+def iter_raw_extracted_examples_and_verify(
+        raw_extracted_data_dir: str, **kwargs) -> typing.Iterable[RawExtractedExample]:
+    for example_idx, example in enumerate(iter_raw_extracted_examples(
+            raw_extracted_data_dir=raw_extracted_data_dir, **kwargs)):
         if example.method_ast.method_hash != example.logging_call.method_ref.hash:
             raise ValueError(f'Error while reading raw data @ line #{example_idx + 1}:'
                              f'logging_call.method_ref.hash={example.logging_call.method_ref.hash},'
