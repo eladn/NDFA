@@ -42,7 +42,7 @@ class BatchFlattenedSequencesDataClassMixin(BatchFlattenedTensorsDataClassMixin,
             random_seed_per_example = get_random_seed_per_example(
                 batch_dependent_seed=True,
                 example_dependent_seed=True,
-                initial_seed_salt='',  # TODO: use `inputs[0].initial_seed_salt`
+                initial_seed_salt=inputs[0].sequences_sampling_initial_seed_salt,
                 collate_data=collate_data)
             fixed_inputs_dicts = []
             for example_idx, inp in enumerate(inputs):
@@ -114,7 +114,10 @@ class BatchFlattenedSeq(BatchFlattenedSequencesDataClass, TensorDataClassWithSin
 def batch_flattened_seq_field(
         *,
         default=dataclasses.MISSING,
-        self_indexing_group: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
-    management_fields_defaults = {'self_indexing_group': self_indexing_group}
+        self_indexing_group: Optional[str] = dataclasses.MISSING,
+        sequences_sampling_initial_seed_salt: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {
+        'self_indexing_group': self_indexing_group,
+        'sequences_sampling_initial_seed_salt': sequences_sampling_initial_seed_salt}
     management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
     return dataclasses.field(default=default, metadata=management_fields_defaults)

@@ -155,7 +155,11 @@ def batched_flattened_indices_flattened_seq_field(
         *,
         default=dataclasses.MISSING,
         self_indexing_group: Optional[str] = dataclasses.MISSING,
-        tgt_indexing_group: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
-    management_fields_defaults = {'self_indexing_group': self_indexing_group, 'tgt_indexing_group': tgt_indexing_group}
+        tgt_indexing_group: Optional[str] = dataclasses.MISSING,
+        sequences_sampling_initial_seed_salt: Optional[str] = dataclasses.MISSING) -> dataclasses.Field:
+    management_fields_defaults = {
+        'self_indexing_group': self_indexing_group,
+        'tgt_indexing_group': tgt_indexing_group,
+        'sequences_sampling_initial_seed_salt': sequences_sampling_initial_seed_salt}
     management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
     return dataclasses.field(default=default, metadata=management_fields_defaults)
