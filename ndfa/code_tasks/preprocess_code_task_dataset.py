@@ -1304,16 +1304,18 @@ def preprocess_code_task_dataset(
             override=pp_override)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
-            for pp_example_as_bytes in pool.imap_unordered(
+            for pp_example_as_bytes_or_errors_list in pool.imap_unordered(
                     functools.partial(
                         catch_preprocess_limit_exceed_error,
                         pp_example_fn, model_hps, code_task_vocabs),
                     iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
-                assert pp_example_as_bytes is not None
-                if isinstance(pp_example_as_bytes, list):
-                    assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in pp_example_as_bytes)
+                assert pp_example_as_bytes_or_errors_list is not None
+                if isinstance(pp_example_as_bytes_or_errors_list, list):
+                    errors_list = pp_example_as_bytes_or_errors_list
+                    assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in errors_list)
                     pass  # TODO: add to limit exceed statistics
                 else:
+                    pp_example_as_bytes = pp_example_as_bytes_or_errors_list
                     with io.BytesIO(pp_example_as_bytes) as pp_example_as_bytes_io_stream:
                         pp_example_as_bytes_io_stream.seek(0)
                         pp_example = torch.load(pp_example_as_bytes_io_stream)
