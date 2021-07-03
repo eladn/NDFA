@@ -84,6 +84,7 @@ class ASTPathsEncoder(nn.Module):
 
         ast_paths_traversal_orientation_encodings_input = None
         if self.is_first_encoder_layer:
+            assert ast_paths_node_indices is not None
             ast_paths_node_occurrences_encodings_inputs = ast_nodes_encodings[ast_paths_node_indices.sequences]
             if self.encoder_params.paths_add_traversal_edges:
                 ast_paths_child_place = sub_ast_input.get_ast_paths_child_place(ast_paths_type)
