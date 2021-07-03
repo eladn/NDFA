@@ -189,9 +189,11 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         if self.model_hps.method_code_encoder.method_encoder_type in {'method-cfg', 'method-cfg-v2'}:
             encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
         elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
-            # TODO: fix this to support any whole-method encoder (like method-AST)!
-            encoder_output_dim = self.model_hps.method_code_encoder.whole_method_expression_encoder\
-                .tokens_seq_encoder.token_encoding_dim
+            # TODO: put in HPs
+            encoder_output_dim = \
+                self.model_hps.method_code_encoder.whole_method_expression_encoder.tokens_seq_encoder.token_encoding_dim \
+                if self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq' else \
+                self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.ast_node_embedding_dim
         else:
             assert False
 
@@ -230,8 +232,25 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
             encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
         elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
-            encoder_outputs = encoded_code.whole_method_token_seqs_encoding
-            encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
+            if self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
+                encoder_outputs = encoded_code.whole_method_token_seqs_encoding
+                encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
+            elif self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'ast':
+                if self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type == 'set-of-paths':
+                    raise NotImplementedError  # TODO: implement!
+                    encoder_outputs = ...  # TODO
+                    encoder_outputs_mask = code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.unflatten(
+                        code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences_mask)
+                elif self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type in {'tree', 'paths-folded'}:
+                    encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
+                        encoded_code.whole_method_ast_nodes_encoding)
+                    encoder_outputs_mask = code_task_input.ast.ast_node_major_types.unflattener_mask
+                else:
+                    assert False
+            else:
+                assert False
+            print('encoder_outputs', encoder_outputs.shape)
+            print('encoder_outputs_mask', encoder_outputs_mask.shape)
         else:
             assert False
 

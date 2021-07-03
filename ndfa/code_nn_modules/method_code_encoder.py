@@ -72,10 +72,14 @@ class MethodCodeEncoder(nn.Module):
                 code_task_vocabs=code_task_vocabs,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+            # TODO: put in HPs
+            expression_encoding_dim = \
+                self.encoder_params.whole_method_expression_encoder.tokens_seq_encoder.token_encoding_dim \
+                if self.encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq' else \
+                self.encoder_params.whole_method_expression_encoder.ast_encoder.ast_node_embedding_dim
             self.symbols_encoder = SymbolsEncoder(
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                expression_encoding_dim=self.encoder_params.whole_method_expression_encoder
-                    .tokens_seq_encoder.token_encoding_dim,
+                expression_encoding_dim=expression_encoding_dim,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
