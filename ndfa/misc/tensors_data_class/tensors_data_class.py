@@ -93,7 +93,7 @@ class TensorsDataClass:
             map_fn=lambda field_val: field_val.pin_memory() if hasattr(field_val, 'pin_memory') else field_val,
             mapper_override_group='device')
 
-    # TODO: generalize to support `TensorDataDict`!
+    # TODO: generalize to support `TensorsDataDict`!
     def deep_map(
             self,
             map_fn: MapFn,
@@ -124,7 +124,7 @@ class TensorsDataClass:
         new_obj = self.factory(mapped_field_values)
         return new_obj
 
-    # TODO: generalize to support `TensorDataDict`!
+    # TODO: generalize to support `TensorsDataDict`!
     def deep_lazy_map(
             self,
             map_fn: MapFn,
@@ -248,7 +248,7 @@ class TensorsDataClass:
         if dgl is not None:
             if isinstance(values_as_tuple[0], dgl.DGLGraph):
                 return dgl.batch(list(values_as_tuple))
-        # TODO: consider canceling native dict handling! (raise ValueError to use `TensorDataDict` instead)
+        # TODO: consider canceling native dict handling! (raise ValueError to use `TensorsDataDict` instead)
         if isinstance(values_as_tuple[0], dict):
             all_keys = {key for dct in values_as_tuple for key in dct.keys()}
             return {key: cls.collate_values(tuple(dct[key] for dct in values_as_tuple if key in dct),
@@ -293,17 +293,24 @@ class TensorsDataClass:
         return batched_obj
 
     def set_class_defaults(self):
-        for field_name in self.get_all_fields():
+        # Note: It should also work for `TensorsDataDict`; as we use `get_all_fields()`
+        #       and not simply iterating `dataclasses.fields()`.
+        all_fields_names = self.get_all_fields()
+        for field_name in all_fields_names:
             field_val = self.access_field_wo_applying_lazy_maps(field_name)
-            field = next(fld for fld in dataclasses.fields(self) if fld.name == field_name)
             if field_val is None or not isinstance(field_val, TensorsDataClass):
                 continue
-            field_val.get_all_fields()
-            for k, v in field.metadata.items():
-                assert k in set(field_val.get_management_fields())
-                assert field_val.access_field_wo_applying_lazy_maps(k) is None
-                if v is not dataclasses.MISSING:
-                    setattr(field_val, k, v)
+            field = next((fld for fld in dataclasses.fields(self) if fld.name == field_name), None)
+            if field is not None:
+                for k, v in field.metadata.items():
+                    assert k in set(field_val.get_management_fields())
+                    if v is not dataclasses.MISSING:
+                        # I wanted to do the update only if this field is not set on the instance.
+                        # Unfortunately it's not possible because of dataclass fields that have a default
+                        # value (like `initial_seed_salt`), as the field is set to its default value when the instance
+                        # is created, and the class metadata won't replace it (although the expected behaviour in this
+                        # case is to replace it).
+                        setattr(field_val, k, v)
             field_val.set_class_defaults()
 
     @classmethod
