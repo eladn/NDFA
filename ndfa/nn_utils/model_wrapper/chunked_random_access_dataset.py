@@ -94,14 +94,15 @@ class ZipKeyValueStore(KeyValueStoreInterface):
         self.zip_file.close()
 
     def get_value_by_key(self, key: str) -> bytes:
+        self.zip_file.getinfo(key)  # verify it is indeed here
         return self.zip_file.read(key)
 
     def write_member(self, key: str, value: bytes) -> int:
-        with tempfile.NamedTemporaryFile(mode='wb') as tmp_file:
-            tmp_file.write(value)
-            tmp_file.seek(0)
-            self.zip_file.write(tmp_file.name, arcname=key)
-        # self.zip_file.writestr(key, value)
+        # with tempfile.NamedTemporaryFile(mode='wb') as tmp_file:
+        #     tmp_file.write(value)
+        #     tmp_file.seek(0)
+        #     self.zip_file.write(tmp_file.name, arcname=key)
+        self.zip_file.writestr(key, value)
         zip_info = self.zip_file.getinfo(key)
         return zip_info.compress_size
 
@@ -133,13 +134,13 @@ class TarKeyValueStore(KeyValueStoreInterface):
 
     def write_member(self, key: str, value: bytes) -> int:
         from tarfile import TarInfo
-        value_as_bytes_stream = io.BytesIO(value)
-        value_as_bytes_stream.seek(0)
-        tar_info = TarInfo(name=key)
-        tar_info.size = len(value)
-        # tar_info = self.tar_file.gettarinfo(arcname=key, fileobj=value_as_bytes_stream)
-        value_as_bytes_stream.seek(0)
-        self.tar_file.addfile(tar_info, value_as_bytes_stream)
+        with io.BytesIO(value) as value_as_bytes_stream:
+            value_as_bytes_stream.seek(0)
+            tar_info = TarInfo(name=key)
+            tar_info.size = len(value)
+            # tar_info = self.tar_file.gettarinfo(arcname=key, fileobj=value_as_bytes_stream)
+            value_as_bytes_stream.seek(0)
+            self.tar_file.addfile(tar_info, value_as_bytes_stream)
         tar_info = self.tar_file.getmember(key)
         return tar_info.size  # it is not the compressed size :(
 
@@ -258,7 +259,7 @@ class ChunkedRandomAccessDataset(Dataset):
         self.pp_data_path_prefix = pp_data_path_prefix
         self.key_value_store_type = key_value_store_type
         self._pp_data_chunks_filepaths = []
-        self._kvstore_chunks = []
+        self._kvstore_opened_chunks_per_pid = {}
         self._kvstore_chunks_lengths = []
         for chunk_idx in itertools.count():
             filepath = f'{self.pp_data_path_prefix}.{chunk_idx}.pt'
@@ -268,15 +269,28 @@ class ChunkedRandomAccessDataset(Dataset):
                 else:
                     break
             self._pp_data_chunks_filepaths.append(filepath)
-            kvstore = self.key_value_store_type.open(filepath, self.key_value_store_type.get_read_mode())
-            self._kvstore_chunks.append(kvstore)
+            kvstore = self._open_chunk(chunk_idx=chunk_idx)
             self._kvstore_chunks_lengths.append(int.from_bytes(kvstore.get_value_by_key('len'), 'little'))
+            kvstore.close()
         self._len = sum(self._kvstore_chunks_lengths)
         print(f'Loaded dataset `{os.path.basename(pp_data_path_prefix)}` of {self._len:,} examples '
-              f'over {len(self._kvstore_chunks)} chunk{"" if len(self._kvstore_chunks) == 1 else "s"}.')
+              f'over {len(self._kvstore_chunks_lengths)} chunk{"" if len(self._kvstore_chunks_lengths) == 1 else "s"}.')
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
+
+    def _open_chunk(self, chunk_idx: int) -> KeyValueStoreInterface:
+        return self.key_value_store_type.open(
+            self._pp_data_chunks_filepaths[chunk_idx],
+            self.key_value_store_type.get_read_mode())
+
+    def _get_chunk(self, chunk_idx: int):
+        if os.getpid() not in self._kvstore_opened_chunks_per_pid:
+            self._kvstore_opened_chunks_per_pid[os.getpid()] = {}
+        opened_chunks = self._kvstore_opened_chunks_per_pid[os.getpid()]
+        if chunk_idx not in opened_chunks:
+            opened_chunks[chunk_idx] = self._open_chunk(chunk_idx=chunk_idx)
+        return opened_chunks[chunk_idx]
 
     def _get_chunk_idx_contains_item(self, item_idx: int) -> int:
         assert item_idx < self._len
@@ -290,12 +304,13 @@ class ChunkedRandomAccessDataset(Dataset):
         return self._len
 
     def __del__(self):
-        for chunk_kvstore in self._kvstore_chunks:
-            chunk_kvstore.close()
+        for kvstore_opened_chunks in self._kvstore_opened_chunks_per_pid.values():
+            for chunk_kvstore in kvstore_opened_chunks.values():
+                chunk_kvstore.close()
 
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len
-        chunk_kvstore = self._kvstore_chunks[self._get_chunk_idx_contains_item(idx)]
+        chunk_kvstore = self._get_chunk(chunk_idx=self._get_chunk_idx_contains_item(idx))
         binary_serialized_example = chunk_kvstore.get_value_by_key(str(idx))
         with io.BytesIO(binary_serialized_example) as bytes_io_stream:
             bytes_io_stream.seek(0)
