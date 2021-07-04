@@ -3,6 +3,7 @@ import io
 import abc
 import math
 import torch
+import tempfile
 import itertools
 import numpy as np
 from warnings import warn
@@ -96,7 +97,11 @@ class ZipKeyValueStore(KeyValueStoreInterface):
         return self.zip_file.read(key)
 
     def write_member(self, key: str, value: bytes) -> int:
-        self.zip_file.writestr(key, value)
+        with tempfile.NamedTemporaryFile(mode='wb') as tmp_file:
+            tmp_file.write(value)
+            tmp_file.seek(0)
+            self.zip_file.write(tmp_file.name, arcname=key)
+        # self.zip_file.writestr(key, value)
         zip_info = self.zip_file.getinfo(key)
         return zip_info.compress_size
 
@@ -155,7 +160,7 @@ class ChunkedRandomAccessDatasetWriter:
     def __init__(self, pp_data_path_prefix: str,
                  max_chunk_size_in_bytes: int = GB_IN_BYTES,
                  override: bool = False,
-                 key_value_store_type: Type[KeyValueStoreInterface] = TarKeyValueStore):
+                 key_value_store_type: Type[KeyValueStoreInterface] = ZipKeyValueStore):
         self.pp_data_path_prefix: str = pp_data_path_prefix
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
         self.override: bool = override
@@ -249,7 +254,7 @@ class ChunkedRandomAccessDatasetWriter:
 
 class ChunkedRandomAccessDataset(Dataset):
     def __init__(self, pp_data_path_prefix: str,
-                 key_value_store_type: Type[KeyValueStoreInterface] = TarKeyValueStore):
+                 key_value_store_type: Type[KeyValueStoreInterface] = ZipKeyValueStore):
         self.pp_data_path_prefix = pp_data_path_prefix
         self.key_value_store_type = key_value_store_type
         self._pp_data_chunks_filepaths = []
