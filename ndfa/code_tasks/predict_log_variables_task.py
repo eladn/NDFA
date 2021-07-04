@@ -249,8 +249,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
                     assert False
             else:
                 assert False
-            print('encoder_outputs', encoder_outputs.shape)
-            print('encoder_outputs_mask', encoder_outputs_mask.shape)
+            # print('encoder_outputs', encoder_outputs.shape)
+            # print('encoder_outputs_mask', encoder_outputs_mask.shape)
         else:
             assert False
 
