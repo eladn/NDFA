@@ -3,7 +3,6 @@ import io
 import abc
 import math
 import torch
-import tempfile
 import itertools
 import numpy as np
 from warnings import warn
@@ -83,8 +82,8 @@ class DBMKeyValueStore(KeyValueStoreInterface):
 
 class ZipKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode):
-        from zipfile import ZipFile, ZIP_LZMA
-        self.zip_file = ZipFile(path, mode, compression=ZIP_LZMA)
+        from zipfile import ZipFile, ZIP_LZMA, ZIP_BZIP2
+        self.zip_file = ZipFile(path, mode, compression=ZIP_BZIP2)
 
     @classmethod
     def open(cls, path, mode) -> 'ZipKeyValueStore':
