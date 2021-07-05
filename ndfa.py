@@ -127,7 +127,9 @@ def main():
             raw_validation_data_path=exec_params.raw_validation_data_path,
             raw_test_data_path=exec_params.raw_test_data_path,
             pp_nr_processes=exec_params.pp_nr_processes,
-            pp_override=exec_params.pp_override)
+            pp_override=exec_params.pp_override,
+            storage_method=exec_params.pp_storage_method,
+            compression_method=exec_params.pp_compression_method)
 
     model = task.build_model(
         model_hps=exec_params.experiment_setting.model_hyper_params,
@@ -196,7 +198,9 @@ def main():
             model_hps=exec_params.experiment_setting.model_hyper_params,
             dataset_props=exec_params.experiment_setting.dataset,
             datafold=DataFold.Train,
-            pp_data_path=exec_params.pp_data_dir_path)
+            pp_data_path=exec_params.pp_data_dir_path,
+            pp_storage_method=exec_params.pp_storage_method,
+            pp_compression_method=exec_params.pp_compression_method)
         train_loader = DataLoader(
             train_dataset, batch_size=exec_params.batch_size,
             collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
@@ -206,7 +210,9 @@ def main():
                 model_hps=exec_params.experiment_setting.model_hyper_params,
                 dataset_props=exec_params.experiment_setting.dataset,
                 datafold=DataFold.Validation,
-                pp_data_path=exec_params.pp_data_dir_path)
+                pp_data_path=exec_params.pp_data_dir_path,
+            pp_storage_method=exec_params.pp_storage_method,
+            pp_compression_method=exec_params.pp_compression_method)
             eval_loader = DataLoader(
                 eval_dataset, batch_size=exec_params.batch_size,
                 collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
@@ -242,7 +248,9 @@ def main():
             model_hps=exec_params.experiment_setting.model_hyper_params,
             dataset_props=exec_params.experiment_setting.dataset,
             datafold=DataFold.Validation,
-            pp_data_path=exec_params.pp_data_dir_path)
+            pp_data_path=exec_params.pp_data_dir_path,
+            pp_storage_method=exec_params.pp_storage_method,
+            pp_compression_method=exec_params.pp_compression_method)
         eval_loader = DataLoader(
             eval_dataset, batch_size=exec_params.batch_size,
             collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)

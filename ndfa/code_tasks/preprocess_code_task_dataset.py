@@ -1287,7 +1287,8 @@ def preprocess_code_task_dataset(
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
         raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
-        nr_processes: int = 4, pp_override: bool = False):
+        nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
+        compression_method: str = 'none'):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
@@ -1301,7 +1302,8 @@ def preprocess_code_task_dataset(
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,
-            override=pp_override)
+            override=pp_override, storage_method=storage_method,
+            compression_method=compression_method)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
             for pp_example_as_bytes_or_errors_list in pool.imap_unordered(

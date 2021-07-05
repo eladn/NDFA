@@ -26,7 +26,7 @@ def prettyprint_filesize(size_bytes: int):
 class KeyValueStoreInterface(abc.ABC):
     @classmethod
     @abc.abstractmethod
-    def open(cls, path, mode) -> 'KeyValueStoreInterface':
+    def open(cls, path, mode, compression) -> 'KeyValueStoreInterface':
         ...
 
     @abc.abstractmethod
@@ -58,7 +58,8 @@ class DBMKeyValueStore(KeyValueStoreInterface):
         self.dbm = dbm_open(path, mode)
 
     @classmethod
-    def open(cls, path, mode) -> 'DBMKeyValueStore':
+    def open(cls, path, mode, compression) -> 'DBMKeyValueStore':
+        assert compression is 'none'
         return DBMKeyValueStore(path=path, mode=mode)
 
     def close(self):
@@ -81,13 +82,14 @@ class DBMKeyValueStore(KeyValueStoreInterface):
 
 
 class ZipKeyValueStore(KeyValueStoreInterface):
-    def __init__(self, path, mode):
-        from zipfile import ZipFile, ZIP_LZMA, ZIP_BZIP2
-        self.zip_file = ZipFile(path, mode, compression=ZIP_BZIP2)
+    def __init__(self, path, mode, compression):
+        from zipfile import ZipFile, ZIP_LZMA, ZIP_BZIP2, ZIP_STORED, ZIP_DEFLATED
+        compression = {'none': ZIP_STORED, 'gzip': ZIP_DEFLATED, 'bz2': ZIP_BZIP2, 'lzma': ZIP_LZMA}[compression]
+        self.zip_file = ZipFile(path, mode, compression=compression)
 
     @classmethod
-    def open(cls, path, mode) -> 'ZipKeyValueStore':
-        return ZipKeyValueStore(path=path, mode=mode)
+    def open(cls, path, mode, compression) -> 'ZipKeyValueStore':
+        return ZipKeyValueStore(path=path, mode=mode, compression=compression)
 
     def close(self):
         self.zip_file.close()
@@ -115,13 +117,14 @@ class ZipKeyValueStore(KeyValueStoreInterface):
 
 
 class TarKeyValueStore(KeyValueStoreInterface):
-    def __init__(self, path, mode):
+    def __init__(self, path, mode, compression):
         from tarfile import open as tarfile_open
-        self.tar_file = tarfile_open(path, mode, compresslevel=9)
+        compression_suffix = {'none': '', 'gzip': 'gz', 'bz2': 'bz2', 'lzma': 'xz'}[compression]
+        self.tar_file = tarfile_open(path, f'{mode}:{compression_suffix}')
 
     @classmethod
-    def open(cls, path, mode) -> 'TarKeyValueStore':
-        return TarKeyValueStore(path=path, mode=mode)
+    def open(cls, path, mode, compression) -> 'TarKeyValueStore':
+        return TarKeyValueStore(path=path, mode=mode, compression=compression)
 
     def close(self):
         self.tar_file.close()
@@ -145,11 +148,15 @@ class TarKeyValueStore(KeyValueStoreInterface):
 
     @classmethod
     def get_new_and_truncate_write_mode(cls) -> 'str':
-        return 'x:bz2'
+        return 'x'
 
     @classmethod
     def get_read_mode(cls) -> 'str':
-        return 'r:bz2'
+        return 'r'
+
+
+def get_key_value_store(storage_method: str = 'dbm', compression_method: str = 'none'):
+    return {'dbm': DBMKeyValueStore, 'zip': ZipKeyValueStore, 'tar': TarKeyValueStore}[storage_method]
 
 
 class ChunkedRandomAccessDatasetWriter:
@@ -160,7 +167,8 @@ class ChunkedRandomAccessDatasetWriter:
     def __init__(self, pp_data_path_prefix: str,
                  max_chunk_size_in_bytes: int = GB_IN_BYTES,
                  override: bool = False,
-                 key_value_store_type: Type[KeyValueStoreInterface] = ZipKeyValueStore):
+                 storage_method: str = 'dbm',
+                 compression_method: str = 'none'):
         self.pp_data_path_prefix: str = pp_data_path_prefix
         self.max_chunk_size_in_bytes: int = max_chunk_size_in_bytes
         self.override: bool = override
@@ -170,7 +178,9 @@ class ChunkedRandomAccessDatasetWriter:
         self.cur_chunk_nr_examples: Optional[int] = None
         self.cur_chunk_file: Optional[KeyValueStoreInterface] = None
         self.cur_chunk_filepath: Optional[str] = None
-        self.key_value_store_type = key_value_store_type
+        self.key_value_store_type = get_key_value_store(
+            storage_method=storage_method, compression_method=compression_method)
+        self.compression_method = compression_method
 
     @property
     def total_nr_examples(self) -> int:
@@ -221,7 +231,8 @@ class ChunkedRandomAccessDatasetWriter:
                     for filename in cur_chunk_files_found_in_pp_dir:
                         os.remove(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
             self.cur_chunk_file = self.key_value_store_type.open(
-                self.cur_chunk_filepath, self.key_value_store_type.get_new_and_truncate_write_mode())
+                self.cur_chunk_filepath, self.key_value_store_type.get_new_and_truncate_write_mode(),
+                compression=self.compression_method)
             self.cur_chunk_size_in_bytes = 0
             self.cur_chunk_nr_examples = 0
         return self.cur_chunk_file
@@ -254,9 +265,12 @@ class ChunkedRandomAccessDatasetWriter:
 
 class ChunkedRandomAccessDataset(Dataset):
     def __init__(self, pp_data_path_prefix: str,
-                 key_value_store_type: Type[KeyValueStoreInterface] = ZipKeyValueStore):
+                 storage_method: str = 'dbm',
+                 compression_method: str = 'none'):
         self.pp_data_path_prefix = pp_data_path_prefix
-        self.key_value_store_type = key_value_store_type
+        self.key_value_store_type = get_key_value_store(
+            storage_method=storage_method, compression_method=compression_method)
+        self.compression_method = compression_method
         self._pp_data_chunks_filepaths = []
         self._kvstore_opened_chunks_per_pid = {}
         self._kvstore_chunks_lengths = []
@@ -280,8 +294,9 @@ class ChunkedRandomAccessDataset(Dataset):
 
     def _open_chunk(self, chunk_idx: int) -> KeyValueStoreInterface:
         return self.key_value_store_type.open(
-            self._pp_data_chunks_filepaths[chunk_idx],
-            self.key_value_store_type.get_read_mode())
+            path=self._pp_data_chunks_filepaths[chunk_idx],
+            mode=self.key_value_store_type.get_read_mode(),
+            compression=self.compression_method)
 
     def _get_chunk(self, chunk_idx: int):
         if os.getpid() not in self._kvstore_opened_chunks_per_pid:
@@ -303,9 +318,10 @@ class ChunkedRandomAccessDataset(Dataset):
         return self._len
 
     def __del__(self):
-        for kvstore_opened_chunks in self._kvstore_opened_chunks_per_pid.values():
-            for chunk_kvstore in kvstore_opened_chunks.values():
-                chunk_kvstore.close()
+        if hasattr(self, '_kvstore_opened_chunks_per_pid'):
+            for kvstore_opened_chunks in self._kvstore_opened_chunks_per_pid.values():
+                for chunk_kvstore in kvstore_opened_chunks.values():
+                    chunk_kvstore.close()
 
     def __getitem__(self, idx):
         assert isinstance(idx, int) and idx <= self._len

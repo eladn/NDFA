@@ -66,6 +66,18 @@ class ModelExecutionParams:
         description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
         arg_names=['--pp-override'])
 
+    pp_storage_method: str = conf_field(
+        default='zip',
+        choices=('zip', 'tar', 'dbm'),
+        description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
+        arg_names=['--pp-storage-method'])
+
+    pp_compression_method: str = conf_field(
+        default='none',
+        choices=('none', 'gzip', 'bz2', 'lzma'),
+        description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
+        arg_names=['--pp-compress'])
+
     raw_train_data_path: Optional[str] = conf_field(
         default=None,
         description="Path to raw train dataset.",

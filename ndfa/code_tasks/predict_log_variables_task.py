@@ -74,9 +74,13 @@ class PredictLogVarsTask(CodeTaskBase):
         print(symbol_names)
         return symbol_names
 
-    def create_dataset(self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
-            datafold: DataFold, pp_data_path: str) -> Dataset:
-        return PredictLogVarsTaskDataset(datafold=datafold, pp_data_path=pp_data_path)
+    def create_dataset(
+            self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
+            datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
+            pp_compression_method: str = 'none') -> Dataset:
+        return PredictLogVarsTaskDataset(
+            datafold=datafold, pp_data_path=pp_data_path,
+            storage_method=pp_storage_method, compression_method=pp_compression_method)
 
     def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
         return PredictLogVarsModelLoss(model_hps=model_hps)
@@ -315,9 +319,13 @@ class PredictLogVarsModelLoss(nn.Module):
 
 
 class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
-    def __init__(self, datafold: DataFold, pp_data_path: str):
+    def __init__(
+            self, datafold: DataFold, pp_data_path: str,
+            storage_method: str = 'dbm',
+            compression_method: str = 'none'):
         super(PredictLogVarsTaskDataset, self).__init__(
-            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'))
+            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
+            storage_method=storage_method, compression_method=compression_method)
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def __getitem__(self, idx):

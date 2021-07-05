@@ -25,7 +25,8 @@ class CodeTaskBase(abc.ABC):
     def preprocess_dataset(
             self, model_hps: NDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
             raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
-            pp_nr_processes: int = 4, pp_override: bool = False):
+            pp_nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
+            compression_method: str = 'none'):
         code_task_vocabs = self.create_or_load_code_task_vocabs(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
         preprocess_code_task_dataset(
@@ -33,7 +34,8 @@ class CodeTaskBase(abc.ABC):
             raw_extracted_examples_generator=functools.partial(self.iterate_raw_examples, model_hps=model_hps),
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
             raw_train_data_path=raw_train_data_path, raw_validation_data_path=raw_validation_data_path,
-            raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes, pp_override=pp_override)
+            raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes, pp_override=pp_override,
+            storage_method=storage_method, compression_method=compression_method)
 
     @abc.abstractmethod
     def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) -> Iterable[Any]:
@@ -74,7 +76,8 @@ class CodeTaskBase(abc.ABC):
     @abc.abstractmethod
     def create_dataset(
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
-            datafold: DataFold, pp_data_path: str) -> Dataset:
+            datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
+            pp_compression_method: str = 'none') -> Dataset:
         ...
 
     @abc.abstractmethod
