@@ -237,10 +237,19 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
                 encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
             elif self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'ast':
                 if self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type == 'set-of-paths':
-                    raise NotImplementedError  # TODO: implement!
-                    encoder_outputs = ...  # TODO
-                    encoder_outputs_mask = code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.unflatten(
-                        code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences_mask)
+
+                    # TODO: use all path-types (not only 'leaf_to_leaf')
+                    encoder_outputs = code_task_input.ast.get_ast_paths_node_indices('leaf_to_leaf').unflatten(
+                        encoded_code.whole_method_combined_ast_paths_encoding_by_type['leaf_to_leaf'])
+                    encoder_outputs_mask = code_task_input.ast.get_ast_paths_node_indices('leaf_to_leaf').unflattener_mask
+                    # all_ast_paths_nodes_encodings = torch.cat([
+                    #     encoded_paths
+                    #     for ast_paths_type, encoded_paths
+                    #     in encoded_code.whole_method_combined_ast_paths_encoding_by_type.items()], dim=0)
+                    # all_ast_paths_node_indices = torch.cat([
+                    #     code_task_input.ast.get_ast_paths_node_indices(ast_paths_type).example_indices
+                    #     for ast_paths_type in encoded_code.whole_method_combined_ast_paths_encoding_by_type.keys()], dim=0)
+
                 elif self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type in {'tree', 'paths-folded'}:
                     encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
                         encoded_code.whole_method_ast_nodes_encoding)

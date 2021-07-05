@@ -62,9 +62,10 @@ class ASTPathsEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for ast_paths_type in self.encoder_params.ast_paths_types})
 
-        self.nodes_representation_path_folder = ScatterCombiner(
-            encoding_dim=self.ast_node_embedding_dim,
-            combiner_params=self.encoder_params.nodes_folding_params)
+        if self.encoder_params.encoder_type == 'paths-folded':
+            self.nodes_representation_path_folder = ScatterCombiner(
+                encoding_dim=self.ast_node_embedding_dim,
+                combiner_params=self.encoder_params.nodes_folding_params)
         self.path_combiner = nn.ModuleDict({
             ast_paths_type: SequenceCombiner(
                 encoding_dim=self.ast_node_embedding_dim,
@@ -172,10 +173,13 @@ class ASTPathsEncoder(nn.Module):
             sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences[ast_paths_masks[ast_paths_type]]
             for ast_paths_type in encoded_paths_by_path_type.keys()], dim=0)
 
-        new_ast_nodes_encodings = self.nodes_representation_path_folder(
-            scattered_input=all_ast_paths_nodes_encodings,
-            indices=all_ast_paths_node_indices,
-            dim_size=nr_ast_nodes, attn_queries=ast_nodes_encodings)
+        if self.encoder_params.encoder_type == 'paths-folded':
+            new_ast_nodes_encodings = self.nodes_representation_path_folder(
+                scattered_input=all_ast_paths_nodes_encodings,
+                indices=all_ast_paths_node_indices,
+                dim_size=nr_ast_nodes, attn_queries=ast_nodes_encodings)
+        else:
+            new_ast_nodes_encodings = ast_nodes_encodings
 
         return CodeExpressionEncodingsTensors(
             ast_nodes=new_ast_nodes_encodings,

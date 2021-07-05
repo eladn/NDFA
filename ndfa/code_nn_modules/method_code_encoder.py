@@ -1,7 +1,7 @@
 import functools
 import torch
 import torch.nn as nn
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Dict
 
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
@@ -23,6 +23,7 @@ __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
 class EncodedMethodCode(NamedTuple):
     encoded_identifiers: torch.Tensor
     whole_method_ast_nodes_encoding: torch.Tensor
+    whole_method_combined_ast_paths_encoding_by_type: Dict[str, torch.Tensor]
     whole_method_token_seqs_encoding: torch.Tensor
     encoded_cfg_nodes: torch.Tensor
     encoded_cfg_nodes_after_bridge: torch.Tensor
@@ -150,8 +151,14 @@ class MethodCodeEncoder(nn.Module):
 
         return EncodedMethodCode(
             encoded_identifiers=encoded_identifiers,
-            whole_method_ast_nodes_encoding=None if whole_method_code_encoded is None else whole_method_code_encoded.ast_nodes,
-            whole_method_token_seqs_encoding=None if whole_method_code_encoded is None else whole_method_code_encoded.token_seqs,
+            whole_method_ast_nodes_encoding=
+            None if whole_method_code_encoded is None else whole_method_code_encoded.ast_nodes,
+            whole_method_combined_ast_paths_encoding_by_type=
+            None if whole_method_code_encoded is None or whole_method_code_encoded.ast_paths_by_type is None else
+            {paths_type: paths.combined
+             for paths_type, paths in whole_method_code_encoded.ast_paths_by_type.items()},
+            whole_method_token_seqs_encoding=
+            None if whole_method_code_encoded is None else whole_method_code_encoded.token_seqs,
             encoded_cfg_nodes=unflattened_cfg_nodes_encodings,
             encoded_symbols=encoded_symbols,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)
