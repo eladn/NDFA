@@ -28,6 +28,7 @@ class ASTPathsEncoder(nn.Module):
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
+        assert self.encoder_params.encoder_type in {'paths-folded', 'set-of-paths'}
         self.ast_node_embedding_dim = ast_node_embedding_dim
         assert all(
             ast_paths_type in {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences', 'siblings_w_parent_sequences'}
@@ -134,6 +135,7 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_nodes_encodings, ast_paths_traversal_orientation_encodings = unweave_tensor(
                 woven_tensor=ast_paths_encoded, dim=1, nr_target_tensors=2)
 
+        # TODO: do it conditionally only when needed
         ast_paths_combined = self.path_combiner[ast_paths_type](
             sequence_encodings=ast_paths_nodes_encodings,
             sequence_mask=ast_paths_node_indices.sequences_mask,
@@ -163,17 +165,16 @@ class ASTPathsEncoder(nn.Module):
                 ast_paths_last_states=None if ast_paths_last_states is None else ast_paths_last_states[ast_paths_type])
             for ast_paths_type in self.encoder_params.ast_paths_types}
 
-        ast_paths_masks = {
-            ast_paths_type: sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences_mask
-            for ast_paths_type in encoded_paths_by_path_type.keys()}
-        all_ast_paths_nodes_encodings = torch.cat([
-            encoded_paths.nodes_occurrences[ast_paths_masks[ast_paths_type]]
-            for ast_paths_type, encoded_paths in encoded_paths_by_path_type.items()], dim=0)
-        all_ast_paths_node_indices = torch.cat([
-            sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences[ast_paths_masks[ast_paths_type]]
-            for ast_paths_type in encoded_paths_by_path_type.keys()], dim=0)
-
         if self.encoder_params.encoder_type == 'paths-folded':
+            ast_paths_masks = {
+                ast_paths_type: sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences_mask
+                for ast_paths_type in encoded_paths_by_path_type.keys()}
+            all_ast_paths_nodes_encodings = torch.cat([
+                encoded_paths.nodes_occurrences[ast_paths_masks[ast_paths_type]]
+                for ast_paths_type, encoded_paths in encoded_paths_by_path_type.items()], dim=0)
+            all_ast_paths_node_indices = torch.cat([
+                sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences[ast_paths_masks[ast_paths_type]]
+                for ast_paths_type in encoded_paths_by_path_type.keys()], dim=0)
             new_ast_nodes_encodings = self.nodes_representation_path_folder(
                 scattered_input=all_ast_paths_nodes_encodings,
                 indices=all_ast_paths_node_indices,
