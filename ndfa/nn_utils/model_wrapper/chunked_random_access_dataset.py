@@ -59,7 +59,7 @@ class DBMKeyValueStore(KeyValueStoreInterface):
 
     @classmethod
     def open(cls, path, mode, compression) -> 'DBMKeyValueStore':
-        assert compression is 'none'
+        assert compression == 'none'
         return DBMKeyValueStore(path=path, mode=mode)
 
     def close(self):
