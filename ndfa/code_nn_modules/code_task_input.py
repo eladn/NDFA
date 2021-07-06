@@ -168,19 +168,29 @@ def dataclasses_field_wo_defaults():
 class SubASTInputTensors(TensorsDataClass):
     ast_leaf_to_leaf_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
         batched_flattened_indices_flattened_seq_field(
-            tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth')
+            tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
+            nr_sequences_to_sample_per_example=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
     ast_leaf_to_leaf_paths_child_place: BatchFlattenedSeq = \
         batch_flattened_seq_field(
-            sequences_sampling_initial_seed_salt='astpth')
+            sequences_sampling_initial_seed_salt='astpth',
+            nr_sequences_to_sample_per_example=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
     ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq = \
         batch_flattened_seq_field(
-            sequences_sampling_initial_seed_salt='astpth')
+            sequences_sampling_initial_seed_salt='astpth',
+            nr_sequences_to_sample_per_example=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
     ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
         batched_flattened_indices_flattened_seq_field(
-            tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth')
+            tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
+            nr_sequences_to_sample_per_example=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading)
     ast_leaf_to_root_paths_child_place: BatchFlattenedSeq = \
         batch_flattened_seq_field(
-            sequences_sampling_initial_seed_salt='astpth')
+            sequences_sampling_initial_seed_salt='astpth',
+            nr_sequences_to_sample_per_example=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading)
     ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
     siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = \

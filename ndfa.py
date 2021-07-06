@@ -4,6 +4,7 @@ import io
 import os
 import base64
 import hashlib
+import functools
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
@@ -203,7 +204,10 @@ def main():
             pp_compression_method=exec_params.pp_compression_method)
         train_loader = DataLoader(
             train_dataset, batch_size=exec_params.batch_size,
-            collate_fn=task.collate_examples, shuffle=True, **dataloader_cuda_kwargs)
+            collate_fn=functools.partial(
+                task.collate_examples,
+                model_hps=exec_params.experiment_setting.model_hyper_params),
+            shuffle=True, **dataloader_cuda_kwargs)
         eval_loader = None
         if exec_params.perform_evaluation:
             eval_dataset = task.create_dataset(

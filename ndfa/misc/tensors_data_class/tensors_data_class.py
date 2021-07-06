@@ -12,7 +12,7 @@ try:
 except ImportError:
     dgl = None
 
-from .misc import compose_fns, CollateData, CollatableValuesTuple, MapFn
+from .misc import compose_fns, CollateData, CollatableValuesTuple, MapFn, get_original_type
 
 
 __all__ = ['TensorsDataClass']
@@ -282,7 +282,8 @@ class TensorsDataClass:
         if collate_data is None:
             collate_data = CollateData()
         for inp in inputs:
-            inp.set_class_defaults()  # TODO: it changes the input. is it ok? should we copy it before?
+            # TODO: it changes the input. is it ok? should we copy it before?
+            inp.set_class_defaults(collate_data=collate_data)
         batched_obj = cls._collate_first_pass(
             inputs, collate_data=collate_data)
         if batched_obj._batch_size is None:
@@ -292,7 +293,7 @@ class TensorsDataClass:
             batched_obj.post_collate_remove_unnecessary_collate_info()
         return batched_obj
 
-    def set_class_defaults(self):
+    def set_class_defaults(self, collate_data: CollateData):
         # Note: It should also work for `TensorsDataDict`; as we use `get_all_fields()`
         #       and not simply iterating `dataclasses.fields()`.
         all_fields_names = self.get_all_fields()
@@ -310,8 +311,10 @@ class TensorsDataClass:
                         # value (like `initial_seed_salt`), as the field is set to its default value when the instance
                         # is created, and the class metadata won't replace it (although the expected behaviour in this
                         # case is to replace it).
+                        if callable(v):
+                            v = v(collate_data)
                         setattr(field_val, k, v)
-            field_val.set_class_defaults()
+            field_val.set_class_defaults(collate_data=collate_data)
 
     @classmethod
     def _collate_first_pass(cls, inputs: List['TensorsDataClass'], collate_data: CollateData) -> 'TensorsDataClass':

@@ -1,6 +1,6 @@
 import torch
 import dataclasses
-from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
+from typing import List, Union, Optional, Tuple, Callable, Dict, Set, Any, final
 
 
 __all__ = [
@@ -61,7 +61,7 @@ class TensorDataClassWithSingleSequenceFieldMixin:
 @dataclasses.dataclass
 class TensorDataClassWithSequencesMixin:
     batch_first: bool = True
-    nr_sequences_to_sample_per_example: Optional[int] = dataclasses.field(default=None)
+    nr_sequences_to_sample_per_example: Optional[Union[int, Callable[[Any], int]]] = dataclasses.field(default=None)
     sequences_sampling_initial_seed_salt: str = dataclasses.field(default='0')
     sequences_lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
     sequences_mask: Optional[torch.BoolTensor] = dataclasses.field(default=None, init=False)
