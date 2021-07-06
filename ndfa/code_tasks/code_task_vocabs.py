@@ -114,7 +114,7 @@ class CodeTaskVocabs(NamedTuple):
             for ast_node in example.method_ast.nodes)
         ast_node_types_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_types',
-            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
             carpus_generator=ast_node_types_carpus_generator)
 
         ast_node_major_types_carpus_generator = None if raw_train_data_path is None else lambda: (
@@ -124,7 +124,7 @@ class CodeTaskVocabs(NamedTuple):
             for ast_node in example.method_ast.nodes)
         ast_node_major_types_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='ast_node_major_types',
-            special_words_sorted_by_idx=vocabs_pad_unk_special_words, min_word_freq=200,
+            special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<LOG_PRED>',), min_word_freq=200,
             carpus_generator=ast_node_major_types_carpus_generator)
 
         ast_node_minor_types_carpus_generator = None if raw_train_data_path is None else lambda: (
