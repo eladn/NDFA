@@ -351,6 +351,40 @@ def preprocess_logging_call_example(
         remove_edges_from_pdg_nodes_idxs={raw_example.logging_call.pdg_node_idx},
         pdg_nodes_to_mask={raw_example.logging_call.pdg_node_idx: '<LOG_PRED>'})
 
+    # Note: The ast-node of the logging-call is the method-call itself, while the ast-node of the pdg-node of the
+    #       logging-call is the stmt-expr (which is the parent of the method-call)
+    logging_call_pdg_node_ast_node_idx = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx].ast_node_idx
+    logging_call_pdg_node_ast_node = raw_example.method_ast.nodes[logging_call_pdg_node_ast_node_idx]
+    assert tuple(logging_call_pdg_node_ast_node.children_idxs) == (raw_example.logging_call.ast_node_idx,)
+    assert logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT
+    assert raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type == SerASTNodeType.METHOD_CALL_EXPR
+    assert len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1
+    is_log_stmt_included_in_any_l2l_path = any(
+        ast_path[0] == logging_call_pdg_node_ast_node_idx or ast_path[-1] == logging_call_pdg_node_ast_node_idx
+        for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences)
+    if not is_log_stmt_included_in_any_l2l_path:
+        warn('Log-stmt ast-node is not included in any sampled AST leaf-to-leaf path.')
+
+    # DBG: Calc probability (per example) for not including the log-stmt in any sampled AST leaf2leaf path.
+    # nr_ast_leaves = len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences[0])
+    # from math import comb
+    # nr_ast_l2l_paths = comb(nr_ast_leaves, 2)
+    # is_sampled = nr_ast_l2l_paths > 1000
+    # nr_paths_including_log_node = (nr_ast_leaves - 1)
+    # prob_for_single_choose_of_path_including_log = nr_paths_including_log_node / nr_ast_l2l_paths
+    # prob_not_choosing_path_including_log = \
+    #     (1 - prob_for_single_choose_of_path_including_log) ** 1000 if is_sampled else 0
+    # chosen_nodes = set(
+    #     int(ast_path[edge]) for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences for edge
+    #     in [0, -1])
+    # print(f'\n{is_log_included_in_any_l2l_path} -- '
+    #       f'\tsampled: {is_sampled} -- '
+    #       f'\t#chosen/#nodes: {len(chosen_nodes)}/{nr_ast_leaves}={(len(chosen_nodes)/nr_ast_leaves)*100:.2f}% -- '
+    #       f'\tprob1: {prob_not_choosing_path_including_log*100:.2f}% -- '
+    #       f'\tprob2: {prob_for_single_choose_of_path_including_log*100:.2f}% -- '
+    #       f'\t#l2l: {nr_ast_l2l_paths} -- '
+    #       f'\t#leaves: {nr_ast_leaves}')
+
     symbols_idxs_used_in_logging_call = get_symbol_idxs_used_in_logging_call(example=raw_example)
     nr_target_symbols = len(symbols_idxs_used_in_logging_call)
 
