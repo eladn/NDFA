@@ -189,6 +189,14 @@ def enforce_code_task_input_pp_limitations(
                               SerASTNodeType.SWITCH_ENTRY_STMT}
             for ast_node in method_ast.nodes)),
         max_val=0))
+    # Note: We filter-out examples with LambdaExpr. We currently don't extract them well (it's CFG).
+    # TODO: Remove this limitation after it is fixed in the JavaExtractor.
+    limitations.append(PreprocessLimitation(
+        object_name='is_there_lambda_expr',
+        value=int(any(
+            ast_node.type == SerASTNodeType.LambdaExpr
+            for ast_node in method_ast.nodes)),
+        max_val=0))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
 
