@@ -356,27 +356,18 @@ def preprocess_logging_call_example(
     logging_call_pdg_node_ast_node_idx = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx].ast_node_idx
     logging_call_pdg_node_ast_node = raw_example.method_ast.nodes[logging_call_pdg_node_ast_node_idx]
 
-    # TODO: remove this part! temporarily here just for debug!
-    if not (raw_example.logging_call.ast_node_idx in logging_call_pdg_node_ast_node.children_idxs) or \
-            not (logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT) or \
-            not (raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type == SerASTNodeType.METHOD_CALL_EXPR) or \
-            not (len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1):
-        from ndfa.misc.code_data_structure_utils import print_ast
-        print('logging_call_pdg_node_ast_node_idx', logging_call_pdg_node_ast_node_idx)
-        print('logging_call.ast_node_idx', raw_example.logging_call.ast_node_idx)
-        print_ast(
-            method_ast=raw_example.method_ast,
-            method=raw_example.method,
-            root_sub_ast_node_idx=logging_call_pdg_node_ast_node_idx)
-        print_ast(
-            method_ast=raw_example.method_ast,
-            method=raw_example.method,
-            root_sub_ast_node_idx=raw_example.logging_call.ast_node_idx)
+    limitations = [
+        PreprocessLimitation(
+            object_name='is_valid_log_stmt_pdg_node_sub_ast_structure',
+            value=int(
+                (raw_example.logging_call.ast_node_idx in logging_call_pdg_node_ast_node.children_idxs) and
+                (logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT) and
+                (raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type ==
+                 SerASTNodeType.METHOD_CALL_EXPR) and
+                (len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1)),
+            min_val=1)]
+    PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    assert raw_example.logging_call.ast_node_idx in logging_call_pdg_node_ast_node.children_idxs
-    assert logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT
-    assert raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type == SerASTNodeType.METHOD_CALL_EXPR
-    assert len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1
     is_log_stmt_included_in_any_l2l_path = any(
         ast_path[0] == logging_call_pdg_node_ast_node_idx or ast_path[-1] == logging_call_pdg_node_ast_node_idx
         for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences)
