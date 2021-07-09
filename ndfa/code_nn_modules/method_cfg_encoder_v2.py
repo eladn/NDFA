@@ -27,6 +27,8 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
 from ndfa.code_nn_modules.cfg_gnn_encoder import CFGGNNEncoder
 from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method import \
+    SymbolOccurrencesExtractorFromEncodedMethod
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -196,6 +198,9 @@ class MethodCFGEncoderV2(nn.Module):
             expression_encoding_dim=expression_encoding_dim,
             encoder_params=symbols_encoder_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        if symbols_encoder_params.use_symbols_occurrences:
+            self.symbol_occurrences_extractor = SymbolOccurrencesExtractorFromEncodedMethod(
+                code_expression_encoder_params=self.encoder_params.cfg_node_expression_encoder)
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
             expression_token_encoding_dim=expression_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
@@ -389,16 +394,18 @@ class MethodCFGEncoderV2(nn.Module):
                 expression_encoder=encoder,
                 expression_combiner=combiner)
 
+        encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = None, None
+        if self.symbols_encoder.encoder_params.use_symbols_occurrences:
+            encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = \
+                self.symbol_occurrences_extractor(
+                    code_expression_encodings=encoded_code_expressions,
+                    tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+                    method_ast_input=code_task_input.ast)
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,
             symbols=code_task_input.symbols,
-            encoded_expressions=encoded_code_expressions.token_seqs
-            if self.symbols_encoder.encoder_params.use_symbols_occurrences else None,
-            tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
-            encoded_ast_nodes=encoded_code_expressions.ast_nodes
-            if self.symbols_encoder.encoder_params.use_symbols_occurrences else None,
-            ast_nodes_with_symbol_leaf_nodes_indices=code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices,
-            ast_nodes_with_symbol_leaf_symbol_idx=code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.indices)
+            encodings_of_symbols_occurrences=encodings_of_symbols_occurrences,
+            symbols_indices_of_symbols_occurrences=symbols_indices_of_symbols_occurrences)
 
         return EncodedMethodCFGV2(
             encoded_identifiers=encoded_identifiers,

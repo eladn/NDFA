@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.code_task_input import SymbolsInputTensors
 from ndfa.nn_utils.modules.scatter_combiner import ScatterCombiner
@@ -43,26 +42,13 @@ class SymbolsEncoder(nn.Module):
 
     def forward(self, encoded_identifiers: torch.Tensor,
                 symbols: SymbolsInputTensors,
-                encoded_expressions: Optional[torch.Tensor] = None,
-                tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
-                encoded_ast_nodes: Optional[torch.Tensor] = None,
-                ast_nodes_with_symbol_leaf_nodes_indices: Optional[torch.LongTensor] = None,
-                ast_nodes_with_symbol_leaf_symbol_idx: Optional[torch.LongTensor] = None):
+                encodings_of_symbols_occurrences: Optional[torch.Tensor] = None,
+                symbols_indices_of_symbols_occurrences: Optional[torch.LongTensor] = None):
         symbols_identifiers_encodings = encoded_identifiers[symbols.symbols_identifier_indices.indices]
 
         if self.encoder_params.use_symbols_occurrences:
-            assert encoded_expressions is not None or encoded_ast_nodes is not None
-            if encoded_expressions is not None:
-                assert tokenized_expressions_input.is_symbol_mask.sequences.shape == encoded_expressions.shape[:-1]
-                encodings_of_symbols_occurrences = encoded_expressions[tokenized_expressions_input.is_symbol_mask.sequences]
-                assert encodings_of_symbols_occurrences.shape[:-1] == tokenized_expressions_input.symbol_index.indices.shape
-                symbols_indices_of_symbols_occurrences = tokenized_expressions_input.symbol_index.indices  #symbols.symbols_appearances_symbol_idx.indices
-            elif encoded_ast_nodes is not None:
-                assert ast_nodes_with_symbol_leaf_nodes_indices.shape == ast_nodes_with_symbol_leaf_symbol_idx.shape
-                encodings_of_symbols_occurrences = encoded_ast_nodes[ast_nodes_with_symbol_leaf_nodes_indices]
-                symbols_indices_of_symbols_occurrences = ast_nodes_with_symbol_leaf_symbol_idx
-            else:
-                assert False
+            assert encodings_of_symbols_occurrences is not None
+            assert symbols_indices_of_symbols_occurrences is not None
 
             # max_nr_tokens_per_expression = encoded_expressions.size(1)
             # cfg_expr_tokens_indices_of_symbols_occurrences = \

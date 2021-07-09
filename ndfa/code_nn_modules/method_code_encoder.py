@@ -15,6 +15,8 @@ from ndfa.code_nn_modules.code_expression_embedder import CodeExpressionEmbedder
 from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method import \
+    SymbolOccurrencesExtractorFromEncodedMethod
 
 
 __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
@@ -87,6 +89,10 @@ class MethodCodeEncoder(nn.Module):
         else:
             raise ValueError(f'Unexpected method code encoder type `{self.encoder_params.method_encoder_type}`.')
 
+        if self.encoder_params.symbols_encoder_params.use_symbols_occurrences:
+            self.symbol_occurrences_extractor = SymbolOccurrencesExtractorFromEncodedMethod(
+                code_expression_encoder_params=self.encoder_params.whole_method_expression_encoder)
+
         self.encoder_decoder_bridge_dense_layers = nn.ModuleList([
             nn.Linear(in_features=self.encoder_params.method_cfg_encoder.cfg_node_encoding_dim,
                       out_features=self.encoder_params.method_cfg_encoder.cfg_node_encoding_dim)  # TODO: make it abstract `encoder.output_dim` to support additional encoders
@@ -136,16 +142,18 @@ class MethodCodeEncoder(nn.Module):
                 previous_code_expression_encodings=embedded_method_code,
                 tokenized_expressions_input=code_task_input.method_tokenized_code,
                 sub_ast_input=code_task_input.ast)
+            encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = None, None
+            if self.encoder_params.symbols_encoder_params.use_symbols_occurrences:
+                encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = \
+                    self.symbol_occurrences_extractor(
+                        code_expression_encodings=whole_method_code_encoded,
+                        tokenized_expressions_input=code_task_input.method_tokenized_code,
+                        method_ast_input=code_task_input.ast)
             encoded_symbols = self.symbols_encoder(
                 encoded_identifiers=encoded_identifiers,
                 symbols=code_task_input.symbols,
-                encoded_expressions=whole_method_code_encoded.token_seqs
-                if self.encoder_params.symbols_encoder_params.use_symbols_occurrences else None,
-                tokenized_expressions_input=code_task_input.method_tokenized_code,
-                encoded_ast_nodes=whole_method_code_encoded.ast_nodes
-                if self.encoder_params.symbols_encoder_params.use_symbols_occurrences else None,
-                ast_nodes_with_symbol_leaf_nodes_indices=code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices,
-                ast_nodes_with_symbol_leaf_symbol_idx=code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.indices)
+                encodings_of_symbols_occurrences=encodings_of_symbols_occurrences,
+                symbols_indices_of_symbols_occurrences=symbols_indices_of_symbols_occurrences)
         else:
             assert False
 
