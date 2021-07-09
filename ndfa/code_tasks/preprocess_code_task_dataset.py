@@ -555,9 +555,14 @@ def enforce_limits_and_sample_ast_paths(
         sampled_keys = random.sample(ast_paths.leaf_to_leaf_paths.keys(), nr_ast_leaf_to_leaf_paths_to_sample)
         leaf_to_leaf_paths = {key: ast_paths.leaf_to_leaf_paths[key] for key in sampled_keys}
         ast_paths = dataclasses.replace(ast_paths, leaf_to_leaf_paths=leaf_to_leaf_paths)
-        if len(ast_paths.leaves_sequence) != \
-           len(set(int(ast_path[edge]) for ast_path in ast_paths.leaf_to_leaf_paths for edge in [0, -1])):
-            warn('Not all ast node has been chosen in sampled AST leaf-to-leaf paths.')
+        nr_ast_nodes_occurred_in_sampled_ast_paths = \
+            len(set(int(ast_path[edge]) for ast_path in ast_paths.leaf_to_leaf_paths for edge in [0, -1]))
+        nr_ast_leaves = len(ast_paths.leaves_sequence)
+        assert nr_ast_nodes_occurred_in_sampled_ast_paths <= nr_ast_leaves
+        if nr_ast_leaves != nr_ast_nodes_occurred_in_sampled_ast_paths:
+            warn(f'Not all AST nodes has been chosen in sampled AST leaf-to-leaf paths '
+                 f'[missing {nr_ast_leaves - nr_ast_nodes_occurred_in_sampled_ast_paths} / {nr_ast_leaves} leaves; '
+                 f'sampled {len(ast_paths.leaf_to_leaf_paths)} / {nr_ast_leaves * (nr_ast_leaves - 1) / 2} paths].')
 
         # DBG: calc appx prob for not including a certain AST node in any sampled AST leaf-to-leaf path:
         # nr_ast_l2l_paths = math.comb(len(ast_paths.leaves_sequence), 2)
