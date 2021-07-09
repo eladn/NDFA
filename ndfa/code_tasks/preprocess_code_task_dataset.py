@@ -194,7 +194,7 @@ def enforce_code_task_input_pp_limitations(
     limitations.append(PreprocessLimitation(
         object_name='is_there_lambda_expr',
         value=int(any(
-            ast_node.type == SerASTNodeType.LambdaExpr
+            ast_node.type == SerASTNodeType.LAMBDA_EXPR
             for ast_node in method_ast.nodes)),
         max_val=0))
     PreprocessLimitation.enforce_limitations(limitations=limitations)
