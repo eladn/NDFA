@@ -17,7 +17,7 @@ import dgl
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, \
-    SerASTNodeType, SerPDGNodeControlKind, SerPDGControlFlowEdge, SerPDGDataDependencyEdge
+    SerASTNodeType, SerPDGNodeControlKind, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerASTNode
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths, \
     get_all_ast_paths, ASTPaths, traverse_ast
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
@@ -489,6 +489,13 @@ def preprocess_control_flow_paths(
     #     # exit()
 
 
+def is_ast_leaf_with_symbol(method: SerMethod, ast_node: SerASTNode) -> bool:
+    return len(ast_node.children_idxs) == 0 and \
+       ast_node.code_sub_token_range_ref is not None and \
+       ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and \
+       method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx is not None
+
+
 def sanitize_sub_asts_to_ignore_or_to_mask(
         method_ast: SerMethodAST,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None,
@@ -703,22 +710,30 @@ def preprocess_method_ast(
             indices=torch.LongTensor([
                 ast_node.idx
                 for ast_node in method_ast.nodes
-                if len(ast_node.children_idxs) == 0 and
-                   ast_node.code_sub_token_range_ref is not None and
-                   ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and
-                   method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx is not None and
+                if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
                    ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_nodes_with_symbol_leaf_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx
                 for ast_node in method_ast.nodes
-                if len(ast_node.children_idxs) == 0 and
-                   ast_node.code_sub_token_range_ref is not None and
-                   ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and
-                   method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx is not None and
+                if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
                    ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='symbols'),
+        ast_nodes_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx
+                if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
+                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask
+                else 0
+                for ast_node in method_ast.nodes]),
+        ),  # tgt_indexing_group='symbols'),
+        ast_nodes_has_symbol_mask=BatchFlattenedTensor(
+            tensor=torch.LongTensor([
+                is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
+                ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask
+                for ast_node in method_ast.nodes]),
+        ),
 
         ast_nodes_with_primitive_type_leaf_nodes_indices=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([

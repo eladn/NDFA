@@ -250,6 +250,10 @@ class MethodASTInputTensors(SubASTInputTensors):
         batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
     ast_nodes_with_symbol_leaf_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
         batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
+    ast_nodes_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
+        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
+    ast_nodes_has_symbol_mask: BatchFlattenedTensor = \
+        batch_flattened_tensor_field()
 
     ast_nodes_with_primitive_type_leaf_nodes_indices: BatchedFlattenedIndicesFlattenedTensor = \
         batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
