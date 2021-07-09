@@ -13,6 +13,7 @@
 # from . import method_cfg_encoder
 # from . import method_cfg_encoder_v2
 # from . import method_code_encoder
+# from . import symbol_occurrences_extractor_from_encoded_method
 # from . import symbols_decoder
 # from . import symbols_encoder
 #
@@ -32,5 +33,6 @@
 #     method_cfg_encoder.__all__ + \
 #     method_cfg_encoder_v2.__all__ + \
 #     method_code_encoder.__all__ + \
+#     symbol_occurrences_extractor_from_encoded_method.__all__ + \
 #     symbols_decoder.__all__ + \
 #     symbols_encoder.__all__
