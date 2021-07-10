@@ -1,18 +1,19 @@
 import os
 import io
+import dgl
 import torch
 import random
 import itertools
 import functools
 import dataclasses
-import multiprocessing as mp
-from collections import defaultdict, namedtuple
 from warnings import warn
-from typing import Iterable, Collection, Any, Set, Optional, Dict, List, Union, Sequence, TypeVar
+import multiprocessing as mp
 from typing_extensions import Protocol
-from sklearn.feature_extraction.text import HashingVectorizer
+from collections import defaultdict, namedtuple
 from torch_geometric.data import Data as TGData
-import dgl
+from sklearn.feature_extraction.text import HashingVectorizer
+from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
+    Union, Sequence, TypeVar, NamedTuple, Tuple, Generic
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
@@ -42,12 +43,17 @@ def _dbg_get_size_of_pickled_obj(a):
         return len(out.getvalue())
 
 
-NGrams = namedtuple('NGrams', ['exact_ngrams', 'partial_ngrams'])
 T = TypeVar('T')
 
 
+@dataclasses.dataclass(frozen=True)
+class NGrams(Generic[T]):
+    exact_ngrams: Dict[int, List[Sequence[T]]]
+    partial_ngrams: Dict[int, List[Sequence[T]]]
+
+
 def extract_ngrams_from_sequence(
-        sequences: Collection[Sequence[T]], ngrams_min_n: int = 2, ngrams_max_n: int = 6) -> NGrams:
+        sequences: Collection[Sequence[T]], ngrams_min_n: int = 2, ngrams_max_n: int = 6) -> NGrams[T]:
     exact_ngrams = defaultdict(set)
     partial_ngrams = defaultdict(set)
     for sequence in sequences:
@@ -357,9 +363,10 @@ def preprocess_cfg_nodes_tokenized_expressions(
     return cfg_nodes_tokenized_expressions
 
 
-CFGPaths = namedtuple(
-    'CFGPaths',
-    ['control_flow_paths', 'pdg_paths', 'control_flow_paths_ngrams'])
+class CFGPaths(NamedTuple):
+    control_flow_paths: List[Tuple[Tuple[int, Optional[str]], ...]]
+    pdg_paths: Optional[List[Tuple[Tuple[int, Optional[str]], ...]]]
+    control_flow_paths_ngrams: NGrams[Tuple[int, Optional[str]]]
 
 
 def preprocess_control_flow_paths(
@@ -504,10 +511,17 @@ def is_ast_leaf_with_symbol(method: SerMethod, ast_node: SerASTNode) -> bool:
        method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx is not None
 
 
+class MaskedSubASTsInfo(NamedTuple):
+    masked_sub_asts_nodes_without_root: Dict[int, Set[int]]
+    transitive_ast_nodes_indices_to_ignore: Set[int]
+    transitive_ast_nodes_indices_to_ignore_or_to_mask: Set[int]
+
+
 def sanitize_sub_asts_to_ignore_or_to_mask(
         method_ast: SerMethodAST,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None,
-        sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None):
+        sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None) \
+        -> MaskedSubASTsInfo:
     if sub_ast_root_indices_to_ignore is None:
         sub_ast_root_indices_to_ignore = set()
     if sub_ast_root_indices_to_mask is None:
@@ -525,19 +539,23 @@ def sanitize_sub_asts_to_ignore_or_to_mask(
                for sub_ast_1_nodes, sub_ast_2_nodes
                in itertools.combinations(masked_sub_asts_nodes_without_root.values(), 2))
 
-    ast_nodes_indices_to_ignore: Set[int] = {
+    transitive_ast_nodes_indices_to_ignore: Set[int] = {
         ast_node.idx
         for sub_ast_root_idx in sub_ast_root_indices_to_ignore
         for ast_node, _, _ in traverse_ast(
             method_ast=method_ast, root_sub_ast_node_idx=sub_ast_root_idx)}
-    assert ast_nodes_indices_to_ignore & sub_ast_root_indices_to_ignore == sub_ast_root_indices_to_ignore
-    ast_nodes_indices_to_ignore.update((
+    assert transitive_ast_nodes_indices_to_ignore & sub_ast_root_indices_to_ignore == sub_ast_root_indices_to_ignore
+    transitive_ast_nodes_indices_to_ignore.update((
         ast_node_idx
         for sub_ast_nodes in masked_sub_asts_nodes_without_root.values()
         for ast_node_idx in sub_ast_nodes))
-    assert len(ast_nodes_indices_to_ignore & sub_ast_root_indices_to_mask.keys()) == 0
+    assert len(transitive_ast_nodes_indices_to_ignore & sub_ast_root_indices_to_mask.keys()) == 0
 
-    return masked_sub_asts_nodes_without_root, ast_nodes_indices_to_ignore
+    return MaskedSubASTsInfo(
+        masked_sub_asts_nodes_without_root=masked_sub_asts_nodes_without_root,
+        transitive_ast_nodes_indices_to_ignore=transitive_ast_nodes_indices_to_ignore,
+        transitive_ast_nodes_indices_to_ignore_or_to_mask=
+        transitive_ast_nodes_indices_to_ignore | sub_ast_root_indices_to_mask.keys())
 
 
 def enforce_limits_and_sample_ast_paths(
@@ -606,20 +624,21 @@ def preprocess_method_ast(
     #         (ii) override its additional data (identifier, symbol, keyword, modifier, #childs, place at parent, ..)
     #              to be the `<PAD>` special word.
     #         (iii) *KEEP* it in ast-paths and as a src/tgt of graph-edges.
-    masked_sub_asts_nodes_without_root, ast_nodes_indices_to_ignore = sanitize_sub_asts_to_ignore_or_to_mask(
+    masked_sub_asts_info = sanitize_sub_asts_to_ignore_or_to_mask(
         method_ast=method_ast,
         sub_ast_root_indices_to_ignore=sub_ast_root_indices_to_ignore,
         sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
-    ast_nodes_indices_to_ignore_or_to_mask = ast_nodes_indices_to_ignore | sub_ast_root_indices_to_mask.keys()
 
     if pp_method_ast_paths:
         method_ast_paths = get_all_ast_paths(
             method_ast=method_ast,
-            subtrees_to_ignore=ast_nodes_indices_to_ignore)
-        assert len(set(method_ast_paths.leaves_sequence) & ast_nodes_indices_to_ignore) == 0
+            subtrees_to_ignore=masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore)
+        assert len(set(method_ast_paths.leaves_sequence) &
+                   masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
         assert set(method_ast_paths.leaves_sequence) & sub_ast_root_indices_to_mask.keys() == \
                sub_ast_root_indices_to_mask.keys()
-        assert len(set(method_ast_paths.postorder_traversal_sequence) & ast_nodes_indices_to_ignore) == 0
+        assert len(set(method_ast_paths.postorder_traversal_sequence) &
+                   masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
 
         method_ast_paths = enforce_limits_and_sample_ast_paths(
             ast_paths=method_ast_paths,
@@ -634,8 +653,8 @@ def preprocess_method_ast(
         [[ast_node.idx, child_node_idx]
          for ast_node in method_ast.nodes
          for child_node_idx in ast_node.children_idxs
-         if ast_node.idx not in ast_nodes_indices_to_ignore and
-         child_node_idx not in ast_nodes_indices_to_ignore]).t().chunk(chunks=2, dim=0)
+         if ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore and
+         child_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]).t().chunk(chunks=2, dim=0)
     dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
     dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
 
@@ -649,7 +668,7 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_types.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore else
                     sub_ast_root_indices_to_mask.get(ast_node.idx, ast_node.type.value))
                 # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
                 for ast_node in method_ast.nodes]),
@@ -658,7 +677,7 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_major_types.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore else
                     sub_ast_root_indices_to_mask.get(ast_node.idx, ast_node.type.value.split('_')[0]))
                 # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
                 for ast_node in method_ast.nodes])),
@@ -666,7 +685,8 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_minor_types.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore_or_to_mask or '_' not in ast_node.type.value else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask
+                       or '_' not in ast_node.type.value else
                     ast_node.type.value[ast_node.type.value.find('_') + 1:])
                 # TODO: should it be a special '<MASK>' vocab word instead of a simple padding?
                 for ast_node in method_ast.nodes])),
@@ -674,7 +694,7 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_child_pos.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore else
                     '<+ROOT>'
                     if ast_node.parent_node_idx is None or ast_node.child_place_at_parent is None else
                     f'+{ast_node.child_place_at_parent + 1}', unk_word='<+MORE>')
@@ -683,7 +703,7 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_child_pos.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore else
                     '<-ROOT>'
                     if ast_node.parent_node_idx is None or ast_node.child_place_at_parent is None else
                     f'-{len(method_ast.nodes[ast_node.parent_node_idx].children_idxs) - ast_node.child_place_at_parent}',
@@ -693,7 +713,7 @@ def preprocess_method_ast(
             torch.LongTensor([
                 code_task_vocabs.ast_node_nr_children.get_word_idx_or_unk(
                     '<PAD>'
-                    if ast_node.idx in ast_nodes_indices_to_ignore_or_to_mask else
+                    if ast_node.idx in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask else
                     f'{len(ast_node.children_idxs)}', unk_word='<MORE>')
                 for ast_node in method_ast.nodes])),
 
@@ -706,7 +726,7 @@ def preprocess_method_ast(
                    ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and
                    method.code.tokenized[
                        ast_node.code_sub_token_range_ref.begin_token_idx].identifier_idx is not None and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_nodes_with_identifier_leaf_identifier_idx=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
@@ -717,7 +737,7 @@ def preprocess_method_ast(
                    ast_node.code_sub_token_range_ref.begin_token_idx == ast_node.code_sub_token_range_ref.end_token_idx and
                    method.code.tokenized[
                        ast_node.code_sub_token_range_ref.begin_token_idx].identifier_idx is not None and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='identifiers'),
 
         ast_nodes_with_symbol_leaf_nodes_indices=BatchedFlattenedIndicesFlattenedTensor(
@@ -725,27 +745,27 @@ def preprocess_method_ast(
                 ast_node.idx
                 for ast_node in method_ast.nodes
                 if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_nodes_with_symbol_leaf_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx
                 for ast_node in method_ast.nodes
                 if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='symbols'),
         ast_nodes_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 method.code.tokenized[ast_node.code_sub_token_range_ref.begin_token_idx].symbol_idx
                 if is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask
                 else 0
                 for ast_node in method_ast.nodes]),
         ),  # tgt_indexing_group='symbols'),
         ast_nodes_has_symbol_mask=BatchFlattenedTensor(
             tensor=torch.BoolTensor([
                 is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
-                ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask
+                ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask
                 for ast_node in method_ast.nodes]),
         ),
 
@@ -756,7 +776,7 @@ def preprocess_method_ast(
                 if len(ast_node.children_idxs) == 0 and
                    ast_node.type == SerASTNodeType.PRIMITIVE_TYPE and
                    ast_node.type_name is not None and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_nodes_with_primitive_type_leaf_primitive_type=BatchFlattenedTensor(tensor=torch.LongTensor([
             code_task_vocabs.primitive_types.get_word_idx_or_unk(ast_node.type_name)
@@ -764,20 +784,20 @@ def preprocess_method_ast(
             if len(ast_node.children_idxs) == 0 and
                ast_node.type == SerASTNodeType.PRIMITIVE_TYPE and
                ast_node.type_name is not None and
-               ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask])),
+               ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask])),
 
         ast_nodes_with_modifier_leaf_nodes_indices=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 ast_node.idx
                 for ast_node in method_ast.nodes
                 if len(ast_node.children_idxs) == 0 and ast_node.modifier is not None and
-                   ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask]),
+                   ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_nodes_with_modifier_leaf_modifier=BatchFlattenedTensor(tensor=torch.LongTensor([
             code_task_vocabs.modifiers.get_word_idx_or_unk(ast_node.modifier)
             for ast_node in method_ast.nodes
             if len(ast_node.children_idxs) == 0 and ast_node.modifier is not None and
-               ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask])),
+               ast_node.idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask])),
 
         ast_leaf_to_leaf_paths_node_indices=None if not pp_method_ast_paths else BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
@@ -854,11 +874,10 @@ def preprocess_sub_ast_for_cfg_expressions(
     #         (ii) override its additional data (identifier, symbol, keyword, modifier, #childs, place at parent, ..)
     #              to be the `<PAD>` special word.
     #         (iii) *KEEP* it in ast-paths and as a src/tgt of graph-edges.
-    masked_sub_asts_nodes_without_root, ast_nodes_indices_to_ignore = sanitize_sub_asts_to_ignore_or_to_mask(
+    masked_sub_asts_info = sanitize_sub_asts_to_ignore_or_to_mask(
         method_ast=method_ast,
         sub_ast_root_indices_to_ignore=sub_ast_root_indices_to_ignore,
         sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
-    ast_nodes_indices_to_ignore_or_to_mask = ast_nodes_indices_to_ignore | sub_ast_root_indices_to_mask.keys()
 
     # assert all(
     #     pdg_node.ast_node_idx is not None for pdg_node in method_pdg.pdg_nodes
@@ -915,14 +934,16 @@ def preprocess_sub_ast_for_cfg_expressions(
     ast_paths_per_pdg_node: Dict[int, ASTPaths] = {
         pdg_node.idx: get_all_ast_paths(
             method_ast=method_ast, sub_ast_root_node_idx=pdg_node.ast_node_idx,
-            subtrees_to_ignore={method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]} | ast_nodes_indices_to_ignore
+            subtrees_to_ignore=
+            {method_ast.nodes[pdg_node.ast_node_idx].children_idxs[-1]} |
+            masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore
             if pdg_node.control_kind in {SerPDGNodeControlKind.METHOD_ENTRY, SerPDGNodeControlKind.CATCH_CLAUSE_ENTRY}
-            else ast_nodes_indices_to_ignore)
+            else masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore)
         for pdg_node in method_pdg.pdg_nodes
         if pdg_node.ast_node_idx is not None and
            pdg_node.code_sub_token_range_ref is not None and
            pdg_node.idx not in pdg_nodes_to_mask and
-           pdg_node.ast_node_idx not in ast_nodes_indices_to_ignore_or_to_mask}  # FIXME: should it be ignored only?
+           pdg_node.ast_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore_or_to_mask}  # FIXME: should it be ignored only?
 
     ast_paths_per_pdg_node = {
         pdg_node_idx: enforce_limits_and_sample_ast_paths(
@@ -971,7 +992,7 @@ def preprocess_sub_ast_for_cfg_expressions(
             range(ast_paths.subtree_indices_range[0], ast_paths.subtree_indices_range[1] + 1))
         for pdg_node_idx, ast_paths in ast_paths_per_pdg_node.items()}
     assert all(
-        len(sub_ast_nodes_indices & ast_nodes_indices_to_ignore) == 0
+        len(sub_ast_nodes_indices & masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
         for sub_ast_nodes_indices in pdg_node_to_ast_node_indices.values())
 
     # No ast-node that belongs to more than one pdg-node
@@ -983,10 +1004,11 @@ def preprocess_sub_ast_for_cfg_expressions(
     assert len(ast_paths_per_pdg_node) > 0
     assert all(len(ast_paths.postorder_traversal_sequence) > 0 for ast_paths in ast_paths_per_pdg_node.values())
     assert all(
-        len(set(sub_ast_paths.leaves_sequence) & ast_nodes_indices_to_ignore) == 0
+        len(set(sub_ast_paths.leaves_sequence) & masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
         for sub_ast_paths in ast_paths_per_pdg_node.values())
     assert all(
-        len(set(sub_ast_paths.postorder_traversal_sequence) & ast_nodes_indices_to_ignore) == 0
+        len(set(sub_ast_paths.postorder_traversal_sequence) &
+            masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
         for sub_ast_paths in ast_paths_per_pdg_node.values())
 
     pdg_nodes_expressions_dgl_ast_edges = torch.LongTensor(
@@ -1076,14 +1098,14 @@ def preprocess_sub_ast_for_cfg_expressions(
                 pdg_node.idx
                 for pdg_node in method_pdg.pdg_nodes
                 if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask
-                   and pdg_node.ast_node_idx not in ast_nodes_indices_to_ignore]),
+                   and pdg_node.ast_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
         ),  # tgt_indexing_group='cfg_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.ast_node_idx
                 for pdg_node in method_pdg.pdg_nodes
                 if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask
-                   and pdg_node.ast_node_idx not in ast_nodes_indices_to_ignore]),
+                   and pdg_node.ast_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_node_idx_to_pdg_node_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.keys())),
