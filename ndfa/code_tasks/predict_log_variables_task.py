@@ -232,6 +232,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
         self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
 
+        # TODO: export to a dedicated module `MethodCodeEncodingsFeeder`
         if self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg':
             encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
@@ -244,19 +245,23 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
                 encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
             elif self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'ast':
                 if self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type == 'set-of-paths':
-
-                    # TODO: use all path-types (not only 'leaf_to_leaf')
-                    encoder_outputs = code_task_input.ast.get_ast_paths_node_indices('leaf_to_leaf').unflatten(
-                        encoded_code.whole_method_combined_ast_paths_encoding_by_type['leaf_to_leaf'])
-                    encoder_outputs_mask = code_task_input.ast.get_ast_paths_node_indices('leaf_to_leaf').unflattener_mask
-                    # all_ast_paths_nodes_encodings = torch.cat([
-                    #     encoded_paths
-                    #     for ast_paths_type, encoded_paths
-                    #     in encoded_code.whole_method_combined_ast_paths_encoding_by_type.items()], dim=0)
-                    # all_ast_paths_node_indices = torch.cat([
-                    #     code_task_input.ast.get_ast_paths_node_indices(ast_paths_type).example_indices
-                    #     for ast_paths_type in encoded_code.whole_method_combined_ast_paths_encoding_by_type.keys()], dim=0)
-
+                    # TODO: is it ok that the outputs are defragmented?
+                    #  (the masks might have `True` after a `False` for the same examples)
+                    ast_paths_by_type = encoded_code.whole_method_combined_ast_paths_encoding_by_type
+                    all_encoder_outputs = [
+                        code_task_input.ast.get_ast_paths_node_indices(path_type).unflatten(ast_paths)
+                        for path_type, ast_paths in ast_paths_by_type.items()]
+                    all_encoder_outputs_mask = [
+                        code_task_input.ast.get_ast_paths_node_indices(path_type).unflattener_mask
+                        for path_type, ast_paths in ast_paths_by_type.items()]
+                    assert all(enc.shape[:-1] == mask.shape
+                               for enc, mask in zip(all_encoder_outputs, all_encoder_outputs_mask))
+                    assert len(all_encoder_outputs) >= 1 and len(all_encoder_outputs_mask) >= 1
+                    encoder_outputs = all_encoder_outputs[0] if len(all_encoder_outputs) == 1 else \
+                        torch.cat(all_encoder_outputs, dim=1)
+                    encoder_outputs_mask = all_encoder_outputs_mask[0] if len(all_encoder_outputs_mask) == 1 else \
+                        torch.cat(all_encoder_outputs_mask, dim=1)
+                    assert encoder_outputs.shape[:-1] == encoder_outputs_mask.shape
                 elif self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type in {'tree', 'paths-folded'}:
                     encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
                         encoded_code.whole_method_ast_nodes_encoding)
