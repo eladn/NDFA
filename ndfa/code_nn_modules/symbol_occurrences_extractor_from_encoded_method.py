@@ -49,7 +49,8 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                         warn(f'Extracting symbol occurrences from ast paths of type '
                              f'`{paths_type}` is currently not supported.')
                 assert leaves_encodings is not None and leaves_indices is not None
-                symbol_leaves_mask = method_ast_input.ast_nodes_has_symbol_mask.tensor[leaves_indices]
+                ast_nodes_has_symbol_mask = method_ast_input.ast_nodes_has_symbol_mask.tensor.type(torch.bool)  # TODO: delete cast to bool after we fix the pp input
+                symbol_leaves_mask = ast_nodes_has_symbol_mask[leaves_indices]
                 encodings_of_symbols_occurrences = leaves_encodings[symbol_leaves_mask]
                 ast_node_indices_of_symbols_occurrences = leaves_indices[symbol_leaves_mask]
                 symbols_indices_of_symbols_occurrences = \
