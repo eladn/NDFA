@@ -820,16 +820,17 @@ def preprocess_cfg_macro_trimmed_ast(
         set(cfg_sub_asts_info.ast_node_idx_to_pdg_node.values()) - \
         set(pdg_node.ast_node_idx for pdg_node in method_pdg.pdg_nodes
             if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None)
-    ast_node_indices = \
-        (set(range(len(method_ast.nodes))) -
-         cfg_sub_asts_info.masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) - \
-        pdg_sub_asts_inner_ast_node_indices
-    ast_paths = get_all_ast_paths(
+    ast_nodes_indices_to_ignore = \
+        pdg_sub_asts_inner_ast_node_indices | \
+        cfg_sub_asts_info.masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore
+    trimmed_ast_node_indices = set(range(len(method_ast.nodes))) - ast_nodes_indices_to_ignore
+    trimmed_ast_paths = get_all_ast_paths(
         method_ast=method_ast, sub_ast_root_node_idx=method_ast.root_node_idx,
-        subtrees_to_ignore=pdg_sub_asts_inner_ast_node_indices)
+        subtrees_to_ignore=ast_nodes_indices_to_ignore)
     sub_ast_input_tensors = preprocess_sub_asts(
         code_task_vocabs=code_task_vocabs, method_ast=method_ast,
-        nodes_indices_per_sub_ast=[ast_node_indices], ast_paths_per_sub_ast=[ast_paths])
+        nodes_indices_per_sub_ast=[trimmed_ast_node_indices],
+        ast_paths_per_sub_ast=[trimmed_ast_paths])
     return sub_ast_input_tensors
 
 
