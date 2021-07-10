@@ -743,7 +743,7 @@ def preprocess_method_ast(
                 for ast_node in method_ast.nodes]),
         ),  # tgt_indexing_group='symbols'),
         ast_nodes_has_symbol_mask=BatchFlattenedTensor(
-            tensor=torch.LongTensor([
+            tensor=torch.BoolTensor([
                 is_ast_leaf_with_symbol(method=method, ast_node=ast_node) and
                 ast_node.idx not in ast_nodes_indices_to_ignore_or_to_mask
                 for ast_node in method_ast.nodes]),
