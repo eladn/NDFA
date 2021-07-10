@@ -24,6 +24,7 @@ from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_ex
     PreprocessLimitExceedError, PreprocessLimitation
 from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMixin
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
+from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -214,6 +215,9 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
             self.model_hps.target_symbols_decoder.use_batch_flattened_target_symbols_vocab,
             dropout_rate=dropout_rate, activation_fn=self.model_hps.activation_fn)
 
+        self.method_code_encodings_feeder = MethodCodeEncodingsFeeder(
+            method_code_encoder_params=self.model_hps.method_code_encoder)
+
     def forward(
             self, code_task_input: MethodCodeInputTensors,
             target_symbols_idxs: Optional[LogVarTargetSymbolsIndices] = None):
@@ -226,67 +230,28 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
                 if use_batch_flattened_target_symbols_vocab else \
                 target_symbols_idxs.example_based_symbol_indices
 
-        encoded_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
-        self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_code.encoded_identifiers)
-        self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_code.encoded_cfg_nodes)
-        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_code.encoded_symbols)
-        self.dbg_log_tensor_during_fwd('encoded_cfg_nodes_after_bridge', encoded_code.encoded_cfg_nodes_after_bridge)
+        encoded_method_code: EncodedMethodCode = self.code_task_encoder(code_task_input=code_task_input)
+        self.dbg_log_tensor_during_fwd('encoded_identifiers', encoded_method_code.encoded_identifiers)
+        self.dbg_log_tensor_during_fwd('encoded_cfg_nodes', encoded_method_code.encoded_cfg_nodes)
+        self.dbg_log_tensor_during_fwd('all_symbols_encodings', encoded_method_code.encoded_symbols)
+        self.dbg_log_tensor_during_fwd(
+            'encoded_cfg_nodes_after_bridge', encoded_method_code.encoded_cfg_nodes_after_bridge)
 
-        # TODO: export to a dedicated module `MethodCodeEncodingsFeeder`
-        if self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg':
-            encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
-            encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
-        elif self.model_hps.method_code_encoder.method_encoder_type == 'method-cfg-v2':
-            encoder_outputs = encoded_code.encoded_cfg_nodes_after_bridge
-            encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
-        elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
-            if self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
-                encoder_outputs = encoded_code.whole_method_token_seqs_encoding
-                encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
-            elif self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'ast':
-                if self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type == 'set-of-paths':
-                    # TODO: is it ok that the outputs are defragmented?
-                    #  (the masks might have `True` after a `False` for the same examples)
-                    ast_paths_by_type = encoded_code.whole_method_combined_ast_paths_encoding_by_type
-                    all_encoder_outputs = [
-                        code_task_input.ast.get_ast_paths_node_indices(path_type).unflatten(ast_paths)
-                        for path_type, ast_paths in ast_paths_by_type.items()]
-                    all_encoder_outputs_mask = [
-                        code_task_input.ast.get_ast_paths_node_indices(path_type).unflattener_mask
-                        for path_type, ast_paths in ast_paths_by_type.items()]
-                    assert all(enc.shape[:-1] == mask.shape
-                               for enc, mask in zip(all_encoder_outputs, all_encoder_outputs_mask))
-                    assert len(all_encoder_outputs) >= 1 and len(all_encoder_outputs_mask) >= 1
-                    encoder_outputs = all_encoder_outputs[0] if len(all_encoder_outputs) == 1 else \
-                        torch.cat(all_encoder_outputs, dim=1)
-                    encoder_outputs_mask = all_encoder_outputs_mask[0] if len(all_encoder_outputs_mask) == 1 else \
-                        torch.cat(all_encoder_outputs_mask, dim=1)
-                    assert encoder_outputs.shape[:-1] == encoder_outputs_mask.shape
-                elif self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.encoder_type in {'tree', 'paths-folded'}:
-                    encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
-                        encoded_code.whole_method_ast_nodes_encoding)
-                    encoder_outputs_mask = code_task_input.ast.ast_node_major_types.unflattener_mask
-                else:
-                    assert False
-            else:
-                assert False
-            # print('encoder_outputs', encoder_outputs.shape)
-            # print('encoder_outputs_mask', encoder_outputs_mask.shape)
-        else:
-            assert False
+        encoder_outputs, encoder_outputs_mask = self.method_code_encodings_feeder(
+            code_task_input=code_task_input, encoded_method_code=encoded_method_code)
 
         decoder_outputs = self.symbols_decoder(
             encoder_outputs=encoder_outputs,
             encoder_outputs_mask=encoder_outputs_mask,
             symbols=code_task_input.symbols,
-            batched_flattened_symbols_encodings=encoded_code.encoded_symbols,
-            encoded_symbols_occurrences=encoded_code.encoded_symbols_occurrences,
+            batched_flattened_symbols_encodings=encoded_method_code.encoded_symbols,
+            encoded_symbols_occurrences=encoded_method_code.encoded_symbols_occurrences,
             groundtruth_target_symbols_idxs=target_symbols_idxs)
         self.dbg_log_tensor_during_fwd('decoder_outputs', decoder_outputs)
 
         return PredictLoggingCallVarsModelOutput(
             decoder_outputs=decoder_outputs,
-            all_symbols_encodings=encoded_code.encoded_symbols)
+            all_symbols_encodings=encoded_method_code.encoded_symbols)
 
 
 class PredictLogVarsModelLoss(nn.Module):
