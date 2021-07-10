@@ -12,11 +12,16 @@ __all__ = ['MethodCodeEncodingsFeeder']
 
 class MethodCodeEncodingsFeeder(nn.Module):
     """
-    (1) selects the relevant method encoder output tensors to feed the decoder based on the selected encoding approach
-    (2) unflattens these tensors to have 1st dim of #example as the decoder expects
-    (3) concatenates multiple tensors if necessary
-    (4) also return the matching output mask (the created outputs now includes paddings because we unflattened
-        to example-based tensors we created paddings)
+    (1) Selects the relevant method encoder output tensors to feed the decoder,
+        based on the selected encoding approach.
+    (2) Unflattens these tensors to have 1st dim of #example as the decoder expects.
+    (3) concatenates multiple tensors if necessary.
+    (4) also return the matching output mask (the created outputs now includes paddings,
+        because we unflattened to example-based tensors).
+
+    TODO: Return a sole embedding per example for the initial state of the LSTM decoder.
+          We currently feed only the attentive "memory bank" of the decoder.
+    TODO: add hyper-params to control what tensors to return (relevant when there multiple possibilities).
     """
     def __init__(self, method_code_encoder_params: MethodCodeEncoderParams):
         super(MethodCodeEncodingsFeeder, self).__init__()
@@ -63,16 +68,6 @@ class MethodCodeEncodingsFeeder(nn.Module):
                     assert False
             else:
                 assert False
-            # print('ast_nodes_with_symbol_leaf_nodes - types',
-            #       code_task_input.ast.ast_node_types.tensor[code_task_input.ast.ast_nodes_with_symbol_leaf_nodes_indices.indices])
-            # print('#zero(encodings_of_symbols_occurrences)',
-            #       torch.sum(torch.all(torch.isclose(encoded_code.whole_method_ast_nodes_encoding[code_task_input.ast.ast_leaves_sequence_node_indices.sequences], torch.tensor(0.0)), dim=1)))
-            # print('ast_nodes_with_symbol_leaf_symbol_idx (per example)', code_task_input.ast.ast_nodes_with_symbol_leaf_symbol_idx.nr_items_per_example)
-            # print('nr_ast_leaves (per example)', code_task_input.ast.ast_leaves_sequence_node_indices.sequences_lengths)
-            # print('ast_node_types', code_task_input.ast.ast_node_types.tensor.shape)
-            # print('ast_node_types', code_task_input.ast.ast_node_types.nr_items_per_example)
-            # print('encoder_outputs', encoder_outputs.shape)
-            # print('encoder_outputs_mask', encoder_outputs_mask.shape)
         else:
             assert False
 
