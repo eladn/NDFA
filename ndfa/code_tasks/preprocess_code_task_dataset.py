@@ -812,11 +812,25 @@ class CFGSubASTsInfo:
     ast_node_idx_to_pdg_node: Dict[int, int]
 
 
-def preprocess_sub_ast_for_cfg_macro(
+def preprocess_cfg_macro_trimmed_ast(
         model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
         method_pdg: SerMethodPDG, method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
         cfg_sub_asts_info: CFGSubASTsInfo) -> SubASTInputTensors:
-    raise NotImplementedError
+    pdg_sub_asts_inner_ast_node_indices = \
+        set(cfg_sub_asts_info.ast_node_idx_to_pdg_node.values()) - \
+        set(pdg_node.ast_node_idx for pdg_node in method_pdg.pdg_nodes
+            if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None)
+    ast_node_indices = \
+        (set(range(len(method_ast.nodes))) -
+         cfg_sub_asts_info.masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) - \
+        pdg_sub_asts_inner_ast_node_indices
+    ast_paths = get_all_ast_paths(
+        method_ast=method_ast, sub_ast_root_node_idx=method_ast.root_node_idx,
+        subtrees_to_ignore=pdg_sub_asts_inner_ast_node_indices)
+    sub_ast_input_tensors = preprocess_sub_asts(
+        code_task_vocabs=code_task_vocabs, method_ast=method_ast,
+        nodes_indices_per_sub_ast=[ast_node_indices], ast_paths_per_sub_ast=[ast_paths])
+    return sub_ast_input_tensors
 
 
 def extract_sub_asts_info_for_cfg_expressions(
@@ -1194,8 +1208,10 @@ def preprocess_pdg(
     cfg_nodes_expressions_sub_ast_input_tensors = preprocess_sub_asts_for_cfg_expressions(
         code_task_vocabs=code_task_vocabs, method_pdg=method_pdg, method_ast=method_ast,
         pdg_nodes_to_mask=pdg_nodes_to_mask, cfg_sub_asts_info=cfg_sub_asts_info)
-    # sub_ast_for_cfg_macro = preprocess_sub_ast_for_cfg_macro(
-    #     ..., cfg_sub_asts_info=cfg_sub_asts_info)
+    cfg_macro_trimmed_ast = preprocess_cfg_macro_trimmed_ast(
+        model_hps=model_hps, code_task_vocabs=code_task_vocabs,
+        method_pdg=method_pdg, method_ast=method_ast,
+        pdg_nodes_to_mask=pdg_nodes_to_mask, cfg_sub_asts_info=cfg_sub_asts_info)
 
     cfg_control_flow_graph = TGData(
         edge_index=torch.LongTensor(
@@ -1226,6 +1242,7 @@ def preprocess_pdg(
             method=method, method_pdg=method_pdg, code_task_vocabs=code_task_vocabs,
             pdg_nodes_to_mask=pdg_nodes_to_mask),
         cfg_nodes_expressions_ast=cfg_nodes_expressions_sub_ast_input_tensors,
+        cfg_macro_trimmed_ast=cfg_macro_trimmed_ast,
         cfg_nodes_random_permutation=BatchedFlattenedIndicesPseudoRandomPermutation(
             # tgt_indexing_group='cfg_nodes',
             # batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='cfgn'),

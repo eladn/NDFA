@@ -106,6 +106,7 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = \
     #     batch_flattened_tensor_field(default=None)
     cfg_nodes_expressions_ast: Optional['PDGExpressionsSubASTInputTensors'] = None
+    cfg_macro_trimmed_ast: Optional['SubASTInputTensors'] = None
 
     # cfg_edges: Optional[torch.LongTensor] = None
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
