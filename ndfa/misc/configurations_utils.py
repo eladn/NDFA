@@ -93,7 +93,21 @@ def create_argparser_from_dataclass_conf_structure(
                        (original_field_type_info.original_type == tuple and len(container_typing_args) == 2 and container_typing_args[1] is ...)
                 if len(container_typing_args) >= 1:
                     item_type = container_typing_args[0]
-            # TODO: finish this case
+
+            # TODO: we currently don't cast to the wanted type because it seems that OmegaConf dotlist
+            #  accept only lists (at least how we currently use it).
+            #  However, it doesn't really matter, because we always perform `reinstantiate_omegaconf_container()`
+            #  that re-creates the correct collection type.
+            # class castContainerTypeAction(argparse.Action):
+            #     def __call__(self, parser, args, values, option_string=None):
+            #         values = original_field_type_info.original_type(values)
+            #         setattr(args, self.dest, values)
+
+            assert conf_field_info.choices is None
+            argparser.add_argument(
+                arg_name, choices=conf_field_info.elements_choices,
+                type=item_type, nargs='+' if required else '*',  # action=castContainerTypeAction,
+                required=required, dest=arg_dest, help=conf_field_info.description)
         else:
             assert False
         # TODO: support `ConfFieldInfo` additional info (arg_prefix, arg_names, ...)
@@ -231,20 +245,23 @@ class ConfFieldInfo:
     arg_names: Optional[Collection[str]] = None
     arg_prefix: Optional[str] = None
     choices: Optional[Collection[Union[str, int, float]]] = None
+    elements_choices: Optional[Collection[Union[str, int, float]]] = None
 
 
 def conf_field(
         *, default=dataclasses.MISSING, default_factory=dataclasses.MISSING, init=True, repr=True,
         hash=None, compare=True, metadata=None, description: Optional[str] = None,
         arg_names: Optional[Collection[str]] = None, arg_prefix: Optional[str] = None,
-        choices: Optional[Collection[Union[str, int, float]]] = None):
+        choices: Optional[Collection[Union[str, int, float]]] = None,
+        elements_choices: Optional[Collection[Union[str, int, float]]] = None):
     metadata = {} if metadata is None else metadata
     assert '__ConfFieldInfo' not in metadata
     metadata['__ConfFieldInfo'] = ConfFieldInfo(
         description=description,
         arg_names=arg_names,
         arg_prefix=arg_prefix,
-        choices=choices)
+        choices=choices,
+        elements_choices=elements_choices)
     return dataclasses.field(
         default=default, default_factory=default_factory, init=init,
         repr=repr, hash=hash, compare=compare, metadata=metadata)
