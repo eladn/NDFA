@@ -24,8 +24,9 @@ from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expressio
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, SymbolsInputTensors, PDGInputTensors, \
-    CFGPathsInputTensors, CFGPathsNGramsInputTensors, IdentifiersInputTensors, MethodASTInputTensors, \
-    PDGExpressionsSubASTInputTensors, MethodCodeTokensSequenceInputTensors, CFGCodeExpressionTokensSequenceInputTensors
+    CFGPathsInputTensors, CFGPathsNGramsInputTensors, IdentifiersInputTensors, MethodCodeTokensSequenceInputTensors, \
+    SubASTInputTensors, PDGExpressionsSubASTInputTensors, MethodASTInputTensors, \
+    CFGCodeExpressionTokensSequenceInputTensors
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
@@ -859,11 +860,26 @@ def preprocess_method_ast(
     return method_ast_input_tensors
 
 
-def preprocess_sub_ast_for_cfg_expressions(
+@dataclasses.dataclass
+class CFGSubASTsInfo:
+    masked_sub_asts_info: MaskedSubASTsInfo
+    ast_paths_per_pdg_node: Dict[int, ASTPaths]
+    pdg_node_to_ast_node_indices: Dict[int, Set[int]]
+    ast_node_idx_to_pdg_node: Dict[int, int]
+
+
+def preprocess_sub_ast_for_cfg_macro(
         model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
         method_pdg: SerMethodPDG, method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
+        cfg_sub_asts_info: CFGSubASTsInfo) -> SubASTInputTensors:
+    raise NotImplementedError
+
+
+def extract_sub_asts_info_for_cfg_expressions(
+        model_hps: NDFAModelHyperParams, method_pdg: SerMethodPDG,
+        method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
         sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None,
-        sub_ast_root_indices_to_ignore: Optional[Set[int]] = None) -> PDGExpressionsSubASTInputTensors:
+        sub_ast_root_indices_to_ignore: Optional[Set[int]] = None) -> CFGSubASTsInfo:
     # Note: For some sub-AST that have to be masked-out:
     #       - Completely ignore the descendants of this sub-AST (the ast-nodes except its root):
     #         (i) override all of their data (type, identifier, symbol, keyword, modifier, #childs, place at parent, ..)
@@ -1011,26 +1027,32 @@ def preprocess_sub_ast_for_cfg_expressions(
             masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
         for sub_ast_paths in ast_paths_per_pdg_node.values())
 
-    pdg_nodes_expressions_dgl_ast_edges = torch.LongTensor(
+    return CFGSubASTsInfo(
+        masked_sub_asts_info=masked_sub_asts_info,
+        ast_paths_per_pdg_node=ast_paths_per_pdg_node,
+        pdg_node_to_ast_node_indices=pdg_node_to_ast_node_indices,
+        ast_node_idx_to_pdg_node=ast_node_idx_to_pdg_node)
+
+
+def preprocess_sub_asts(
+        code_task_vocabs: CodeTaskVocabs,
+        method_ast: SerMethodAST,
+        nodes_indices_per_sub_ast: Sequence[Set[int]],
+        ast_paths_per_sub_ast: Sequence[ASTPaths]) \
+        -> SubASTInputTensors:
+    dgl_ast_edges = torch.LongTensor(
         [[ast_node_idx, child_node_idx]
-         for sub_ast_nodes in pdg_node_to_ast_node_indices.values()
+         for sub_ast_nodes in nodes_indices_per_sub_ast
          for ast_node_idx in sub_ast_nodes
          for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
          if child_node_idx in sub_ast_nodes]).t().chunk(chunks=2, dim=0)
-    pdg_nodes_expressions_dgl_ast_edges = tuple(u.view(-1) for u in pdg_nodes_expressions_dgl_ast_edges)
-    pdg_nodes_expressions_dgl_ast = \
-        dgl.graph(data=pdg_nodes_expressions_dgl_ast_edges, num_nodes=len(method_ast.nodes))
+    dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
+    dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
 
-    cfg_nodes_expressions_sub_ast_input_tensors = PDGExpressionsSubASTInputTensors(
-        ast_leaf_to_leaf_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
-            indices=torch.LongTensor([
-                pdg_node_idx
-                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
-                for _ in sub_ast_paths.leaf_to_leaf_paths.values()]),
-        ),  # tgt_indexing_group='cfg_nodes'),
+    sub_ast_input_tensors = SubASTInputTensors(
         ast_leaf_to_leaf_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
-                       for sub_ast_paths in ast_paths_per_pdg_node.values()
+                       for sub_ast_paths in ast_paths_per_sub_ast
                        for path in sub_ast_paths.leaf_to_leaf_paths.values()],
         ),  # tgt_indexing_group='ast_nodes'),
         ast_leaf_to_leaf_paths_child_place=BatchFlattenedSeq(
@@ -1040,7 +1062,7 @@ def preprocess_sub_ast_for_cfg_expressions(
                         'child_place=UNK' if path_node.child_place_in_parent is None else
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
-                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for sub_ast_paths in ast_paths_per_sub_ast
                 for path in sub_ast_paths.leaf_to_leaf_paths.values()]),
         ast_leaf_to_leaf_paths_vertical_direction=BatchFlattenedSeq(
             sequences=[
@@ -1048,17 +1070,11 @@ def preprocess_sub_ast_for_cfg_expressions(
                     code_task_vocabs.ast_traversal_orientation.get_word_idx(
                         f'DIR={path_node.direction.value}')
                     for path_node in path])
-                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for sub_ast_paths in ast_paths_per_sub_ast
                 for path in sub_ast_paths.leaf_to_leaf_paths.values()]),
-        ast_leaf_to_root_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
-            indices=torch.LongTensor([
-                pdg_node_idx
-                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
-                for _ in sub_ast_paths.leaf_to_root_paths.values()]),
-        ),  # tgt_indexing_group='cfg_nodes'),
         ast_leaf_to_root_paths_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
-                       for sub_ast_paths in ast_paths_per_pdg_node.values()
+                       for sub_ast_paths in ast_paths_per_sub_ast
                        for path in sub_ast_paths.leaf_to_root_paths.values()],
         ),  # tgt_indexing_group='ast_nodes'),
         ast_leaf_to_root_paths_child_place=BatchFlattenedSeq(
@@ -1068,29 +1084,58 @@ def preprocess_sub_ast_for_cfg_expressions(
                         'child_place=UNK' if path_node.child_place_in_parent is None else
                         f'child_place={min(path_node.child_place_in_parent, 4 - 1)}')
                     for path_node in path])
-                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for sub_ast_paths in ast_paths_per_sub_ast
                 for path in sub_ast_paths.leaf_to_root_paths.values()]),
         ast_leaves_sequence_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[
                 torch.LongTensor(sub_ast_paths.leaves_sequence)
-                for sub_ast_paths in ast_paths_per_pdg_node.values()],
+                for sub_ast_paths in ast_paths_per_sub_ast],
         ),  # tgt_indexing_group='ast_nodes'),
         siblings_sequences_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[
                 torch.LongTensor(siblings_sequence)
-                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for sub_ast_paths in ast_paths_per_sub_ast
                 for siblings_sequence in sub_ast_paths.siblings_sequences.values()],
         ),  # tgt_indexing_group='ast_nodes'),
         siblings_w_parent_sequences_node_indices=BatchedFlattenedIndicesFlattenedSeq(
             sequences=[
                 torch.LongTensor((parent_ast_node_idx,) + siblings_sequence)
-                for sub_ast_paths in ast_paths_per_pdg_node.values()
+                for sub_ast_paths in ast_paths_per_sub_ast
                 for parent_ast_node_idx, siblings_sequence in sub_ast_paths.siblings_sequences.items()],
         ),  # tgt_indexing_group='ast_nodes'),
+        dgl_tree=dgl_ast)
+    return sub_ast_input_tensors
+
+
+def preprocess_sub_asts_for_cfg_expressions(
+        code_task_vocabs: CodeTaskVocabs, method_pdg: SerMethodPDG,
+        method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
+        cfg_sub_asts_info: CFGSubASTsInfo) -> PDGExpressionsSubASTInputTensors:
+    sub_ast_input_tensors = preprocess_sub_asts(
+        code_task_vocabs=code_task_vocabs, method_ast=method_ast,
+        nodes_indices_per_sub_ast=list(cfg_sub_asts_info.pdg_node_to_ast_node_indices.values()),
+        ast_paths_per_sub_ast=list(cfg_sub_asts_info.ast_paths_per_pdg_node.values()))
+
+    cfg_nodes_expressions_sub_ast_input_tensors = PDGExpressionsSubASTInputTensors(
+        **{field.name: getattr(sub_ast_input_tensors, field.name)
+           for field in dataclasses.fields(sub_ast_input_tensors)
+           if field.init},
+        ast_leaf_to_leaf_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node_idx
+                for pdg_node_idx, sub_ast_paths in cfg_sub_asts_info.ast_paths_per_pdg_node.items()
+                for _ in sub_ast_paths.leaf_to_leaf_paths.values()]),
+        ),  # tgt_indexing_group='cfg_nodes'),
+        ast_leaf_to_root_paths_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
+            indices=torch.LongTensor([
+                pdg_node_idx
+                for pdg_node_idx, sub_ast_paths in cfg_sub_asts_info.ast_paths_per_pdg_node.items()
+                for _ in sub_ast_paths.leaf_to_root_paths.values()]),
+        ),  # tgt_indexing_group='cfg_nodes'),
         siblings_sequences_pdg_node_indices=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node_idx
-                for pdg_node_idx, sub_ast_paths in ast_paths_per_pdg_node.items()
+                for pdg_node_idx, sub_ast_paths in cfg_sub_asts_info.ast_paths_per_pdg_node.items()
                 for _ in sub_ast_paths.siblings_sequences.values()]),
         ),  # tgt_indexing_group='cfg_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
@@ -1098,22 +1143,24 @@ def preprocess_sub_ast_for_cfg_expressions(
                 pdg_node.idx
                 for pdg_node in method_pdg.pdg_nodes
                 if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask
-                   and pdg_node.ast_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
+                   and pdg_node.ast_node_idx not in
+                   cfg_sub_asts_info.masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
         ),  # tgt_indexing_group='cfg_nodes'),
         pdg_node_idx_to_sub_ast_root_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
             indices=torch.LongTensor([
                 pdg_node.ast_node_idx
                 for pdg_node in method_pdg.pdg_nodes
                 if pdg_node.code_sub_token_range_ref and pdg_node.idx not in pdg_nodes_to_mask
-                   and pdg_node.ast_node_idx not in masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
+                   and pdg_node.ast_node_idx not in
+                   cfg_sub_asts_info.masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore]),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_node_idx_to_pdg_node_idx_mapping_key=BatchedFlattenedIndicesFlattenedTensor(
-            indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.keys())),
+            indices=torch.LongTensor(list(cfg_sub_asts_info.ast_node_idx_to_pdg_node.keys())),
         ),  # tgt_indexing_group='ast_nodes'),
         ast_node_idx_to_pdg_node_idx_mapping_value=BatchedFlattenedIndicesFlattenedTensor(
-            indices=torch.LongTensor(list(ast_node_idx_to_pdg_node.values())),
-        ),  # tgt_indexing_group='cfg_nodes'),
-        dgl_tree=pdg_nodes_expressions_dgl_ast)
+            indices=torch.LongTensor(list(cfg_sub_asts_info.ast_node_idx_to_pdg_node.values())),
+        )  # tgt_indexing_group='cfg_nodes')
+    )
     return cfg_nodes_expressions_sub_ast_input_tensors
 
 
@@ -1196,9 +1243,15 @@ def preprocess_pdg(
     #       The tensor mask is by `code_sub_token_range_ref` (which might exist even if !pdg_node.has_expression)
 
     cfg_paths = preprocess_control_flow_paths(model_hps=model_hps, method_pdg=method_pdg)
-    cfg_nodes_expressions_sub_ast_input_tensors = preprocess_sub_ast_for_cfg_expressions(
-        model_hps=model_hps, code_task_vocabs=code_task_vocabs, method_pdg=method_pdg, method_ast=method_ast,
-        pdg_nodes_to_mask=pdg_nodes_to_mask, sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
+    cfg_sub_asts_info = extract_sub_asts_info_for_cfg_expressions(
+        model_hps=model_hps, method_pdg=method_pdg,
+        method_ast=method_ast, pdg_nodes_to_mask=pdg_nodes_to_mask,
+        sub_ast_root_indices_to_mask=sub_ast_root_indices_to_mask)
+    cfg_nodes_expressions_sub_ast_input_tensors = preprocess_sub_asts_for_cfg_expressions(
+        code_task_vocabs=code_task_vocabs, method_pdg=method_pdg, method_ast=method_ast,
+        pdg_nodes_to_mask=pdg_nodes_to_mask, cfg_sub_asts_info=cfg_sub_asts_info)
+    # sub_ast_for_cfg_macro = preprocess_sub_ast_for_cfg_macro(
+    #     ..., cfg_sub_asts_info=cfg_sub_asts_info)
 
     cfg_control_flow_graph = TGData(
         edge_index=torch.LongTensor(
