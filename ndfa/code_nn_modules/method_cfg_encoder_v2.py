@@ -29,6 +29,7 @@ from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderPar
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method import \
     SymbolOccurrencesExtractorFromEncodedMethod
+from ndfa.code_nn_modules.ast_encoder import ASTEncoder
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -184,6 +185,14 @@ class MethodCFGEncoderV2(nn.Module):
                 cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                 sequence_type=cfg_single_path_sequence_type,
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+
+        if self.encoder_params.encoder_type == 'trimmed-ast':
+            self.trimmed_ast_encoder = ASTEncoder(
+                encoder_params=self.encoder_params.macro_trimmed_ast_encoder,
+                code_task_vocabs=code_task_vocabs,
+                identifier_embedding_dim=identifier_embedding_dim,
+                is_first_encoder_layer=True,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         # TODO: put in HPs
@@ -352,6 +361,24 @@ class MethodCFGEncoderV2(nn.Module):
                 encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, usage_point=1)
         elif self.encoder_params.encoder_type == 'set-of-nodes':
             pass  # We actually do not need to do anything in this case.
+        elif self.encoder_params.encoder_type == 'trimmed-ast':
+            encoded_macro_trimmed_ast: CodeExpressionEncodingsTensors = self.trimmed_ast_encoder(
+                previous_code_expression_encodings=encoded_code_expressions,
+                sub_ast_input=code_task_input.pdg.cfg_macro_trimmed_ast)
+            # Replace the encodings of the CFG nodes (these that have expressions) to be the new encoding
+            # of the root of their sub-ast.
+            new_cfg_sub_asts_roots_encodings = encoded_macro_trimmed_ast.ast_nodes[
+                code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices]
+            # TODO: do we have to normalize the new cfg nodes encodings here?
+            # if self.use_norm:
+            #     new_cfg_sub_asts_roots_encodings = self.cfg_nodes_norm(
+            #         new_cfg_sub_asts_roots_encodings, usage_point=1)
+            scatter_index = code_task_input.pdg.cfg_nodes_expressions_ast.\
+                pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices.\
+                unsqueeze(-1).expand(new_cfg_sub_asts_roots_encodings.shape)
+            encoded_cfg_nodes = torch.scatter(
+                input=encoded_cfg_nodes, dim=0, index=scatter_index,
+                src=new_cfg_sub_asts_roots_encodings)
         else:
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 

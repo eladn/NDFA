@@ -5,6 +5,7 @@ from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoder
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
 
 
@@ -26,7 +27,8 @@ class MethodCFGEncoderParams(HasDispatchableField):
                 'set-of-nodes': [],
                 'all-nodes-single-unstructured-linear-seq': ['cfg_paths_sequence_encoder'],
                 'all-nodes-single-unstructured-linear-seq-ngrams': ['cfg_paths_sequence_encoder', 'create_sub_grams_from_long_gram', 'cfg_paths_ngrams_min_n', 'cfg_paths_ngrams_max_n'],
-                'all-nodes-single-random-permutation-seq': ['cfg_paths_sequence_encoder']
+                'all-nodes-single-random-permutation-seq': ['cfg_paths_sequence_encoder'],
+                'trimmed-ast': ['macro_trimmed_ast_encoder']
             }))
     encoder_type: str = conf_field(
         default='control-flow-paths-folded-to-nodes',
@@ -35,7 +37,7 @@ class MethodCFGEncoderParams(HasDispatchableField):
                  'set-of-control-flow-paths-ngrams', 'control-flow-paths-ngrams-folded-to-nodes',
                  'set-of-nodes', 'all-nodes-single-unstructured-linear-seq',
                  'all-nodes-single-unstructured-linear-seq-ngrams',  # TODO: support it!
-                 'all-nodes-single-random-permutation-seq'),
+                 'all-nodes-single-random-permutation-seq', 'trimmed-ast'),
         description="Representation type of the method-CFG (specific architecture of the method-CFG-code-encoder).")
 
     cfg_node_expression_encoder: CodeExpressionEncoderParams = conf_field(
@@ -43,6 +45,9 @@ class MethodCFGEncoderParams(HasDispatchableField):
         description="Representation type of the expression of a CFG node "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='cfg_node_expression_encoder')
+
+    macro_trimmed_ast_encoder: Optional[ASTEncoderParams] = conf_field(
+        default_factory=ASTEncoderParams)
 
     cfg_node_control_kinds_embedding_dim: int = conf_field(
         default=64,
