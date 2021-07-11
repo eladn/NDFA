@@ -381,16 +381,16 @@ def get_all_ast_paths(
             for child_node_idx in current_node_children_idxs]
         postorder_traversal_sequence.append(current_node_idx)
 
-        for left_child_place in range(len(inner_upward_paths_from_leaves_to_children)):
+        for left_child_place in range(len(inner_upward_paths_from_leaves_to_children) - 1):
             for right_child_place in range(left_child_place + 1, len(inner_upward_paths_from_leaves_to_children)):
                 ret_from_left_child = inner_upward_paths_from_leaves_to_children[left_child_place]
                 ret_from_right_child = inner_upward_paths_from_leaves_to_children[right_child_place]
                 for left_path in ret_from_left_child:
+                    left_path = left_path + (ASTLeaf2InnerNodePathNode(
+                        ast_node_idx=current_node_children_idxs[left_child_place],
+                        child_place_in_parent=left_child_place),)
                     for right_path in ret_from_right_child:
-                        left_path += (ASTLeaf2InnerNodePathNode(
-                            ast_node_idx=current_node_children_idxs[left_child_place],
-                            child_place_in_parent=left_child_place),)
-                        right_path += (ASTLeaf2InnerNodePathNode(
+                        right_path = right_path + (ASTLeaf2InnerNodePathNode(
                             ast_node_idx=current_node_children_idxs[right_child_place],
                             child_place_in_parent=right_child_place),)
                         leaves_pair_key = (left_path[0].ast_node_idx, right_path[0].ast_node_idx)
