@@ -817,7 +817,7 @@ def preprocess_cfg_macro_trimmed_ast(
         method_pdg: SerMethodPDG, method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
         cfg_sub_asts_info: CFGSubASTsInfo) -> SubASTInputTensors:
     pdg_sub_asts_inner_ast_node_indices = \
-        set(cfg_sub_asts_info.ast_node_idx_to_pdg_node.values()) - \
+        set(cfg_sub_asts_info.ast_node_idx_to_pdg_node.keys()) - \
         set(pdg_node.ast_node_idx for pdg_node in method_pdg.pdg_nodes
             if pdg_node.ast_node_idx is not None and pdg_node.code_sub_token_range_ref is not None)
     ast_nodes_indices_to_ignore = \
@@ -831,6 +831,9 @@ def preprocess_cfg_macro_trimmed_ast(
         code_task_vocabs=code_task_vocabs, method_ast=method_ast,
         nodes_indices_per_sub_ast=[trimmed_ast_node_indices],
         ast_paths_per_sub_ast=[trimmed_ast_paths])
+
+    assert len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
+
     return sub_ast_input_tensors
 
 
