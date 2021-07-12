@@ -214,6 +214,10 @@ class SubASTInputTensors(TensorsDataClass):
         else:
             raise ValueError(f'Unsupported path type `{path_type}`.')
 
+    @classmethod
+    def path_type_has_child_place(cls, path_type: str) -> bool:
+        return path_type in {'leaf_to_leaf', 'leaf_to_root'}
+
     def get_ast_paths_child_place(self, path_type: str) -> Optional[BatchFlattenedSeq]:
         if path_type == 'leaf_to_leaf':
             return self.ast_leaf_to_leaf_paths_child_place
@@ -223,6 +227,10 @@ class SubASTInputTensors(TensorsDataClass):
             return None
         else:
             raise ValueError(f'Unsupported path type `{path_type}`.')
+
+    @classmethod
+    def path_type_has_vertical_direction(cls, path_type: str) -> bool:
+        return path_type == 'leaf_to_leaf'
 
     def get_ast_paths_vertical_direction(self, path_type: str) -> Optional[BatchFlattenedSeq]:
         if path_type == 'leaf_to_leaf':
