@@ -31,7 +31,8 @@ class ASTPathsEncoder(nn.Module):
         assert self.encoder_params.encoder_type in {'paths-folded', 'set-of-paths'}
         self.ast_node_embedding_dim = ast_node_embedding_dim
         assert all(
-            ast_paths_type in {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences', 'siblings_w_parent_sequences'}
+            ast_paths_type in {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences',
+                               'siblings_w_parent_sequences', 'leaves_sequence'}
             for ast_paths_type in self.encoder_params.ast_paths_types)
         self.is_first_encoder_layer = is_first_encoder_layer
 

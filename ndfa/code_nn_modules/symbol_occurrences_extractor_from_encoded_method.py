@@ -91,10 +91,8 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                         ast_nodes_occurrences.verify_matching_shapes()
                         all_symbols_occurrences.append(get_symbols_occurrences_from_ast_nodes_occurrences(
                             method_ast_input=method_ast_input, ast_nodes_occurrences=ast_nodes_occurrences))
-                    elif paths_type in {'siblings_sequences', 'siblings_w_parent_sequences'}:
-                        node_indices = method_ast_input.siblings_sequences_node_indices \
-                            if paths_type == 'siblings_sequences' \
-                            else method_ast_input.siblings_w_parent_sequences_node_indices
+                    elif paths_type in {'siblings_sequences', 'siblings_w_parent_sequences', 'leaves_sequence'}:
+                        node_indices = method_ast_input.get_ast_paths_node_indices(paths_type)
                         ast_nodes_occurrences = ScatteredOccurrences(
                             encodings=ast_paths.nodes_occurrences[node_indices.sequences_mask],
                             indices=node_indices.sequences[node_indices.sequences_mask])
