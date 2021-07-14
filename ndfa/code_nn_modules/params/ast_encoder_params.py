@@ -4,6 +4,7 @@ from typing import Tuple, Optional
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
 
 
@@ -44,3 +45,6 @@ class ASTEncoderParams(HasDispatchableField):
         default=('leaf_to_leaf', 'leaf_to_root'),
         elements_choices=['leaf_to_leaf', 'leaf_to_root', 'siblings_sequences',
                           'siblings_w_parent_sequences', 'leaves_sequence'])
+
+    state_updater_for_nodes_occurrences_from_previous_layer: StateUpdaterParams = conf_field(
+        default_factory=StateUpdaterParams)

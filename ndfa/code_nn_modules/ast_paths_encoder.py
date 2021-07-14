@@ -57,7 +57,9 @@ class ASTPathsEncoder(nn.Module):
         else:
             self.nodes_occurrences_update_gate = nn.ModuleDict({
                 ast_paths_type: StateUpdater(
-                    state_dim=self.ast_node_embedding_dim, update_dim=self.ast_node_embedding_dim,
+                    state_dim=self.ast_node_embedding_dim,
+                    params=self.encoder_params.state_updater_for_nodes_occurrences_from_previous_layer,
+                    update_dim=self.ast_node_embedding_dim,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
                 for ast_paths_type in self.encoder_params.ast_paths_types})
 

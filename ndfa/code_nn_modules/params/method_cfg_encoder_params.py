@@ -5,6 +5,7 @@ from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoder
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
 
@@ -48,6 +49,18 @@ class MethodCFGEncoderParams(HasDispatchableField):
 
     macro_trimmed_ast_encoder: Optional[ASTEncoderParams] = conf_field(
         default_factory=ASTEncoderParams)
+
+    post_macro_encoder_state_updater: StateUpdaterParams = conf_field(
+        default_factory=StateUpdaterParams)
+
+    pre_macro_encoder_state_updater: StateUpdaterParams = conf_field(
+        default_factory=StateUpdaterParams)
+
+    macro_context_to_micro_state_updater: StateUpdaterParams = conf_field(
+        default_factory=StateUpdaterParams)
+
+    symbols_to_expressions_state_updater: StateUpdaterParams = conf_field(
+        default_factory=StateUpdaterParams)
 
     cfg_node_control_kinds_embedding_dim: int = conf_field(
         default=64,

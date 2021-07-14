@@ -20,6 +20,7 @@ from ndfa.nn_utils.modules.state_updater import StateUpdater
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
+from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
 from ndfa.code_nn_modules.code_expression_embedder import CodeExpressionEmbedder
 from ndfa.code_nn_modules.code_expression_combiner import CodeExpressionCombiner
@@ -121,7 +122,9 @@ class MethodCFGEncoderV2(nn.Module):
         elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
             self.macro_context_adder_to_sub_ast = MacroContextAdderToSubAST(
                 ast_node_encoding_dim=self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim,
-                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim)
+                cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
+                state_updater_params=self.encoder_params.macro_context_to_micro_state_updater,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(
                 f'Unsupported expression encoder type '
@@ -134,11 +137,14 @@ class MethodCFGEncoderV2(nn.Module):
             pdg_node_control_kinds_embedding_dim=self.encoder_params.cfg_node_control_kinds_embedding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        self.cfg_node_encoding_mixer_with_expression_encoding = \
-            CFGNodeEncodingMixerWithExpressionEncoding(
-                cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
-                cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+        # TODO: why/when do we need it?
+        # TODO: change `macro_encodings_state_updater` to a dedicated HP duplicate.
+        # self.cfg_node_encoding_mixer_with_expression_encoding = \
+        #     CFGNodeEncodingMixerWithExpressionEncoding(
+        #         cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
+        #         cfg_combined_expression_dim=self.encoder_params.cfg_node_expression_encoder.combined_expression_encoding_dim,
+        #         state_updater_params=self.encoder_params.macro_encodings_state_updater,
+        #         dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         if self.encoder_params.encoder_type in {'pdg-paths-folded-to-nodes', 'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
             self.cfg_paths_encoder = CFGPathEncoder(
@@ -152,6 +158,7 @@ class MethodCFGEncoderV2(nn.Module):
             self.cfg_paths_ngrams_encoder = CFGPathsNGramsEncoder(
                 cfg_node_dim=self.encoder_params.cfg_node_encoding_dim,
                 cfg_paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
+                state_updater_params=self.encoder_params.pre_macro_encoder_state_updater,
                 control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types, is_first=True,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type == 'gnn':
@@ -168,12 +175,14 @@ class MethodCFGEncoderV2(nn.Module):
                 ScatterCFGEncodedNGramsToCFGNodeEncodings(
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
                     cfg_nodes_folding_params=self.encoder_params.cfg_nodes_folding_params,
+                    state_updater_params=self.encoder_params.post_macro_encoder_state_updater,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type in {'control-flow-paths-folded-to-nodes', 'pdg-paths-folded-to-nodes'}:
             self.scatter_cfg_encoded_paths_to_cfg_node_encodings = \
                 ScatterCFGEncodedPathsToCFGNodeEncodings(
                     cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
                     cfg_nodes_folding_params=self.encoder_params.cfg_nodes_folding_params,
+                    state_updater_params=self.encoder_params.post_macro_encoder_state_updater,
                     dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type in {'all-nodes-single-unstructured-linear-seq',
                                                   'all-nodes-single-random-permutation-seq'}:
@@ -194,6 +203,11 @@ class MethodCFGEncoderV2(nn.Module):
                 identifier_embedding_dim=identifier_embedding_dim,
                 is_first_encoder_layer=True,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+            self.post_macro_encoder_state_updater = StateUpdater(
+                state_dim=self.encoder_params.cfg_node_encoding_dim,
+                params=self.encoder_params.post_macro_encoder_state_updater,
+                update_dim=self.encoder_params.cfg_node_encoding_dim,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         # TODO: put in HPs
         expression_encoding_dim = \
@@ -213,6 +227,7 @@ class MethodCFGEncoderV2(nn.Module):
         self.add_symbols_encodings_to_expressions = AddSymbolsEncodingsToExpressions(
             expression_token_encoding_dim=expression_encoding_dim,
             symbol_encoding_dim=self.symbol_embedding_dim,
+            state_updater_params=self.encoder_params.symbols_to_expressions_state_updater,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         self.use_norm = use_norm
@@ -362,23 +377,34 @@ class MethodCFGEncoderV2(nn.Module):
         elif self.encoder_params.encoder_type == 'set-of-nodes':
             pass  # We actually do not need to do anything in this case.
         elif self.encoder_params.encoder_type == 'trimmed-ast':
+            # TODO: mirate this part to a dedicated module.
+            # We take the AST nodes embeddings of the upper part of the tree.
+            # TODO: use fresh AST nodes embeddings here.. It is not even sure we have AST encodings from micro encoder..
+            macro_trimmed_ast_nodes_encodings = encoded_code_expressions.ast_nodes  # for upper part
+            assert macro_trimmed_ast_nodes_encodings is not None
+            # We take the CFG nodes encodings for the roots of the relevant sub-asts!
+            macro_trimmed_ast_nodes_encodings[code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices] = \
+                encoded_cfg_nodes[
+                    code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices]
+            encoded_ast_for_macro_trimmed_ast_encoder = CodeExpressionEncodingsTensors(
+                ast_nodes=macro_trimmed_ast_nodes_encodings)
             encoded_macro_trimmed_ast: CodeExpressionEncodingsTensors = self.trimmed_ast_encoder(
-                previous_code_expression_encodings=encoded_code_expressions,
+                previous_code_expression_encodings=encoded_ast_for_macro_trimmed_ast_encoder,
                 sub_ast_input=code_task_input.pdg.cfg_macro_trimmed_ast)
             # Replace the encodings of the CFG nodes (these that have expressions) to be the new encoding
             # of the root of their sub-ast.
             new_cfg_sub_asts_roots_encodings = encoded_macro_trimmed_ast.ast_nodes[
                 code_task_input.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_value.indices]
-            # TODO: do we have to normalize the new cfg nodes encodings here?
-            # if self.use_norm:
-            #     new_cfg_sub_asts_roots_encodings = self.cfg_nodes_norm(
-            #         new_cfg_sub_asts_roots_encodings, usage_point=1)
             scatter_index = code_task_input.pdg.cfg_nodes_expressions_ast.\
                 pdg_node_idx_to_sub_ast_root_idx_mapping_key.indices.\
                 unsqueeze(-1).expand(new_cfg_sub_asts_roots_encodings.shape)
-            encoded_cfg_nodes = torch.scatter(
+            new_encoded_cfg_nodes = torch.scatter(
                 input=encoded_cfg_nodes, dim=0, index=scatter_index,
                 src=new_cfg_sub_asts_roots_encodings)
+            encoded_cfg_nodes = self.post_macro_encoder_state_updater(
+                previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
+            if self.use_norm:
+                encoded_cfg_nodes = self.cfg_nodes_norm(encoded_cfg_nodes, usage_point=1)
         else:
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
@@ -442,12 +468,14 @@ class MethodCFGEncoderV2(nn.Module):
 
 class MacroContextAdderToSubAST(nn.Module):
     def __init__(self, ast_node_encoding_dim: int, cfg_node_encoding_dim: int,
+                 state_updater_params: StateUpdaterParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MacroContextAdderToSubAST, self).__init__()
         self.ast_node_encoding_dim = ast_node_encoding_dim
         self.cfg_node_encoding_dim = cfg_node_encoding_dim
         self.gate = StateUpdater(
-            state_dim=self.ast_node_encoding_dim, update_dim=self.cfg_node_encoding_dim,
+            state_dim=self.ast_node_encoding_dim, params=state_updater_params,
+            update_dim=self.cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(
@@ -523,12 +551,14 @@ class CFGSinglePathEncoder(nn.Module):
 
 class AddSymbolsEncodingsToExpressions(nn.Module):
     def __init__(self, expression_token_encoding_dim: int, symbol_encoding_dim: int,
+                 state_updater_params: StateUpdaterParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(AddSymbolsEncodingsToExpressions, self).__init__()
         self.expression_token_encoding_dim = expression_token_encoding_dim
         self.symbol_encoding_dim = symbol_encoding_dim
         self.gate = StateUpdater(
-            state_dim=expression_token_encoding_dim, update_dim=symbol_encoding_dim,
+            state_dim=expression_token_encoding_dim, params=state_updater_params,
+            update_dim=symbol_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -563,6 +593,7 @@ class AddSymbolsEncodingsToExpressions(nn.Module):
 
 class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
     def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int,
+                 state_updater_params: StateUpdaterParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGNodeEncodingMixerWithExpressionEncoding, self).__init__()
         self.cfg_node_dim = cfg_node_dim
@@ -570,7 +601,8 @@ class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
         # self.projection_layer = nn.Linear(
         #     in_features=self.cfg_node_dim + self.cfg_combined_expression_dim, out_features=self.cfg_node_dim)
         self.gate = StateUpdater(
-            state_dim=self.cfg_node_dim, update_dim=self.cfg_combined_expression_dim,
+            state_dim=self.cfg_node_dim, params=state_updater_params,
+            update_dim=self.cfg_combined_expression_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -598,6 +630,7 @@ class CFGNodeEncodingMixerWithExpressionEncoding(nn.Module):
 class CFGPathsNGramsEncoder(nn.Module):
     def __init__(self, cfg_node_dim: int,
                  cfg_paths_sequence_encoder_params: SequenceEncoderParams,
+                 state_updater_params: StateUpdaterParams,
                  control_flow_edge_types_vocab: Optional[Vocabulary] = None, is_first: bool = True,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGPathsNGramsEncoder, self).__init__()
@@ -614,7 +647,8 @@ class CFGPathsNGramsEncoder(nn.Module):
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.nodes_occurrences_encodings_gate = StateUpdater(
-            state_dim=self.cfg_node_dim, update_dim=self.cfg_node_dim,
+            state_dim=self.cfg_node_dim, params=state_updater_params,
+            update_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(
@@ -666,6 +700,7 @@ class CFGPathsNGramsEncoder(nn.Module):
 class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
     def __init__(self, cfg_node_encoding_dim: int,
                  cfg_nodes_folding_params: ScatterCombinerParams,
+                 state_updater_params: StateUpdaterParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ScatterCFGEncodedNGramsToCFGNodeEncodings, self).__init__()
         self.cfg_nodes_folding_params = cfg_nodes_folding_params
@@ -673,7 +708,8 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=cfg_node_encoding_dim, combiner_params=cfg_nodes_folding_params)
         self.gate = StateUpdater(
-            state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
+            state_dim=cfg_node_encoding_dim, params=state_updater_params,
+            update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self, encoded_cfg_paths_ngrams: Dict[int, EncodedCFGPaths],
@@ -713,13 +749,15 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
 class ScatterCFGEncodedPathsToCFGNodeEncodings(nn.Module):
     def __init__(self, cfg_node_encoding_dim: int,
                  cfg_nodes_folding_params: ScatterCombinerParams,
+                 state_updater_params: StateUpdaterParams,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ScatterCFGEncodedPathsToCFGNodeEncodings, self).__init__()
         self.cfg_nodes_folding_params = cfg_nodes_folding_params
         self.scatter_combiner_layer = ScatterCombiner(
             encoding_dim=cfg_node_encoding_dim, combiner_params=cfg_nodes_folding_params)
         self.gate = StateUpdater(
-            state_dim=cfg_node_encoding_dim, update_dim=cfg_node_encoding_dim,
+            state_dim=cfg_node_encoding_dim, params=state_updater_params,
+            update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(self, encoded_cfg_node_occurrences_in_paths: torch.Tensor,
