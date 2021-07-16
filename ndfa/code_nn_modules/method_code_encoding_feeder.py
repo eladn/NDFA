@@ -42,6 +42,7 @@ class MethodCodeEncodingsFeeder(nn.Module):
             elif self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'ast':
                 if self.method_code_encoder_params.whole_method_expression_encoder.ast_encoder.encoder_type == \
                         'set-of-paths':
+                    # TODO: for 'leaves_sequence' we might want to have the whole sequence rather than the combined path
                     # TODO: is it ok that the outputs are defragmented?
                     #  (the masks might have `True` after a `False` for the same examples)
                     ast_paths_by_type = encoded_method_code.whole_method_combined_ast_paths_encoding_by_type
