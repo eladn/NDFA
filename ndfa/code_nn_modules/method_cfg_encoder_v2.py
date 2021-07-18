@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import dataclasses
 from typing import NamedTuple, Dict, Optional, Mapping
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
@@ -262,9 +263,22 @@ class MethodCFGEncoderV2(nn.Module):
             if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoded_code_expressions.token_seqs = self.expressions_norm(
                     encoded_code_expressions.token_seqs, usage_point=1)
-            elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
-                encoded_code_expressions.ast_nodes = self.expressions_norm(
-                    encoded_code_expressions.ast_nodes, usage_point=1)
+            elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+                if self.encoder_params.cfg_node_expression_encoder.ast_encoder.encoder_type in {'tree', 'paths-folded'}:
+                    encoded_code_expressions.ast_nodes = self.expressions_norm(
+                        encoded_code_expressions.ast_nodes, usage_point=1)
+                elif self.encoder_params.cfg_node_expression_encoder.ast_encoder.encoder_type == 'set-of-paths':
+                    # TODO: should we norm both `combined` & `nodes_occurrences` here?
+                    encoded_code_expressions.ast_paths_by_type = {
+                        paths_type: dataclasses.replace(
+                            ast_paths,
+                            combined=self.expressions_norm(ast_paths.combined, usage_point=1),
+                            nodes_occurrences=self.expressions_norm(ast_paths.nodes_occurrences, usage_point=1))
+                        for paths_type, ast_paths in encoded_code_expressions.ast_paths_by_type.items()}
+                else:
+                    assert False
+            else:
+                assert False
 
         encoded_code_expressions.combined_expressions = expression_combiner(
             encoded_code_expressions=encoded_code_expressions,
@@ -288,9 +302,11 @@ class MethodCFGEncoderV2(nn.Module):
             if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
                 embedded_code_expressions.token_seqs = self.expressions_norm(
                     embedded_code_expressions.token_seqs, usage_point=0)
-            elif self.encoder_params.cfg_node_expression_encoder.encoder_type in {'ast_paths', 'ast_treelstm'}:
+            elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
                 embedded_code_expressions.ast_nodes = self.expressions_norm(
                     embedded_code_expressions.ast_nodes, usage_point=0)
+            else:
+                assert False
 
         encoded_code_expressions = embedded_code_expressions
         for encoder, combiner in \

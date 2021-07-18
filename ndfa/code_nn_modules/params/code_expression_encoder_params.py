@@ -26,7 +26,7 @@ class CodeExpressionEncoderParams(HasDispatchableField):
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 
-    # relevant only if `encoder_type == 'ast_paths'`
+    # relevant only if `encoder_type == 'ast'`
     ast_encoder: Optional[ASTEncoderParams] = conf_field(
         default_factory=ASTEncoderParams,
         description="Representation type of the AST of the expression "
