@@ -23,7 +23,7 @@ class StateUpdater(nn.Module):
         elif self.params.method == 'gate':
             self.gate = Gate(state_dim=self.state_dim, update_dim=self.update_dim,
                              dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.params.method == 'add':
+        elif self.params.method in {'add', 'pass-through'}:
             assert self.state_dim == self.update_dim
             pass  # we don't need anything in this case ...
         else:
@@ -36,5 +36,7 @@ class StateUpdater(nn.Module):
             return self.gate(previous_state=previous_state, state_update=state_update)
         elif self.params.method == 'add':
             return previous_state + state_update
+        elif self.params.method == 'pass-through':
+            return state_update
         else:
             assert False
