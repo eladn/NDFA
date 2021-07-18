@@ -55,28 +55,26 @@ class CFGPathEncoder(nn.Module):
             cfg_paths_edge_types_embeddings = self.dropout_layer(cfg_paths_edge_types_embeddings)
             assert cfg_paths_nodes_embeddings.shape == cfg_paths_edge_types_embeddings.shape
 
-            # weave nodes & edge-types in each path
-            cfg_paths_interwoven_nodes_and_edge_types_embeddings = weave_tensors(
-                tensors=[cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)
-            assert cfg_paths_interwoven_nodes_and_edge_types_embeddings.shape == \
-                (cfg_paths_nodes_embeddings.size(0), 2 * cfg_paths_nodes_embeddings.size(1), self.cfg_node_dim)
+            paths_effective_lengths = cfg_paths_lengths * 2
+            max_path_effective_len = cfg_paths_nodes_embeddings.size(1) * 2
 
-            # mask-out the paths (remove paddings)
-            paths_with_edges_lengths = cfg_paths_lengths * 2
-            paths_with_edges_mask = seq_lengths_to_mask(
-                seq_lengths=paths_with_edges_lengths, max_seq_len=2 * cfg_paths_nodes_embeddings.size(1))
-            paths_with_edges_mask_expanded = \
-                paths_with_edges_mask.unsqueeze(-1).expand(cfg_paths_interwoven_nodes_and_edge_types_embeddings.size())
-            cfg_paths_interwoven_nodes_and_edge_types_embeddings = \
-                cfg_paths_interwoven_nodes_and_edge_types_embeddings.masked_fill(
-                    ~paths_with_edges_mask_expanded, 0)
+            # weave nodes & edge-types in each path
+            paths_effective_embeddings = weave_tensors(
+                tensors=[cfg_paths_nodes_embeddings, cfg_paths_edge_types_embeddings], dim=1)
+            assert paths_effective_embeddings.shape == \
+                (cfg_paths_nodes_embeddings.size(0), max_path_effective_len, self.cfg_node_dim)
         else:
-            paths_with_edges_lengths = cfg_paths_lengths
-            cfg_paths_interwoven_nodes_and_edge_types_embeddings = cfg_paths_nodes_embeddings
+            paths_effective_embeddings = cfg_paths_nodes_embeddings
+            paths_effective_lengths = cfg_paths_lengths
+            max_path_effective_len = cfg_paths_nodes_embeddings.size(1)
+
+        # masking: replace incorrect tails with paddings
+        paths_mask = seq_lengths_to_mask(seq_lengths=paths_effective_lengths, max_seq_len=max_path_effective_len)
+        paths_mask_expanded = paths_mask.unsqueeze(-1).expand(paths_effective_embeddings.size())
+        paths_effective_embeddings = paths_effective_embeddings.masked_fill(~paths_mask_expanded, 0)
 
         paths_encodings = self.sequence_encoder_layer(
-            sequence_input=cfg_paths_interwoven_nodes_and_edge_types_embeddings,
-            lengths=paths_with_edges_lengths, batch_first=True).sequence
+            sequence_input=paths_effective_embeddings, lengths=paths_effective_lengths, batch_first=True).sequence
 
         if self.add_edge_types:
             # separate nodes encodings and edge types embeddings from paths
