@@ -17,26 +17,26 @@ class StateUpdater(nn.Module):
         self.state_dim = state_dim
         self.update_dim = self.state_dim if update_dim is None else update_dim
         self.params = params
-        if self.params.method == 'cat-project':
+        if self.params.method == StateUpdaterParams.Method.CatProject:
             self.linear_projection_layer = nn.Linear(
                 in_features=self.state_dim + self.update_dim, out_features=self.state_dim, bias=False)
-        elif self.params.method == 'gate':
+        elif self.params.method == StateUpdaterParams.Method.Gate:
             self.gate = Gate(state_dim=self.state_dim, update_dim=self.update_dim,
                              dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.params.method in {'add', 'pass-through'}:
+        elif self.params.method in {StateUpdaterParams.Method.Add, StateUpdaterParams.Method.PassThrough}:
             assert self.state_dim == self.update_dim
             pass  # we don't need anything in this case ...
         else:
             raise ValueError(f'Unsupported update method `{self.params.method}`.')
 
     def forward(self, previous_state: torch.Tensor, state_update: torch.Tensor):
-        if self.params.method == 'cat-project':
+        if self.params.method == StateUpdaterParams.Method.CatProject:
             return self.linear_projection_layer(torch.cat([previous_state, state_update], dim=-1))
-        elif self.params.method == 'gate':
+        elif self.params.method == StateUpdaterParams.Method.Gate:
             return self.gate(previous_state=previous_state, state_update=state_update)
-        elif self.params.method == 'add':
+        elif self.params.method == StateUpdaterParams.Method.Add:
             return previous_state + state_update
-        elif self.params.method == 'pass-through':
+        elif self.params.method == StateUpdaterParams.Method.PassThrough:
             return state_update
         else:
             assert False
