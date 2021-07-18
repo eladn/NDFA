@@ -445,6 +445,7 @@ class MethodCFGEncoderV2(nn.Module):
                 self.symbol_occurrences_extractor(
                     code_expression_encodings=encoded_code_expressions,
                     tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
+                    sub_ast_expressions_input=code_task_input.pdg.cfg_nodes_expressions_ast,
                     method_ast_input=code_task_input.ast)
         encoded_symbols = self.symbols_encoder(
             encoded_identifiers=encoded_identifiers,

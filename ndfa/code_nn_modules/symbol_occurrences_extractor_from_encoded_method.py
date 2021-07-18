@@ -3,7 +3,8 @@ import torch.nn as nn
 from warnings import warn
 from typing import Tuple, NamedTuple, Collection
 
-from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors, MethodASTInputTensors
+from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors, MethodASTInputTensors, \
+    SubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.nn_utils.functions.last_item_in_sequence import get_last_item_in_sequence
@@ -56,6 +57,7 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
             self,
             code_expression_encodings: CodeExpressionEncodingsTensors,
             tokenized_expressions_input: CodeExpressionTokensSequenceInputTensors,
+            sub_ast_expressions_input: SubASTInputTensors,
             method_ast_input: MethodASTInputTensors) -> Tuple[torch.Tensor, torch.LongTensor]:
         if self.code_expression_encoder_params.encoder_type == 'ast':
             if self.code_expression_encoder_params.ast_encoder.encoder_type == 'set-of-paths':
@@ -64,16 +66,16 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                 for paths_type, ast_paths in code_expression_encodings.ast_paths_by_type.items():
                     if paths_type == 'leaf_to_leaf':
                         assert len(ast_paths.nodes_occurrences.shape) == 3
-                        assert method_ast_input.ast_leaf_to_leaf_paths_node_indices.sequences.shape == \
+                        assert sub_ast_expressions_input.ast_leaf_to_leaf_paths_node_indices.sequences.shape == \
                                ast_paths.nodes_occurrences.shape[:2]
                         first_item_encoding = ast_paths.nodes_occurrences[:, 0, :]
-                        first_item_node_index = method_ast_input.ast_leaf_to_leaf_paths_node_indices.sequences[:, 0]
+                        first_item_node_index = sub_ast_expressions_input.ast_leaf_to_leaf_paths_node_indices.sequences[:, 0]
                         last_item_encoding = get_last_item_in_sequence(
                             sequence_encodings=ast_paths.nodes_occurrences,
-                            sequence_lengths=method_ast_input.ast_leaf_to_leaf_paths_node_indices.sequences_lengths)
+                            sequence_lengths=sub_ast_expressions_input.ast_leaf_to_leaf_paths_node_indices.sequences_lengths)
                         last_item_node_index = get_last_item_in_sequence(
-                            sequence_encodings=method_ast_input.ast_leaf_to_leaf_paths_node_indices.sequences.unsqueeze(-1),
-                            sequence_lengths=method_ast_input.ast_leaf_to_leaf_paths_node_indices.sequences_lengths).squeeze(-1)
+                            sequence_encodings=sub_ast_expressions_input.ast_leaf_to_leaf_paths_node_indices.sequences.unsqueeze(-1),
+                            sequence_lengths=sub_ast_expressions_input.ast_leaf_to_leaf_paths_node_indices.sequences_lengths).squeeze(-1)
                         assert first_item_encoding.shape == last_item_encoding.shape
                         assert first_item_node_index.shape == last_item_node_index.shape
                         assert first_item_encoding.shape[:-1] == first_item_node_index.shape
@@ -85,14 +87,14 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                             method_ast_input=method_ast_input, ast_nodes_occurrences=ast_nodes_occurrences))
                     elif paths_type == 'leaf_to_root':
                         leaves_encodings = ast_paths.nodes_occurrences[:, 0, :]
-                        leaves_indices = method_ast_input.ast_leaf_to_root_paths_node_indices.sequences[:, 0]
+                        leaves_indices = sub_ast_expressions_input.ast_leaf_to_root_paths_node_indices.sequences[:, 0]
                         ast_nodes_occurrences = ScatteredOccurrences(
                             encodings=leaves_encodings, indices=leaves_indices)
                         ast_nodes_occurrences.verify_matching_shapes()
                         all_symbols_occurrences.append(get_symbols_occurrences_from_ast_nodes_occurrences(
                             method_ast_input=method_ast_input, ast_nodes_occurrences=ast_nodes_occurrences))
                     elif paths_type in {'siblings_sequences', 'siblings_w_parent_sequences', 'leaves_sequence'}:
-                        node_indices = method_ast_input.get_ast_paths_node_indices(paths_type)
+                        node_indices = sub_ast_expressions_input.get_ast_paths_node_indices(paths_type)
                         ast_nodes_occurrences = ScatteredOccurrences(
                             encodings=ast_paths.nodes_occurrences[node_indices.sequences_mask],
                             indices=node_indices.sequences[node_indices.sequences_mask])

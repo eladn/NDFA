@@ -148,6 +148,7 @@ class MethodCodeEncoder(nn.Module):
                     self.symbol_occurrences_extractor(
                         code_expression_encodings=whole_method_code_encoded,
                         tokenized_expressions_input=code_task_input.method_tokenized_code,
+                        sub_ast_expressions_input=code_task_input.ast,
                         method_ast_input=code_task_input.ast)
             encoded_symbols = self.symbols_encoder(
                 encoded_identifiers=encoded_identifiers,
