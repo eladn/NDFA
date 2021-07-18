@@ -11,7 +11,7 @@ __all__ = ['CFGNodeEncoder']
 
 class CFGNodeEncoder(nn.Module):
     def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int, pdg_node_control_kinds_vocab: Vocabulary,
-                 pdg_node_control_kinds_embedding_dim: int = 8, nr_cfg_nodes_encoding_linear_layers: int = 2,
+                 pdg_node_control_kinds_embedding_dim: int = 8, nr_cfg_nodes_encoding_linear_layers: int = 1,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_cfg_nodes_encoding_linear_layers >= 1
         super(CFGNodeEncoder, self).__init__()
@@ -47,30 +47,11 @@ class CFGNodeEncoder(nn.Module):
         cfg_nodes_encodings = torch.cat(
             [cfg_nodes_expressions_encodings, embedded_cfg_nodes_control_kind], dim=-1)  # (nr_cfg_nodes_in_batch, expr_embed_dim + control_kind_embedding)
 
-        cfg_nodes_encodings = self.dropout_layer(cfg_nodes_encodings)
-        final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_layer(
-            self.cfg_node_projection_linear_layer(cfg_nodes_encodings)))
+        # cfg_nodes_encodings = self.dropout_layer(cfg_nodes_encodings)
+        final_cfg_nodes_encodings_projected = self.dropout_layer(  #self.activation_layer(
+            self.cfg_node_projection_linear_layer(cfg_nodes_encodings))  #)
         for linear_layer in self.cfg_node_additional_linear_layers:
             final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_cfg_nodes_encodings_projected)))
         assert final_cfg_nodes_encodings_projected.size() == (nr_cfg_nodes_in_batch, self.cfg_node_dim)
         return final_cfg_nodes_encodings_projected
-
-        # TODO: remove!
-        # nr_examples = pdg.cfg_nodes_control_kind.nr_examples
-        # max_nr_cfg_nodes = pdg.cfg_nodes_control_kind.max_nr_items
-        # unflattened_nodes_encodings = pdg.cfg_nodes_control_kind.unflatten(final_cfg_nodes_encodings_projected)
-        # packed_input = pack_padded_sequence(
-        #     unflattened_nodes_encodings,
-        #     lengths=pdg.cfg_nodes_control_kind.nr_items_per_example,
-        #     enforce_sorted=False, batch_first=True)
-        # rnn_outputs, (_, _) = self.rnn_layer(packed_input)
-        # rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
-        # assert rnn_outputs.size() == (max_nr_cfg_nodes, nr_examples, self.nr_rnn_directions * self.output_dim)
-        # if self.nr_rnn_directions > 1:
-        #     rnn_outputs = rnn_outputs \
-        #         .view(max_nr_cfg_nodes, nr_examples, self.nr_rnn_directions, self.output_dim).sum(dim=-2)
-        # rnn_outputs = rnn_outputs.permute(1, 0, 2)  # (batch_size, max_nr_cfg_nodes, output_dim)
-        # assert rnn_outputs.size() == (nr_examples, max_nr_cfg_nodes, self.output_dim)
-        #
-        # return rnn_outputs
