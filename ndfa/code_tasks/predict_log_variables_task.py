@@ -15,7 +15,8 @@ from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMe
 from ndfa.misc.code_data_structure_api import *
 from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDataset
-from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor, CollateData
+from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor, CollateData, \
+    batch_flattened_indices_tensor_field
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedMethodCode
 from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
@@ -169,7 +170,12 @@ class LogVarTargetSymbolsIndices(TensorsDataClass):
 class PredictLogVarsTaggedExample(TensorsDataClass):
     example_hash: str
     code_task_input: MethodCodeInputTensors
-    target_symbols_idxs_used_in_logging_call: Optional[LogVarTargetSymbolsIndices]
+    logging_call_token_idx_in_flat_whole_method_tokenized: torch.LongTensor
+    logging_call_cfg_node_idx: BatchedFlattenedIndicesTensor = \
+        batch_flattened_indices_tensor_field(tgt_indexing_group='cfg_nodes')
+    logging_call_ast_node_idx: BatchedFlattenedIndicesTensor = \
+        batch_flattened_indices_tensor_field(tgt_indexing_group='ast_nodes')
+    target_symbols_idxs_used_in_logging_call: Optional[LogVarTargetSymbolsIndices] = None
 
     def __iter__(self):  # To support unpacking into (x_batch, y_batch)
         yield self.code_task_input
@@ -322,9 +328,14 @@ def preprocess_logging_call_example(
         pdg_nodes_to_mask={raw_example.logging_call.pdg_node_idx: '<LOG_PRED>'})
 
     # Note: The ast-node of the logging-call is the method-call itself, while the ast-node of the pdg-node of the
-    #       logging-call is the stmt-expr (which is the parent of the method-call)
-    logging_call_pdg_node_ast_node_idx = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx].ast_node_idx
+    #       logging-call is the stmt-expr. The ast-node of the pdg-node is an ancestor of the method-call, not
+    #       necessarily the direct parent. We take only examples in which it is the direct parent.
+    logging_call_pdg_node = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx]
+    logging_call_pdg_node_ast_node_idx = logging_call_pdg_node.ast_node_idx
     logging_call_pdg_node_ast_node = raw_example.method_ast.nodes[logging_call_pdg_node_ast_node_idx]
+    assert logging_call_pdg_node.code_sub_token_range_ref is not None
+    assert logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx == \
+           logging_call_pdg_node_ast_node.code_sub_token_range_ref.begin_token_idx
 
     limitations = [
         PreprocessLimitation(
@@ -364,6 +375,15 @@ def preprocess_logging_call_example(
     #       f'\t#l2l: {nr_ast_l2l_paths} -- '
     #       f'\t#leaves: {nr_ast_leaves}')
 
+    # Shallow sanity-check for logging-call masking (note we don't really verify here the whole expression/sub-ast is
+    # masked, but it is checked by `preprocess_code_task_example()`).
+    assert code_task_vocabs.tokens_kinds.idx2word[code_task_input.method_tokenized_code.token_type.sequences[0][
+        logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx].item()] == '<LOG_PRED>'
+    assert code_task_vocabs.pdg_node_control_kinds.idx2word[
+               code_task_input.pdg.cfg_nodes_control_kind.tensor[logging_call_pdg_node.idx].item()] == '<LOG_PRED>'
+    assert code_task_vocabs.ast_node_major_types.idx2word[
+               code_task_input.ast.ast_node_types.tensor[logging_call_pdg_node_ast_node_idx].item()] == '<LOG_PRED>'
+
     symbols_idxs_used_in_logging_call = get_symbol_idxs_used_in_logging_call(example=raw_example)
     nr_target_symbols = len(symbols_idxs_used_in_logging_call)
 
@@ -399,5 +419,13 @@ def preprocess_logging_call_example(
 
     return PredictLogVarsTaggedExample(
         example_hash=raw_example.logging_call.hash,
-        code_task_input=code_task_input,  # TODO: put logging_call_cfg_node_idx=torch.tensor(logging_call.pdg_node_idx)),
+        code_task_input=code_task_input,
+        logging_call_cfg_node_idx=BatchedFlattenedIndicesTensor(
+            indices=torch.LongTensor(raw_example.logging_call.pdg_node_idx),
+        ),  # tgt_indexing_group='cfg_nodes'),
+        logging_call_ast_node_idx=BatchedFlattenedIndicesTensor(
+            indices=torch.LongTensor(logging_call_pdg_node_ast_node_idx),
+        ),  # tgt_indexing_group='ast_nodes'),
+        logging_call_token_idx_in_flat_whole_method_tokenized=torch.LongTensor(
+            logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)
