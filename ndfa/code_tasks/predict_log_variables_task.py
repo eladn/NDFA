@@ -416,11 +416,11 @@ def preprocess_logging_call_example(
         example_hash=raw_example.logging_call.hash,
         code_task_input=code_task_input,
         logging_call_cfg_node_idx=BatchedFlattenedIndicesTensor(
-            indices=torch.LongTensor(raw_example.logging_call.pdg_node_idx),
+            indices=torch.LongTensor([raw_example.logging_call.pdg_node_idx]),
         ),  # tgt_indexing_group='cfg_nodes'),
         logging_call_ast_node_idx=BatchedFlattenedIndicesTensor(
-            indices=torch.LongTensor(logging_call_pdg_node_ast_node_idx),
+            indices=torch.LongTensor([logging_call_pdg_node_ast_node_idx]),
         ),  # tgt_indexing_group='ast_nodes'),
         logging_call_token_idx_in_flat_whole_method_tokenized=torch.LongTensor(
-            logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx),
+            [logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx]),
         target_symbols_idxs_used_in_logging_call=target_symbols_idxs_used_in_logging_call)
