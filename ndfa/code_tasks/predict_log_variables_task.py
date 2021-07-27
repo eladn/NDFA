@@ -333,9 +333,6 @@ def preprocess_logging_call_example(
     logging_call_pdg_node = raw_example.method_pdg.pdg_nodes[raw_example.logging_call.pdg_node_idx]
     logging_call_pdg_node_ast_node_idx = logging_call_pdg_node.ast_node_idx
     logging_call_pdg_node_ast_node = raw_example.method_ast.nodes[logging_call_pdg_node_ast_node_idx]
-    assert logging_call_pdg_node.code_sub_token_range_ref is not None
-    assert logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx == \
-           logging_call_pdg_node_ast_node.code_sub_token_range_ref.begin_token_idx
 
     limitations = [
         PreprocessLimitation(
@@ -345,7 +342,10 @@ def preprocess_logging_call_example(
                 (logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT) and
                 (raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type ==
                  SerASTNodeType.METHOD_CALL_EXPR) and
-                (len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1)),
+                (len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1) and
+                logging_call_pdg_node.code_sub_token_range_ref is not None and
+                logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx ==
+                logging_call_pdg_node_ast_node.code_sub_token_range_ref.begin_token_idx),
             min_val=1)]
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
