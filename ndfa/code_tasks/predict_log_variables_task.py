@@ -391,12 +391,7 @@ def preprocess_logging_call_example(
         object_name='#target_symbols', value=nr_target_symbols,
         min_val=model_hps.target_symbols_decoder.min_nr_target_symbols,
         max_val=model_hps.target_symbols_decoder.max_nr_target_symbols)]
-    exceeding_limitations = [limitation for limitation in limitations if limitation.exceeds]
-    for exceeding_limitation in exceeding_limitations:
-        if exceeding_limitation.warn:
-            warn(str(exceeding_limitation))
-    if len(exceeding_limitations) > 0:
-        raise PreprocessLimitExceedError(exceeding_limitations=exceeding_limitations)
+    PreprocessLimitation.enforce_limitations(limitations=limitations)
 
     target_symbols_idxs_used_in_logging_call = None
     if add_tag:
