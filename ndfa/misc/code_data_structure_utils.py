@@ -4,13 +4,14 @@ import itertools
 import dataclasses
 import numpy as np
 from enum import Enum
+from warnings import warn
 from functools import reduce
 from collections import defaultdict
 from typing_extensions import Protocol
 from typing import List, Dict, Tuple, Set, Optional, Any, Union, Iterable, Generic, TypeVar
 
 from ndfa.misc.code_data_structure_api import SerASTNodeType, SerASTNode, SerMethodAST, SerMethod, SerPDGNode, \
-    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType, SerToken
+    SerMethodPDG, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerControlScopeType, SerToken, SerSymbol
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 
 
@@ -18,7 +19,8 @@ __all__ = [
     'get_pdg_node_tokenized_expression', 'get_pdg_node_expression_str', 'get_ast_node_tokenized_expression',
     'get_ast_node_expression_str', 'find_all_simple_names_in_sub_ast', 'get_symbol_idxs_used_in_logging_call',
     'traverse_pdg', 'get_all_pdg_simple_paths', 'get_all_ast_paths', 'ASTPaths', 'ASTLeaf2InnerNodePathNode',
-    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'traverse_ast', 'ast_node_to_str', 'print_ast']
+    'ASTLeaf2LeafPathNode', 'ASTNodeIdxType', 'traverse_ast', 'ast_node_to_str', 'print_ast',
+    'find_symbol_occurrence_ast_node_idx']
 
 
 def get_pdg_node_tokenized_expression(method: SerMethod, pdg_node: SerPDGNode) -> List[SerToken]:
@@ -490,3 +492,18 @@ def print_ast(method_ast: SerMethodAST,
             subtrees_to_ignore=subtrees_to_ignore):
         if pop == 'pre':
             print('  ' * depth + ast_node_to_str(method=method, ast_node=ast_node))
+
+
+def find_symbol_occurrence_ast_node_idx(
+        method_ast: SerMethodAST, root_sub_ast_node_idx: int,
+        symbol: SerSymbol, occurrence_type: str = '*') -> Tuple[int, ...]:
+    assert occurrence_type in {'*', 'def', 'use'}
+    if occurrence_type != '*':
+        warn(f"def/use separation is not implemented.")
+        occurrence_type = '*'
+    # TODO: impl correctly the identifier equivalence is not enough (could be a type name)..
+    return tuple(
+        ast_node.idx
+        for ast_node, _, _ in traverse_ast(method_ast=method_ast, root_sub_ast_node_idx=root_sub_ast_node_idx)
+        if len(ast_node.children_idxs) == 0 and ast_node.type == SerASTNodeType.SIMPLE_NAME and
+        ast_node.identifier == symbol.identifier_idx)

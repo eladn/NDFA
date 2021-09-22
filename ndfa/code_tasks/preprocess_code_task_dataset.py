@@ -16,11 +16,12 @@ from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
     Union, Sequence, TypeVar, NamedTuple, Tuple, Generic
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
+from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethodAST, SerToken, SerTokenKind, \
     SerASTNodeType, SerPDGNodeControlKind, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerASTNode
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths, \
-    get_all_ast_paths, ASTPaths, traverse_ast
+    get_all_ast_paths, ASTPaths, traverse_ast, find_symbol_occurrence_ast_node_idx
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, SymbolsInputTensors, PDGInputTensors, \
@@ -994,6 +995,51 @@ def extract_sub_asts_info_for_cfg_expressions(
         ast_paths_per_pdg_node=ast_paths_per_pdg_node,
         pdg_node_to_ast_node_indices=pdg_node_to_ast_node_indices,
         ast_node_idx_to_pdg_node=ast_node_idx_to_pdg_node)
+
+
+def preprocess_allamanis_graph(
+        method_ast: SerMethodAST,
+        method_pdg: SerMethodPDG,
+        pdg_control_flow_edge_types: Vocabulary,
+        nodes_indices: Set[int]):
+    ast_edges = torch.LongTensor(
+        [[ast_node_idx, child_node_idx]
+         for ast_node_idx in nodes_indices
+         for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
+         if child_node_idx in nodes_indices])
+    ast_edges_types = torch.LongTensor([
+        pdg_control_flow_edge_types.get_word_idx('AST')
+        for ast_node_idx in nodes_indices
+        for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
+        if child_node_idx in nodes_indices])
+    control_flow_edges = torch.LongTensor(
+        [[pdg_node.ast_node_idx, method_pdg.pdg_nodes[cf_edge.pgd_node_idx].ast_node_idx]
+         for pdg_node in method_pdg.pdg_nodes
+         if pdg_node.ast_node_idx is not None
+         for cf_edge in pdg_node.control_flow_out_edges
+         if method_pdg.pdg_nodes[cf_edge.pgd_node_idx].ast_node_idx is not None])
+    # control_flow_edges_types = torch.LongTensor([
+    #     pdg_control_flow_edge_types.get_word_idx(cf_edge.type.value)
+    #     for
+    # ])
+    data_dependency_edges = torch.LongTensor(
+        [[def_ast_node_idx, use_ast_node_idx]
+         for pdg_node in method_pdg.pdg_nodes
+         if pdg_node.ast_node_idx is not None
+         for dd_edge in pdg_node.data_dependency_out_edges
+         if method_pdg.pdg_nodes[dd_edge.pgd_node_idx].ast_node_idx is not None
+         for symbol in dd_edge.symbols
+         for def_ast_node_idx in find_symbol_occurrence_ast_node_idx(
+            method_ast=method_ast, root_sub_ast_node_idx=pdg_node.ast_node_idx, symbol=symbol)
+         for use_ast_node_idx in find_symbol_occurrence_ast_node_idx(
+            method_ast=method_ast, root_sub_ast_node_idx=method_pdg.pdg_nodes[dd_edge.pgd_node_idx].ast_node_idx,
+            symbol=symbol)])
+
+    dgl_ast_edges = ast_edges.t().chunk(chunks=2, dim=0)
+    dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
+    dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
+
+    raise NotImplementedError  # TODO: implement!
 
 
 def preprocess_sub_asts(
