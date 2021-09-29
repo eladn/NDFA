@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-import dataclasses
-from typing import NamedTuple, Dict, Optional, Mapping
+from typing import NamedTuple, Dict, Optional, Mapping, Literal
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
@@ -48,7 +47,9 @@ class MethodCFGEncoderV2(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, identifier_embedding_dim: int,
                  symbol_embedding_dim: int, encoder_params: MethodCFGEncoderParams,
                  symbols_encoder_params: SymbolsEncoderParams,
-                 use_norm: bool = True, affine_norm: bool = False, norm_type: str = 'layer',  # TODO: put in HPs
+                 use_norm: bool = True,  # TODO: put in HPs
+                 affine_norm: bool = False,  # TODO: put in HPs
+                 norm_type: Literal['layer', 'batch'] = 'layer',  # TODO: put in HPs
                  share_norm_between_usage_points: bool = True,  # TODO: put in HPs
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCFGEncoderV2, self).__init__()
