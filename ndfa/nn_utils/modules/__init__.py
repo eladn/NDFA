@@ -5,6 +5,7 @@
 # from . import gate
 # from . import module_repeater
 # from . import norm_wrapper
+# from . import paths_encoder
 # from . import rnn_encoder
 # from . import scatter_attention
 # from . import scatter_combiner
@@ -23,6 +24,7 @@
 #     gate.__all__ + \
 #     module_repeater.__all__ + \
 #     norm_wrapper.__all__ + \
+#     paths_encoder.__all__ + \
 #     rnn_encoder.__all__ + \
 #     scatter_attention.__all__ + \
 #     scatter_combiner.__all__ + \
