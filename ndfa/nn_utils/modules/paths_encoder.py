@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import dataclasses
-from enum import Enum
 from typing import Optional
 
+from ndfa.nn_utils.modules.params.paths_encoder_params import EdgeTypeInsertionMode
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
@@ -18,12 +18,6 @@ __all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
 class EncodedPaths:
     nodes_occurrences: torch.Tensor
     edges_occurrences: Optional[torch.Tensor] = None
-
-
-class EdgeTypeInsertionMode(Enum):
-    Without = 'Without'
-    AsStandAlongToken = 'AsStandAlongToken'
-    MixWithNodeEmbedding = 'MixWithNodeEmbedding'
 
 
 class PathsEncoder(nn.Module):
