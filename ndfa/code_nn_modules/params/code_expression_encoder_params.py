@@ -48,3 +48,9 @@ class CodeExpressionEncoderParams(HasDispatchableField):
     tokenized_expression_combiner: Optional[SequenceCombinerParams] = conf_field(
         default_factory=lambda: SequenceCombinerParams(
             method='ends', nr_attn_heads=8, nr_dim_reduction_layers=0))
+
+    @property
+    def expression_encoding_dim(self) -> int:
+        return self.tokens_seq_encoder.token_encoding_dim \
+            if self.encoder_type == 'FlatTokensSeq' else \
+            self.ast_encoder.ast_node_embedding_dim
