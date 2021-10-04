@@ -6,5 +6,5 @@ __all__ = ['EdgeTypeInsertionMode']
 
 class EdgeTypeInsertionMode(Enum):
     Without = 'Without'
-    AsStandAlongToken = 'AsStandAlongToken'
+    AsStandAloneToken = 'AsStandAloneToken'
     MixWithNodeEmbedding = 'MixWithNodeEmbedding'
