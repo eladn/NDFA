@@ -15,6 +15,8 @@ from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 from ndfa.nn_utils.modules.scatter_encoded_paths_to_node_encodings import ScatterEncodedPathsToNodeEncodings
+from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
+from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
 __all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
@@ -25,6 +27,7 @@ class EncodedPaths:
     nodes_occurrences: torch.Tensor
     edges_occurrences: Optional[torch.Tensor] = None
     folded_nodes_encodings: Optional[torch.Tensor] = None
+    combined_paths: Optional[torch.Tensor] = None
 
 
 class PathsEncoder(nn.Module):
@@ -40,6 +43,8 @@ class PathsEncoder(nn.Module):
             fold_occurrences_back_to_nodes: bool = False,
             folding_params: Optional[ScatterCombinerParams] = None,  # supply if should fold
             folded_node_encodings_updater_params: Optional[StateUpdaterParams] = None,  # supply if should fold
+            combine_paths: bool = False,
+            paths_combining_params: Optional[SequenceCombinerParams] = None,  # supply if should combine paths
             norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(PathsEncoder, self).__init__()
@@ -47,6 +52,7 @@ class PathsEncoder(nn.Module):
         self.edge_type_insertion_mode = edge_type_insertion_mode
         self.is_first_layer = is_first_layer
         self.fold_occurrences_back_to_nodes = fold_occurrences_back_to_nodes
+        self.combine_paths = combine_paths
         self.edge_type_dim = None
         if self.is_first_layer:
             if self.edge_type_insertion_mode in \
@@ -87,6 +93,11 @@ class PathsEncoder(nn.Module):
                 node_encoding_dim=self.node_encoding_dim,
                 folding_params=folding_params,
                 state_updater_params=folded_node_encodings_updater_params,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
+        if self.combine_paths:
+            self.paths_combiner = SequenceCombiner(
+                encoding_dim=self.node_encoding_dim,
+                combiner_params=paths_combining_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.norm = None if norm_params is None else NormWrapper(
             nr_features=self.node_encoding_dim, params=norm_params)
@@ -186,7 +197,16 @@ class PathsEncoder(nn.Module):
                 previous_nodes_encodings=all_nodes_encodings,
                 nr_nodes=all_nodes_encodings.size(0))
 
+        combined_paths = None
+        if self.combine_paths:
+            combined_paths = self.paths_combiner(
+                sequence_encodings=nodes_occurrences_encodings,
+                sequence_mask=paths_mask,
+                sequence_lengths=paths_lengths,
+                batch_first=True)
+
         return EncodedPaths(
             nodes_occurrences=nodes_occurrences_encodings,
             edges_occurrences=edges_occurrences_encodings,
-            folded_nodes_encodings=new_folded_nodes_encodings)
+            folded_nodes_encodings=new_folded_nodes_encodings,
+            combined_paths=combined_paths)
