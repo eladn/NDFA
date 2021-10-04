@@ -11,6 +11,8 @@ from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.functions.weave_tensors import weave_tensors, unweave_tensor
 from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.nn_utils.modules.state_updater import StateUpdater
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
 __all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
@@ -32,6 +34,7 @@ class PathsEncoder(nn.Module):
             edge_type_dim: Optional[int] = None,
             is_first_layer: bool = True,
             node_occurrences_state_updater_params: Optional[StateUpdaterParams] = None,
+            norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(PathsEncoder, self).__init__()
         self.node_dim = node_dim
@@ -70,6 +73,8 @@ class PathsEncoder(nn.Module):
             encoder_params=paths_sequence_encoder_params,
             input_dim=self.node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.norm = None if norm_params is None else NormWrapper(
+            nr_features=self.node_dim, params=norm_params)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(
@@ -137,6 +142,9 @@ class PathsEncoder(nn.Module):
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=paths_effective_embeddings, lengths=paths_effective_lengths, batch_first=True).sequence
+
+        if self.norm:
+            paths_encodings = self.norm(paths_encodings)
 
         if self.edge_type_insertion_mode == EdgeTypeInsertionMode.AsStandAloneToken:
             # separate nodes encodings and edge types embeddings from paths
