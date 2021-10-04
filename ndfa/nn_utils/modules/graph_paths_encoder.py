@@ -3,7 +3,7 @@ import torch.nn as nn
 import dataclasses
 from typing import Optional
 
-from ndfa.nn_utils.modules.params.paths_encoder_params import EdgeTypeInsertionMode
+from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
 from ndfa.nn_utils.misc.misc import seq_lengths_to_mask
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
@@ -13,6 +13,8 @@ from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.nn_utils.modules.state_updater import StateUpdater
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
+from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
+from ndfa.nn_utils.modules.scatter_encoded_paths_to_node_encodings import ScatterEncodedPathsToNodeEncodings
 
 
 __all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
@@ -22,6 +24,7 @@ __all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
 class EncodedPaths:
     nodes_occurrences: torch.Tensor
     edges_occurrences: Optional[torch.Tensor] = None
+    folded_nodes_encodings: Optional[torch.Tensor] = None
 
 
 class PathsEncoder(nn.Module):
@@ -33,20 +36,24 @@ class PathsEncoder(nn.Module):
             edge_type_insertion_mode: EdgeTypeInsertionMode = EdgeTypeInsertionMode.AsStandAloneToken,
             edge_type_dim: Optional[int] = None,
             is_first_layer: bool = True,
-            node_occurrences_state_updater_params: Optional[StateUpdaterParams] = None,
+            node_occurrences_state_updater_params: Optional[StateUpdaterParams] = None,  # supply if not first layer
+            fold_occurrences_back_to_nodes: bool = False,
+            folding_params: Optional[ScatterCombinerParams] = None,  # supply if should fold
+            folded_node_encodings_updater_params: Optional[StateUpdaterParams] = None,  # supply if should fold
             norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(PathsEncoder, self).__init__()
-        self.node_dim = node_dim
+        self.node_encoding_dim = node_dim
         self.edge_type_insertion_mode = edge_type_insertion_mode
         self.is_first_layer = is_first_layer
+        self.fold_occurrences_back_to_nodes = fold_occurrences_back_to_nodes
         self.edge_type_dim = None
         if self.is_first_layer:
             if self.edge_type_insertion_mode in \
                     {EdgeTypeInsertionMode.AsStandAloneToken, EdgeTypeInsertionMode.MixWithNodeEmbedding}:
-                self.edge_type_dim = self.node_dim if edge_type_dim is None else edge_type_dim
+                self.edge_type_dim = self.node_encoding_dim if edge_type_dim is None else edge_type_dim
                 if self.edge_type_insertion_mode == EdgeTypeInsertionMode.AsStandAloneToken and \
-                        self.edge_type_dim != self.node_dim:
+                        self.edge_type_dim != self.node_encoding_dim:
                     raise ValueError(f'For `EdgeTypeInsertionMode.AsStandAloneToken` mode the edge type dim should be '
                                      f'not set or set as equal to the node dim.')
                 assert edge_types_vocab is not None
@@ -57,24 +64,32 @@ class PathsEncoder(nn.Module):
                     padding_idx=self.edge_types_vocab.get_word_idx('<PAD>'))
                 if self.edge_type_insertion_mode == EdgeTypeInsertionMode.MixWithNodeEmbedding:
                     self.node_with_edge_projection = nn.Linear(
-                        in_features=self.node_dim + self.edge_type_dim,
-                        out_features=self.node_dim,
+                        in_features=self.node_encoding_dim + self.edge_type_dim,
+                        out_features=self.node_encoding_dim,
                         bias=False)
             else:
                 assert self.edge_type_insertion_mode == EdgeTypeInsertionMode.Without
         else:
             assert node_occurrences_state_updater_params is not None
             self.nodes_occurrences_encodings_gate = StateUpdater(
-                state_dim=self.node_dim,
+                state_dim=self.node_encoding_dim,
                 params=node_occurrences_state_updater_params,
-                update_dim=self.node_dim,
+                update_dim=self.node_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.sequence_encoder_layer = SequenceEncoder(
             encoder_params=paths_sequence_encoder_params,
-            input_dim=self.node_dim,
+            input_dim=self.node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        if self.fold_occurrences_back_to_nodes:
+            assert folding_params is not None
+            assert folded_node_encodings_updater_params is not None
+            self.node_occurrences_folder = ScatterEncodedPathsToNodeEncodings(
+                node_encoding_dim=self.node_encoding_dim,
+                folding_params=folding_params,
+                state_updater_params=folded_node_encodings_updater_params,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.norm = None if norm_params is None else NormWrapper(
-            nr_features=self.node_dim, params=norm_params)
+            nr_features=self.node_encoding_dim, params=norm_params)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(
@@ -83,9 +98,10 @@ class PathsEncoder(nn.Module):
             paths_nodes_indices: torch.LongTensor,
             paths_edge_types: torch.LongTensor,
             paths_lengths: torch.LongTensor,
+            paths_mask: Optional[torch.BoolTensor] = None,
             previous_encoding_layer_output: Optional[EncodedPaths] = None) -> EncodedPaths:
         assert all_nodes_encodings.ndim == 2
-        assert all_nodes_encodings.size(1) == self.node_dim
+        assert all_nodes_encodings.size(1) == self.node_encoding_dim
         assert paths_nodes_indices.ndim == 2
         assert paths_edge_types.shape == paths_edge_types.shape
         assert (previous_encoding_layer_output is not None) ^ self.is_first_layer
@@ -114,7 +130,7 @@ class PathsEncoder(nn.Module):
             paths_effective_embeddings = weave_tensors(
                 tensors=[paths_nodes_embeddings, paths_edge_types_embeddings], dim=1)
             assert paths_effective_embeddings.shape == \
-                (paths_nodes_embeddings.size(0), max_path_effective_len, self.node_dim)
+                (paths_nodes_embeddings.size(0), max_path_effective_len, self.node_encoding_dim)
         elif self.edge_type_insertion_mode == EdgeTypeInsertionMode.MixWithNodeEmbedding:
             if self.is_first_layer:
                 paths_edge_types_embeddings = self.edge_types_embeddings(paths_edge_types)
@@ -136,13 +152,12 @@ class PathsEncoder(nn.Module):
             assert False
 
         # masking: replace incorrect tails with paddings
-        paths_mask = seq_lengths_to_mask(seq_lengths=paths_effective_lengths, max_seq_len=max_path_effective_len)
-        paths_mask_expanded = paths_mask.unsqueeze(-1).expand(paths_effective_embeddings.size())
-        paths_effective_embeddings = paths_effective_embeddings.masked_fill(~paths_mask_expanded, 0)
+        eff_paths_mask = seq_lengths_to_mask(seq_lengths=paths_effective_lengths, max_seq_len=max_path_effective_len)
+        eff_paths_mask_expanded = eff_paths_mask.unsqueeze(-1).expand(paths_effective_embeddings.size())
+        paths_effective_embeddings = paths_effective_embeddings.masked_fill(~eff_paths_mask_expanded, 0)
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=paths_effective_embeddings, lengths=paths_effective_lengths, batch_first=True).sequence
-
         if self.norm:
             paths_encodings = self.norm(paths_encodings)
 
@@ -159,6 +174,19 @@ class PathsEncoder(nn.Module):
         else:
             assert False
 
+        new_folded_nodes_encodings = None
+        if self.fold_occurrences_back_to_nodes:
+            if paths_mask is None:
+                paths_mask = seq_lengths_to_mask(
+                    seq_lengths=paths_lengths, max_seq_len=paths_nodes_embeddings.size(1))
+            new_folded_nodes_encodings = self.node_occurrences_folder(
+                encoded_paths=nodes_occurrences_encodings,
+                paths_mask=paths_mask,
+                paths_node_indices=paths_nodes_indices,
+                previous_nodes_encodings=all_nodes_encodings,
+                nr_nodes=all_nodes_encodings.size(0))
+
         return EncodedPaths(
             nodes_occurrences=nodes_occurrences_encodings,
-            edges_occurrences=edges_occurrences_encodings)
+            edges_occurrences=edges_occurrences_encodings,
+            folded_nodes_encodings=new_folded_nodes_encodings)
