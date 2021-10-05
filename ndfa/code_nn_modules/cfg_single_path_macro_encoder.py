@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import CFGSinglePathMacroEncoderParams
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
 __all__ = ['CFGSinglePathMacroEncoder']
@@ -14,6 +17,7 @@ class CFGSinglePathMacroEncoder(nn.Module):
             self,
             cfg_node_dim: int,
             params: CFGSinglePathMacroEncoderParams,
+            norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGSinglePathMacroEncoder, self).__init__()
         self.cfg_node_dim = cfg_node_dim
@@ -22,6 +26,8 @@ class CFGSinglePathMacroEncoder(nn.Module):
             encoder_params=params.path_sequence_encoder,
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.norm = None if norm_params is None else NormWrapper(
+            nr_features=self.ast_node_embedding_dim, params=norm_params)
 
     def forward(
             self,
@@ -58,6 +64,9 @@ class CFGSinglePathMacroEncoder(nn.Module):
                 index=cfg_nodes_permuted_indices_flattened.unsqueeze(-1).expand(path_encodings_flattened.shape),
                 src=path_encodings_flattened)
             reflattened_nodes_encodings = new_cfg_nodes_encodings[:-1]
+
+        if self.norm:
+            reflattened_nodes_encodings = self.norm(reflattened_nodes_encodings)
 
         assert reflattened_nodes_encodings.shape == cfg_nodes_encodings.shape
         return reflattened_nodes_encodings

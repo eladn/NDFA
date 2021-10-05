@@ -59,6 +59,7 @@ class MethodCFGMacroEncoder(nn.Module):
             self.cfg_single_path_encoder = CFGSinglePathMacroEncoder(
                 cfg_node_dim=self.params.cfg_node_encoding_dim,
                 params=self.params.single_path_encoder,
+                norm_params=norm_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGGNN:
             # TODO: use `self.params.post_macro_cfg_nodes_encodings_state_updater`
@@ -111,10 +112,10 @@ class MethodCFGMacroEncoder(nn.Module):
             pass  # We actually do not need to do anything in this case.
             raise NotImplementedError  # what we want to do in this case?
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.FlatCFGNodesAppearanceSeq:
+            # note: norm inside `CFGSinglePathMacroEncoder`
             encoded_cfg_nodes = self.cfg_single_path_encoder(
                 pdg_input=code_task_input.pdg,
                 cfg_nodes_encodings=encoded_cfg_nodes)
-            # TODO: norm here or in `CFGSinglePathMacroEncoder`!
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGGNN:
             # note: norm inside `CFGGNNEncoder`
             encoded_cfg_nodes = self.cfg_gnn_encoder(
