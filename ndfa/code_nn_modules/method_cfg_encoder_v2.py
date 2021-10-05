@@ -4,11 +4,11 @@ from typing import NamedTuple, Dict, Optional, Mapping
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
-from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, MethodASTInputTensors, \
-    CFGPathsNGramsInputTensors, PDGExpressionsSubASTInputTensors, SymbolsInputTensors
+from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInputTensors, \
+    CFGPathsNGramsInputTensors, PDGExpressionsSubASTInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
-from ndfa.nn_utils.modules.paths_encoder import PathsEncoder, EncodedPaths, EdgeTypeInsertionMode
+from ndfa.nn_utils.modules.graph_paths_encoder import PathsEncoder, EncodedPaths, EdgeTypeInsertionMode
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.seq_context_adder import SeqContextAdder
@@ -152,7 +152,7 @@ class MethodCFGEncoderV2(nn.Module):
                 node_dim=self.encoder_params.cfg_node_encoding_dim,
                 paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                 edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
-                edge_type_insertion_mode=EdgeTypeInsertionMode.AsStandAlongToken
+                edge_type_insertion_mode=EdgeTypeInsertionMode.AsStandAloneToken
                 if self.encoder_params.add_cfg_edge_types else EdgeTypeInsertionMode.Without,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.encoder_params.encoder_type in \
@@ -326,10 +326,10 @@ class MethodCFGEncoderV2(nn.Module):
                 if self.encoder_params.encoder_type == 'pdg-paths-folded-to-nodes' else \
                 code_task_input.pdg.cfg_control_flow_paths
             encoded_cfg_paths = self.cfg_paths_encoder(
-                cfg_nodes_encodings=encoded_cfg_nodes,
-                cfg_paths_nodes_indices=cfg_paths_input.nodes_indices.sequences,
-                cfg_paths_edge_types=cfg_paths_input.edges_types.sequences,
-                cfg_paths_lengths=cfg_paths_input.nodes_indices.sequences_lengths)
+                nodes_encodings=encoded_cfg_nodes,
+                paths_nodes_indices=cfg_paths_input.nodes_indices.sequences,
+                paths_edge_types=cfg_paths_input.edges_types.sequences,
+                paths_lengths=cfg_paths_input.nodes_indices.sequences_lengths)
         if self.encoder_params.encoder_type in \
                 {'control-flow-paths-ngrams-folded-to-nodes', 'set-of-control-flow-paths-ngrams'}:
             ngrams_min_n = self.encoder_params.cfg_paths_ngrams_min_n
