@@ -4,6 +4,8 @@ from typing import Tuple
 
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
+from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
+    HierarchicMicroMacroMethodCodeEncoderParams
 from ndfa.code_nn_modules.method_code_encoder import EncodedMethodCode
 
 
@@ -38,8 +40,15 @@ class MethodCodeEncodingsFeeder(nn.Module):
             encoder_outputs = encoded_method_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
         elif self.method_code_encoder_params.method_encoder_type == 'hierarchic':
-            encoder_outputs = encoded_method_code.unflattened_macro_encodings
-            encoder_outputs_mask = encoded_method_code.unflattened_macro_encodings_mask
+            if self.method_code_encoder_params.hierarchic_micro_macro_encoder.decoder_feeding_policy == \
+                    HierarchicMicroMacroMethodCodeEncoderParams.DecoderFeedingPolicy.MacroItems:
+                encoder_outputs = encoded_method_code.unflattened_macro_encodings
+                encoder_outputs_mask = encoded_method_code.unflattened_macro_encodings_mask
+            elif self.method_code_encoder_params.hierarchic_micro_macro_encoder.decoder_feeding_policy == \
+                    HierarchicMicroMacroMethodCodeEncoderParams.DecoderFeedingPolicy.MicroItems:
+                raise NotImplementedError  # TODO!
+            else:
+                assert False
         elif self.method_code_encoder_params.method_encoder_type == 'whole-method':
             if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding

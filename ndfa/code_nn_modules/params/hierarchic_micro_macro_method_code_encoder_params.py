@@ -21,6 +21,10 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         def requires_micro(self):
             return self in {self.SimilarMicro, self.DifferentMicro}
 
+    class DecoderFeedingPolicy(Enum):
+        MicroItems = 'MicroItems'
+        MacroItems = 'MacroItems'
+
     @classmethod
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
@@ -37,6 +41,8 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default_factory=CodeExpressionEncoderParams)
     global_context_encoder: MethodCFGMacroEncoderParams = conf_field(
         default_factory=MethodCFGMacroEncoderParams)
+    decoder_feeding_policy: DecoderFeedingPolicy = conf_field(
+        default=DecoderFeedingPolicy.MacroItems)
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:
