@@ -1,18 +1,27 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
 __all__ = ['CFGNodeEncoder']
 
 
 class CFGNodeEncoder(nn.Module):
-    def __init__(self, cfg_node_dim: int, cfg_combined_expression_dim: int, pdg_node_control_kinds_vocab: Vocabulary,
-                 pdg_node_control_kinds_embedding_dim: int = 8, nr_cfg_nodes_encoding_linear_layers: int = 1,
-                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+    def __init__(
+            self,
+            cfg_node_dim: int,
+            cfg_combined_expression_dim: int,
+            pdg_node_control_kinds_vocab: Vocabulary,
+            pdg_node_control_kinds_embedding_dim: int = 8,
+            nr_cfg_nodes_encoding_linear_layers: int = 1,
+            norm_params: Optional[NormWrapperParams] = None,
+            dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         assert nr_cfg_nodes_encoding_linear_layers >= 1
         super(CFGNodeEncoder, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -30,6 +39,9 @@ class CFGNodeEncoder(nn.Module):
             out_features=self.cfg_node_dim)
         self.cfg_node_additional_linear_layers = nn.ModuleList(
             [nn.Linear(self.cfg_node_dim, self.cfg_node_dim) for _ in range(nr_cfg_nodes_encoding_linear_layers - 1)])
+
+        self.norm = None if norm_params is None else NormWrapper(
+            nr_features=self.encoder_params.expression_encoding_dim, params=norm_params)
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
@@ -54,4 +66,8 @@ class CFGNodeEncoder(nn.Module):
             final_cfg_nodes_encodings_projected = self.dropout_layer(self.activation_layer(linear_layer(
                 final_cfg_nodes_encodings_projected)))
         assert final_cfg_nodes_encodings_projected.size() == (nr_cfg_nodes_in_batch, self.cfg_node_dim)
+
+        if self.norm is not None:
+            final_cfg_nodes_encodings_projected = self.norm(final_cfg_nodes_encodings_projected)
+
         return final_cfg_nodes_encodings_projected
