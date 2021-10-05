@@ -9,6 +9,7 @@ from ndfa.nn_utils.modules.module_repeater import ModuleRepeater
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['CFGGNNEncoder']
@@ -20,7 +21,7 @@ class CFGGNNEncoder(nn.Module):
             cfg_node_encoding_dim: int,
             encoder_params: CFGGNNEncoderParams,
             pdg_control_flow_edge_types_vocab: Vocabulary,
-            norm_layer_ctor: Optional[Callable[[], NormWrapper]],  # TODO: get `NormWrapperParams` instead
+            norm_params: Optional[NormWrapperParams] = None,
             share_norm_between_usage_points: bool = False,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CFGGNNEncoder, self).__init__()
@@ -55,9 +56,9 @@ class CFGGNNEncoder(nn.Module):
             embedding_dim=self.cfg_node_encoding_dim,
             padding_idx=pdg_control_flow_edge_types_vocab.get_word_idx('<PAD>'))
         self.cfg_nodes_norm = None
-        if norm_layer_ctor is not None:
+        if norm_params is not None:
             self.cfg_nodes_norm = ModuleRepeater(
-                module_create_fn=norm_layer_ctor,
+                module_create_fn=lambda: NormWrapper(nr_features=cfg_node_encoding_dim, params=norm_params),
                 repeats=self.nr_layers_to_apply,
                 share=share_norm_between_usage_points, repeat_key='usage_point')
 
