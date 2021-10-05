@@ -127,6 +127,12 @@ class PDGInputTensors(TensorsDataClass):
     def nr_cfg_nodes(self) -> int:
         return self.cfg_nodes_control_kind.tensor.size(0)
 
+    def unflatten_cfg_nodes_encodings(self, cfg_nodes_encodings: torch.Tensor) -> torch.Tensor:
+        return self.cfg_nodes_control_kind.unflatten(cfg_nodes_encodings)
+
+    def get_cfg_nodes_encodings_unflattener_mask(self):
+        return self.cfg_nodes_control_kind.unflattener_mask
+
 
 @dataclasses.dataclass
 class IdentifiersInputTensors(TensorsDataClass):
