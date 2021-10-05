@@ -1,20 +1,24 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 from ndfa.code_nn_modules.params.code_tokens_seq_encoder_params import CodeTokensSeqEncoderParams
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['CodeExpressionTokensSequenceEncoder']
 
 
 class CodeExpressionTokensSequenceEncoder(nn.Module):
-    def __init__(self,
-                 encoder_params: CodeTokensSeqEncoderParams,
-                 dropout_rate: float = 0.3, activation_fn: str = 'relu'):
+    def __init__(
+            self,
+            encoder_params: CodeTokensSeqEncoderParams,
+            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
+            dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionTokensSequenceEncoder, self).__init__()
         self.encoder_params = encoder_params
         self.sequence_encoder = SequenceEncoder(
@@ -22,6 +26,7 @@ class CodeExpressionTokensSequenceEncoder(nn.Module):
             input_dim=self.encoder_params.token_encoding_dim,
             hidden_dim=self.encoder_params.token_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.norm_params = norm_params  # TODO: use it!
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 

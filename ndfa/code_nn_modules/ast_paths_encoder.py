@@ -13,6 +13,7 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
     ASTPathsEncodingsTensors
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['ASTPathsEncoder']
@@ -25,6 +26,7 @@ class ASTPathsEncoder(nn.Module):
             encoder_params: ASTEncoderParams,
             is_first_encoder_layer: bool = True,
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
+            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params

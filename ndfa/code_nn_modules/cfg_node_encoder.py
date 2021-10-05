@@ -41,7 +41,7 @@ class CFGNodeEncoder(nn.Module):
             [nn.Linear(self.cfg_node_dim, self.cfg_node_dim) for _ in range(nr_cfg_nodes_encoding_linear_layers - 1)])
 
         self.norm = None if norm_params is None else NormWrapper(
-            nr_features=self.encoder_params.expression_encoding_dim, params=norm_params)
+            nr_features=self.cfg_node_dim, params=norm_params)
 
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 

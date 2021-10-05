@@ -105,23 +105,23 @@ class PathsEncoder(nn.Module):
 
     def forward(
             self,
-            all_nodes_encodings: torch.Tensor,
+            nodes_encodings: torch.Tensor,
             paths_nodes_indices: torch.LongTensor,
             paths_edge_types: torch.LongTensor,
             paths_lengths: torch.LongTensor,
             paths_mask: Optional[torch.BoolTensor] = None,
             previous_encoding_layer_output: Optional[EncodedPaths] = None) -> EncodedPaths:
-        assert all_nodes_encodings.ndim == 2
-        assert all_nodes_encodings.size(1) == self.node_encoding_dim
+        assert nodes_encodings.ndim == 2
+        assert nodes_encodings.size(1) == self.node_encoding_dim
         assert paths_nodes_indices.ndim == 2
         assert paths_edge_types.shape == paths_edge_types.shape
         assert (previous_encoding_layer_output is not None) ^ self.is_first_layer
 
         if self.is_first_layer:
-            paths_nodes_embeddings = all_nodes_encodings[paths_nodes_indices]
+            paths_nodes_embeddings = nodes_encodings[paths_nodes_indices]
         else:
             # Update encodings of node occurrences in paths:
-            updated_ngrams_nodes_encodings = all_nodes_encodings[paths_nodes_indices]
+            updated_ngrams_nodes_encodings = nodes_encodings[paths_nodes_indices]
             assert updated_ngrams_nodes_encodings.shape == \
                    previous_encoding_layer_output.nodes_occurrences.shape
             paths_nodes_embeddings = self.nodes_occurrences_encodings_gate(
@@ -194,8 +194,8 @@ class PathsEncoder(nn.Module):
                 encoded_paths=nodes_occurrences_encodings,
                 paths_mask=paths_mask,
                 paths_node_indices=paths_nodes_indices,
-                previous_nodes_encodings=all_nodes_encodings,
-                nr_nodes=all_nodes_encodings.size(0))
+                previous_nodes_encodings=nodes_encodings,
+                nr_nodes=nodes_encodings.size(0))
 
         combined_paths = None
         if self.combine_paths:

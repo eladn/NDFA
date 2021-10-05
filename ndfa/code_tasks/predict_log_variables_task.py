@@ -202,6 +202,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
 
         if self.model_hps.method_code_encoder.method_encoder_type in {'method-cfg', 'method-cfg-v2'}:
             encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
+        elif self.model_hps.method_code_encoder.method_encoder_type == 'hierarchic':
+            encoder_output_dim = self.model_hps.method_code_encoder.hierarchic_micro_macro_encoder.macro_encoding_dim
         elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
             # TODO: put in HPs
             encoder_output_dim = \

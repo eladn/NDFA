@@ -8,6 +8,7 @@ from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['ASTEncoder']
@@ -19,6 +20,7 @@ class ASTEncoder(nn.Module):
             code_task_vocabs: CodeTaskVocabs,
             identifier_embedding_dim: int,
             is_first_encoder_layer: bool = True,
+            norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -35,11 +37,11 @@ class ASTEncoder(nn.Module):
                 encoder_params=self.encoder_params,
                 is_first_encoder_layer=self.is_first_encoder_layer,
                 ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
-                dropout_rate=dropout_rate, activation_fn=activation_fn)
+                norm_params=norm_params, dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type == 'tree':
             self.ast_treelstm_up = ASTTreeLSTMEncoder(
                 ast_node_embedding_dim=self.encoder_params.ast_node_embedding_dim,
-                direction='leaves_to_root', dropout_rate=dropout_rate)
+                direction='leaves_to_root', norm_params=norm_params, dropout_rate=dropout_rate)
             # self.ast_treelstm_down = ASTTreeLSTMEncoder(
             #     ast_node_embedding_dim=self.encoder_params.ast_node_embedding_dim,
             #     direction='root_to_leaves', dropout_rate=dropout_rate)

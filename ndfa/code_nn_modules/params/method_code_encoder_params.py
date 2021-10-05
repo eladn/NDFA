@@ -2,6 +2,8 @@ from typing import Optional
 from dataclasses import dataclass
 
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
+from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
+    HierarchicMicroMacroMethodCodeEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEncoderParams
 from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
@@ -19,19 +21,25 @@ class MethodCodeEncoderParams(HasDispatchableField):
             'method_encoder_type', {
                 'whole-method': 'whole_method_expression_encoder',
                 'method-cfg': 'method_cfg_encoder',
-                'method-cfg-v2': 'method_cfg_encoder'}))
+                'method-cfg-v2': 'method_cfg_encoder',
+                'hierarchic': 'hierarchic_micro_macro_encoder'}))
     method_encoder_type: str = conf_field(
         # default='whole-method',
         default='method-cfg-v2',
-        choices=('whole-method', 'method-cfg', 'method-cfg-v2'),
+        choices=('whole-method', 'method-cfg', 'method-cfg-v2', 'hierarchic'),
         description="Representation type of the code "
                     "(main architecture of the method-code-encoder).")
-    # relevant only if `method_encoder_type == 'method-cfg'`
+    # relevant only if `method_encoder_type in {'method-cfg', 'method-cfg-v2'}`
     method_cfg_encoder: Optional[MethodCFGEncoderParams] = conf_field(
         default_factory=MethodCFGEncoderParams,
         description="Representation type of the method-CFG "
                     "(specific architecture of the method-CFG-code-encoder).",
         arg_prefix='method_cfg_encoder')
+    # relevant only if `method_encoder_type == 'hierarchic'`
+    hierarchic_micro_macro_encoder: Optional[HierarchicMicroMacroMethodCodeEncoderParams] = conf_field(
+        default_factory=HierarchicMicroMacroMethodCodeEncoderParams,
+        description="Hierarchic micro-macro representation of the method.",
+        arg_prefix='hierarchic_encoder')
     # relevant only if `method_encoder_type == 'method-linear-seq'`
     whole_method_expression_encoder: Optional[CodeExpressionEncoderParams] = conf_field(
         default_factory=lambda: CodeExpressionEncoderParams(encoder_type='FlatTokensSeq'),

@@ -1,16 +1,23 @@
 import torch
 import torch.nn as nn
 import dgl
+from typing import Optional
 
 from ndfa.nn_utils.modules.dgl_tree_lstm import TreeLSTM
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['ASTTreeLSTMEncoder']
 
 
 class ASTTreeLSTMEncoder(nn.Module):
-    def __init__(self, ast_node_embedding_dim: int, direction: str = 'root_to_leaves', dropout_rate: float = 0.3):
+    def __init__(
+            self,
+            ast_node_embedding_dim: int,
+            direction: str = 'root_to_leaves',
+            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
+            dropout_rate: float = 0.3):
         super(ASTTreeLSTMEncoder, self).__init__()
         self.ast_node_embedding_dim = ast_node_embedding_dim
         assert direction in {'root_to_leaves', 'leaves_to_root'}

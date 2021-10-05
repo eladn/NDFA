@@ -21,7 +21,9 @@ class MethodCodeEncodingsFeeder(nn.Module):
 
     TODO: Return a sole embedding per example for the initial state of the LSTM decoder.
           We currently feed only the attentive "memory bank" of the decoder.
-    TODO: add hyper-params to control what tensors to return (relevant when there multiple possibilities).
+    TODO: Add hyper-params to control what tensors to return.
+          Relevant when there multiple possibilities. For CFG-method encoder we can pass:
+          (i) CFG nodes; or (ii) CFG paths; or (iii) expressions (after mixing with their global ctx).
     """
     def __init__(self, method_code_encoder_params: MethodCodeEncoderParams):
         super(MethodCodeEncodingsFeeder, self).__init__()
@@ -35,6 +37,9 @@ class MethodCodeEncodingsFeeder(nn.Module):
         elif self.method_code_encoder_params.method_encoder_type == 'method-cfg-v2':
             encoder_outputs = encoded_method_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
+        elif self.method_code_encoder_params.method_encoder_type == 'hierarchic':
+            encoder_outputs = encoded_method_code.unflattened_macro_encodings
+            encoder_outputs_mask = encoded_method_code.unflattened_macro_encodings_mask
         elif self.method_code_encoder_params.method_encoder_type == 'whole-method':
             if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding

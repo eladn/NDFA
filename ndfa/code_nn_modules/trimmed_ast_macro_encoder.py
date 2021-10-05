@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import Optional
 
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, MethodASTInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
@@ -9,6 +10,7 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.ast_encoder import ASTEncoder
 from ndfa.code_nn_modules.ast_nodes_embedder import ASTNodesEmbedder
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
 __all__ = ['TrimmedASTMacroEncoder']
@@ -21,6 +23,7 @@ class TrimmedASTMacroEncoder(nn.Module):
             identifier_embedding_dim: int,
             macro_trimmed_ast_encoder_params: ASTEncoderParams,
             post_macro_encoder_state_updater_params: StateUpdaterParams,
+            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(TrimmedASTMacroEncoder, self).__init__()
         self.trimmed_ast_encoder = ASTEncoder(
@@ -81,4 +84,5 @@ class TrimmedASTMacroEncoder(nn.Module):
             src=new_cfg_sub_asts_roots_encodings)
         encoded_cfg_nodes = self.post_macro_encoder_state_updater(
             previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
+        # TODO: normalize!
         return encoded_cfg_nodes
