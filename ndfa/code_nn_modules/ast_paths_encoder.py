@@ -14,6 +14,7 @@ from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressio
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
 __all__ = ['ASTPathsEncoder']
@@ -26,7 +27,7 @@ class ASTPathsEncoder(nn.Module):
             encoder_params: ASTEncoderParams,
             is_first_encoder_layer: bool = True,
             ast_traversal_orientation_vocab: Optional[Vocabulary] = None,
-            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
+            norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -83,6 +84,8 @@ class ASTPathsEncoder(nn.Module):
                 combiner_params=self.encoder_params.paths_combiner_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for ast_paths_type in self.encoder_params.ast_paths_types})
+        self.norm = None if norm_params is None else NormWrapper(
+            nr_features=self.ast_node_embedding_dim, params=norm_params)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward_single_path_type(
@@ -138,6 +141,8 @@ class ASTPathsEncoder(nn.Module):
         ast_paths_encoded = self.path_sequence_encoder[ast_paths_type](
             sequence_input=ast_paths_embeddings_input,
             lengths=ast_paths_lengths, batch_first=True).sequence
+        if self.norm:
+            ast_paths_encoded = self.norm(ast_paths_encoded)
 
         if ast_paths_traversal_orientation_encodings_input is None:
             ast_paths_nodes_encodings = ast_paths_encoded
@@ -152,6 +157,8 @@ class ASTPathsEncoder(nn.Module):
             sequence_mask=ast_paths_node_indices.sequences_mask,
             sequence_lengths=ast_paths_node_indices.sequences_lengths,
             batch_first=True)
+        if self.norm:
+            ast_paths_combined = self.norm(ast_paths_combined)
 
         return ASTPathsEncodingsTensors(
             nodes_occurrences=ast_paths_nodes_encodings,
@@ -190,6 +197,8 @@ class ASTPathsEncoder(nn.Module):
                 scattered_input=all_ast_paths_nodes_encodings,
                 indices=all_ast_paths_node_indices,
                 dim_size=nr_ast_nodes, attn_queries=ast_nodes_encodings)
+            if self.norm:
+                new_ast_nodes_encodings = self.norm(new_ast_nodes_encodings)
         else:
             new_ast_nodes_encodings = ast_nodes_encodings
 
