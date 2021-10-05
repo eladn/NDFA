@@ -11,6 +11,7 @@ from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.ast_encoder import ASTEncoder
 from ndfa.code_nn_modules.ast_nodes_embedder import ASTNodesEmbedder
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
+from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
 __all__ = ['TrimmedASTMacroEncoder']
@@ -23,7 +24,7 @@ class TrimmedASTMacroEncoder(nn.Module):
             identifier_embedding_dim: int,
             macro_trimmed_ast_encoder_params: ASTEncoderParams,
             post_macro_encoder_state_updater_params: StateUpdaterParams,
-            norm_params: Optional[NormWrapperParams] = None,  # TODO: use it!
+            norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(TrimmedASTMacroEncoder, self).__init__()
         self.trimmed_ast_encoder = ASTEncoder(
@@ -31,6 +32,7 @@ class TrimmedASTMacroEncoder(nn.Module):
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=identifier_embedding_dim,
             is_first_encoder_layer=True,
+            norm_params=norm_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         ast_node_embedding_dim = macro_trimmed_ast_encoder_params.ast_node_embedding_dim
         self.ast_nodes_embedder = ASTNodesEmbedder(
@@ -51,6 +53,8 @@ class TrimmedASTMacroEncoder(nn.Module):
             params=post_macro_encoder_state_updater_params,
             update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
+        self.norm = None if norm_params is None else NormWrapper(
+            nr_features=cfg_node_encoding_dim, params=norm_params)
 
     def forward(
             self, code_task_input: MethodCodeInputTensors,
@@ -84,5 +88,6 @@ class TrimmedASTMacroEncoder(nn.Module):
             src=new_cfg_sub_asts_roots_encodings)
         encoded_cfg_nodes = self.post_macro_encoder_state_updater(
             previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
-        # TODO: normalize!
+        if self.norm:
+            encoded_cfg_nodes = self.norm(encoded_cfg_nodes)
         return encoded_cfg_nodes
