@@ -1,6 +1,6 @@
 import torch
 import dataclasses
-from typing import Optional
+from typing import Optional, Callable
 from torch_geometric.data import Data as TGData
 import dgl
 
@@ -11,6 +11,7 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     batch_flattened_pseudo_random_sampler_from_range_field, BatchFlattenedSeqShuffler, \
     batch_flattened_seq_shuffler_field, TensorsDataDict, batch_flattened_tensor_field, batch_flattened_seq_field, \
     batch_flattened_indices_pseudo_random_permutation_field
+from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 
 
 __all__ = [
@@ -59,6 +60,25 @@ class CFGCodeExpressionTokensSequenceInputTensors(CodeExpressionTokensSequenceIn
     # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
     token_type: BatchFlattenedSeq = \
         batch_flattened_seq_field(self_indexing_group='cfg_code_expressions')
+
+    def batch_flattened_tokens_seqs_as_unflattenable(
+            self, tokens_seq_encodings: torch.Tensor) -> FlattenedTensor:
+        return FlattenedTensor(
+            flattened=tokens_seq_encodings,
+            unflattener_mask_getter=self.get_expressions_per_example_unflattener_mask,
+            unflattener_fn=self.flatten_expressions_per_example)
+
+    def flatten_expressions_per_example(self, tokens_seq_encodings: torch.Tensor) -> torch.Tensor:
+        assert tokens_seq_encodings.ndim == 3  # (#seqs_in_batch, seq_len, embd)
+        unflattened_tokens_seq = self.token_type.unflatten(tokens_seq_encodings)
+        assert unflattened_tokens_seq.ndim == 4  # (#examples_in_batch, #seqs_in_example, seq_len, embd)
+        return unflattened_tokens_seq.flatten(1, 2)  # (#examples_in_batch, len_of_concatenated_seqs_per_example, embd)
+
+    def get_expressions_per_example_unflattener_mask(self) -> torch.Tensor:
+        assert self.token_type.sequences_mask.ndim == 2  # (#seqs_in_batch, seq_len)
+        unflattened_tokens_seq_mask = self.token_type.unflatten(self.token_type.sequences_mask)
+        assert unflattened_tokens_seq_mask.ndim == 3  # (#examples_in_batch, #seqs_in_example, seq_len)
+        return unflattened_tokens_seq_mask.flatten(1, 2)  # (#examples_in_batch, len_of_concatenated_seqs_per_example)
 
 
 @dataclasses.dataclass
@@ -279,6 +299,22 @@ class MethodASTInputTensors(SubASTInputTensors):
         batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='ast_nodes')
     ast_nodes_with_modifier_leaf_modifier: BatchFlattenedTensor = \
         batch_flattened_tensor_field()
+
+    def get_ast_nodes_unflattener(self) -> Callable[[torch.Tensor], torch.Tensor]:
+        return self.ast_node_types.unflatten
+
+    def unflatten_ast_nodes_encodings(self, ast_nodes_encodings: torch.Tensor) -> torch.Tensor:
+        return self.ast_node_types.unflatten(ast_nodes_encodings)
+
+    def get_ast_nodes_unflattener_mask(self) -> torch.Tensor:
+        return self.ast_node_types.unflattener_mask
+
+    def batch_flattened_ast_nodes_as_unflattenable(
+            self, ast_nodes_encodings: torch.Tensor) -> FlattenedTensor:
+        return FlattenedTensor(
+            flattened=ast_nodes_encodings,
+            unflattener_mask=self.get_ast_nodes_unflattener_mask(),
+            unflattener_fn=self.get_ast_nodes_unflattener())
 
 
 @dataclasses.dataclass

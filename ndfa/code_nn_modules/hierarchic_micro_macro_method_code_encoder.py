@@ -21,6 +21,7 @@ from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method impor
 from ndfa.code_nn_modules.params.method_cfg_macro_encoder_params import MethodCFGMacroEncoderParams
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
+from ndfa.code_nn_modules.micro_code_expression_encodings_unflattener import unflatten_micro_code_expression_encodings
 
 
 __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodCodeEncodings']
@@ -29,9 +30,10 @@ __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodC
 @dataclass
 class HierarchicMicroMacroMethodCodeEncodings:
     identifiers_encodings: torch.Tensor
-    micro_encodings: CodeExpressionEncodingsTensors
+    unflattenable_final_micro_encodings: FlattenedTensor
     macro_encodings: FlattenedTensor
-    global_context_aware_micro_encodings: CodeExpressionEncodingsTensors
+    # micro_encodings: CodeExpressionEncodingsTensors
+    # global_context_aware_micro_encodings: CodeExpressionEncodingsTensors
     symbols_encodings: torch.Tensor
 
 
@@ -165,9 +167,15 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
             encodings_of_symbols_occurrences=encodings_of_symbols_occurrences,
             symbols_indices_of_symbols_occurrences=symbols_indices_of_symbols_occurrences)
 
+        unflattenable_final_micro_encodings = unflatten_micro_code_expression_encodings(
+            micro_encoder_params=self.params.last_local_expression_encoder,
+            code_task_input=code_task_input,
+            code_expression_encodings=final_encoded_code_expressions)
+
         return HierarchicMicroMacroMethodCodeEncodings(
             identifiers_encodings=encoded_identifiers,
-            micro_encodings=micro_encoded_code_expressions,
+            unflattenable_final_micro_encodings=unflattenable_final_micro_encodings,
             macro_encodings=macro_encodings.macro_encodings,
-            global_context_aware_micro_encodings=global_context_aware_micro_encodings,
+            # micro_encodings=micro_encoded_code_expressions,
+            # global_context_aware_micro_encodings=global_context_aware_micro_encodings,
             symbols_encodings=encoded_symbols)

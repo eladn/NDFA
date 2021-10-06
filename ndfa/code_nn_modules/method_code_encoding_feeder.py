@@ -49,7 +49,7 @@ class MethodCodeEncodingsFeeder(nn.Module):
             else:
                 assert False
             encoder_outputs = unflattanable_encodings.get_unflattened()
-            encoder_outputs_mask = unflattanable_encodings.unflattener_mask
+            encoder_outputs_mask = unflattanable_encodings.get_unflattener_mask()
         elif self.method_code_encoder_params.method_encoder_type == 'whole-method':
             if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding
@@ -87,4 +87,6 @@ class MethodCodeEncodingsFeeder(nn.Module):
         else:
             assert False
 
+        assert encoder_outputs.ndim == 3
+        assert encoder_outputs.shape[:-1] == encoder_outputs_mask.shape
         return encoder_outputs, encoder_outputs_mask

@@ -55,6 +55,13 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         assert False
 
     @property
+    def last_local_expression_encoder(self) -> Optional[CodeExpressionEncoderParams]:
+        if self.after_macro == HierarchicMicroMacroMethodCodeEncoderParams.AfterMacro.Pass:
+            return self.local_expression_encoder
+        else:
+            return self.local_expression_encoder_after_macro
+
+    @property
     def expression_encoding_dim(self) -> int:
         return self.local_expression_encoder.expression_encoding_dim
 

@@ -74,13 +74,14 @@ class CFGPathsMacroEncoder(nn.Module):
                     previous_encoding_layer_output.ngrams[ngrams_n]
                 )
             combined_paths = torch.cat([paths.combined_paths for paths in result_per_ngram_len.values()], dim=0)
+            raise NotImplementedError
             return CFGPathsMacroEncodings(
                 ngrams=result_per_ngram_len,
                 folded_nodes_encodings=None,  # TODO!
                 combined_paths=FlattenedTensor(
                     flattened=combined_paths,
                     unflattener_mask=None,  # TODO!
-                    unflattener=None))  # TODO!
+                    unflattener_fn=None))  # TODO!
         else:
             cfg_paths_input = pdg_input.cfg_pdg_paths \
                 if self.params.paths_type == CFGPathsMacroEncoderParams.PathsType.DataDependencyAndControlFlow else \
@@ -102,7 +103,7 @@ class CFGPathsMacroEncoder(nn.Module):
                 combined_paths=FlattenedTensor(
                     flattened=encoded_paths.combined_paths,
                     unflattener_mask=cfg_paths_input.nodes_indices.unflattener_mask,
-                    unflattener=cfg_paths_input.nodes_indices.unflatten))
+                    unflattener_fn=cfg_paths_input.nodes_indices.unflatten))
 
     def get_cfg_control_flow_paths_ngrams_input(
             self, pdg_input: PDGInputTensors) -> Mapping[int, CFGPathsNGramsInputTensors]:

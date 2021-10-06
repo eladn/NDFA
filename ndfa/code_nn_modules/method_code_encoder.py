@@ -155,8 +155,8 @@ class MethodCodeEncoder(nn.Module):
                 self.hierarchic_micro_macro_method_encoder(
                     code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
             macro_encodings = hierarchic_method_encodings.macro_encodings
-            micro_encodings = None  # TODO: micro encodings!
-            # TODO: apply bridge to the macro encodings!
+            micro_encodings = hierarchic_method_encodings.unflattenable_final_micro_encodings
+            # TODO: apply bridge to the macro/micro encodings!
             encoded_symbols = hierarchic_method_encodings.symbols_encodings
         elif self.encoder_params.method_encoder_type == 'whole-method':
             embedded_method_code: CodeExpressionEncodingsTensors = self.whole_method_code_embedder(
