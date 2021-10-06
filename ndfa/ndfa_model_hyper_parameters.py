@@ -27,7 +27,7 @@ class TargetSymbolsDecoderParams:
 @dataclass
 class NDFAModelHyperParams:
     activation_fn: str = conf_field(
-        default='relu',
+        default='leaky_relu',
         choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh', 'none'),
         description='Activation function type to use for non-linearities all over the model.')
     method_code_encoder: MethodCodeEncoderParams = conf_field(
