@@ -51,6 +51,8 @@ class MethodCFGMacroEncoder(nn.Module):
                 control_flow_edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
                 norm_params=norm_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
+        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.NoMacro:
+            pass  # We actually do not need to do anything in this case.
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
             pass  # We actually do not need to do anything in this case.
             raise NotImplementedError  # what we want to do in this case?
@@ -106,6 +108,9 @@ class MethodCFGMacroEncoder(nn.Module):
                 macro_encodings = cfg_paths_macro_encodings.combined_paths
                 from warnings import warn
                 warn('The un-flattening of the combined paths is not checked!')
+        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.NoMacro:
+            pass  # We actually do not need to do anything in this case.
+            raise NotImplementedError  # what we want to do in this case?
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
             pass  # We actually do not need to do anything in this case.
             raise NotImplementedError  # what we want to do in this case?

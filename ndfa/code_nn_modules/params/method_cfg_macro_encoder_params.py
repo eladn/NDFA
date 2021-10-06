@@ -16,6 +16,7 @@ __all__ = ['MethodCFGMacroEncoderParams']
 @dataclass
 class MethodCFGMacroEncoderParams(HasDispatchableField):
     class EncoderType(Enum):
+        NoMacro = 'NoMacro'
         SetOfCFGNodes = 'SetOfCFGNodes'
         FlatCFGNodesAppearanceSeq = 'FlatCFGNodesAppearanceSeq'
         CFGGNN = 'CFGGNN'
@@ -34,6 +35,7 @@ class MethodCFGMacroEncoderParams(HasDispatchableField):
                 cls.EncoderType.FlatCFGNodesAppearanceSeq: ['single_path_encoder'],
                 cls.EncoderType.CFGGNN: ['gnn_encoder'],
                 cls.EncoderType.SetOfCFGNodes: [],
+                cls.EncoderType.NoMacro: [],
                 cls.EncoderType.UpperASTPaths: ['macro_trimmed_ast_encoder']
             }))
 
