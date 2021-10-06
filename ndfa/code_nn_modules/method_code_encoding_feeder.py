@@ -42,13 +42,14 @@ class MethodCodeEncodingsFeeder(nn.Module):
         elif self.method_code_encoder_params.method_encoder_type == 'hierarchic':
             if self.method_code_encoder_params.hierarchic_micro_macro_encoder.decoder_feeding_policy == \
                     HierarchicMicroMacroMethodCodeEncoderParams.DecoderFeedingPolicy.MacroItems:
-                encoder_outputs = encoded_method_code.unflattened_macro_encodings
-                encoder_outputs_mask = encoded_method_code.unflattened_macro_encodings_mask
+                unflattanable_encodings = encoded_method_code.macro_encodings
             elif self.method_code_encoder_params.hierarchic_micro_macro_encoder.decoder_feeding_policy == \
                     HierarchicMicroMacroMethodCodeEncoderParams.DecoderFeedingPolicy.MicroItems:
-                raise NotImplementedError  # TODO!
+                unflattanable_encodings = encoded_method_code.micro_encodings
             else:
                 assert False
+            encoder_outputs = unflattanable_encodings.get_unflattened()
+            encoder_outputs_mask = unflattanable_encodings.unflattener_mask
         elif self.method_code_encoder_params.method_encoder_type == 'whole-method':
             if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding

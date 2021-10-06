@@ -9,6 +9,7 @@ from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors, CFGPathsNGramsInputTensors
 from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
+from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 
 
 __all__ = ['CFGPathsMacroEncoder', 'CFGPathsMacroEncodings']
@@ -19,9 +20,7 @@ class CFGPathsMacroEncodings:
     ngrams: Optional[Dict[int, EncodedPaths]] = None
     paths: Optional[EncodedPaths] = None
     folded_nodes_encodings: Optional[torch.Tensor] = None
-    combined_paths: Optional[torch.Tensor] = None
-    combined_paths_unflattener: Optional[Callable[[torch.Tensor], torch.Tensor]] = None
-    combined_paths_unflattener_mask: Optional[torch.Tensor] = None
+    combined_paths: Optional[FlattenedTensor] = None
 
 
 class CFGPathsMacroEncoder(nn.Module):
@@ -78,9 +77,10 @@ class CFGPathsMacroEncoder(nn.Module):
             return CFGPathsMacroEncodings(
                 ngrams=result_per_ngram_len,
                 folded_nodes_encodings=None,  # TODO!
-                combined_paths=combined_paths,
-                combined_paths_unflattener=None,  # TODO!
-                combined_paths_unflattener_mask=None)  # TODO!
+                combined_paths=FlattenedTensor(
+                    flattened=combined_paths,
+                    unflattener_mask=None,  # TODO!
+                    unflattener=None))  # TODO!
         else:
             cfg_paths_input = pdg_input.cfg_pdg_paths \
                 if self.params.paths_type == CFGPathsMacroEncoderParams.PathsType.DataDependencyAndControlFlow else \
@@ -99,9 +99,10 @@ class CFGPathsMacroEncoder(nn.Module):
                     nodes_occurrences=encoded_paths.nodes_occurrences,
                     edges_occurrences=encoded_paths.edges_occurrences),
                 folded_nodes_encodings=encoded_paths.folded_nodes_encodings,
-                combined_paths=encoded_paths.combined_paths,
-                combined_paths_unflattener=cfg_paths_input.nodes_indices.unflatten,  # TODO: verify
-                combined_paths_unflattener_mask=cfg_paths_input.nodes_indices.unflattener_mask)  # TODO: verify
+                combined_paths=FlattenedTensor(
+                    flattened=encoded_paths.combined_paths,
+                    unflattener_mask=cfg_paths_input.nodes_indices.unflattener_mask,
+                    unflattener=cfg_paths_input.nodes_indices.unflatten))
 
     def get_cfg_control_flow_paths_ngrams_input(
             self, pdg_input: PDGInputTensors) -> Mapping[int, CFGPathsNGramsInputTensors]:

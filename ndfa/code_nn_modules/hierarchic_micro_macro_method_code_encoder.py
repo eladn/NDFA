@@ -20,6 +20,7 @@ from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method impor
     SymbolOccurrencesExtractorFromEncodedMethod
 from ndfa.code_nn_modules.params.method_cfg_macro_encoder_params import MethodCFGMacroEncoderParams
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
+from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 
 
 __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodCodeEncodings']
@@ -29,8 +30,7 @@ __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodC
 class HierarchicMicroMacroMethodCodeEncodings:
     identifiers_encodings: torch.Tensor
     micro_encodings: CodeExpressionEncodingsTensors
-    unflattened_macro_encodings: torch.Tensor
-    unflattened_macro_encodings_mask: torch.Tensor
+    macro_encodings: FlattenedTensor
     global_context_aware_micro_encodings: CodeExpressionEncodingsTensors
     symbols_encodings: torch.Tensor
 
@@ -168,7 +168,6 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
         return HierarchicMicroMacroMethodCodeEncodings(
             identifiers_encodings=encoded_identifiers,
             micro_encodings=micro_encoded_code_expressions,
-            unflattened_macro_encodings=macro_encodings.unflattened_macro_encodings,
-            unflattened_macro_encodings_mask=macro_encodings.unflattened_macro_encodings_mask,
+            macro_encodings=macro_encodings.macro_encodings,
             global_context_aware_micro_encodings=global_context_aware_micro_encodings,
             symbols_encodings=encoded_symbols)

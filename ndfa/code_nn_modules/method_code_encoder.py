@@ -20,6 +20,7 @@ from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method impor
     SymbolOccurrencesExtractorFromEncodedMethod
 from ndfa.code_nn_modules.hierarchic_micro_macro_method_code_encoder import HierarchicMicroMacroMethodCodeEncoder, \
     HierarchicMicroMacroMethodCodeEncodings
+from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 
 
 __all__ = ['MethodCodeEncoder', 'EncodedMethodCode']
@@ -32,8 +33,8 @@ class EncodedMethodCode(NamedTuple):
     whole_method_token_seqs_encoding: torch.Tensor
     encoded_cfg_nodes: torch.Tensor
     encoded_cfg_nodes_after_bridge: torch.Tensor
-    unflattened_macro_encodings: Optional[torch.Tensor]
-    unflattened_macro_encodings_mask: Optional[torch.Tensor]
+    macro_encodings: Optional[FlattenedTensor]
+    micro_encodings: Optional[FlattenedTensor]
     encoded_symbols: torch.Tensor
     encoded_symbols_occurrences: Optional[ScatteredEncodings] = None
 
@@ -121,8 +122,7 @@ class MethodCodeEncoder(nn.Module):
 
         whole_method_code_encoded = None
         unflattened_cfg_nodes_encodings = None
-        unflattened_macro_encodings = None
-        unflattened_macro_encodings_mask = None
+        macro_encodings, micro_encodings = None, None
         encoded_cfg_nodes_after_bridge = None
         if self.encoder_params.method_encoder_type == 'method-cfg':
             encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
@@ -154,8 +154,8 @@ class MethodCodeEncoder(nn.Module):
             hierarchic_method_encodings: HierarchicMicroMacroMethodCodeEncodings = \
                 self.hierarchic_micro_macro_method_encoder(
                     code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
-            unflattened_macro_encodings = hierarchic_method_encodings.unflattened_macro_encodings
-            unflattened_macro_encodings_mask = hierarchic_method_encodings.unflattened_macro_encodings_mask
+            macro_encodings = hierarchic_method_encodings.macro_encodings
+            micro_encodings = None  # TODO: micro encodings!
             # TODO: apply bridge to the macro encodings!
             encoded_symbols = hierarchic_method_encodings.symbols_encodings
         elif self.encoder_params.method_encoder_type == 'whole-method':
@@ -194,7 +194,7 @@ class MethodCodeEncoder(nn.Module):
             whole_method_token_seqs_encoding=
             None if whole_method_code_encoded is None else whole_method_code_encoded.token_seqs,
             encoded_cfg_nodes=unflattened_cfg_nodes_encodings,
-            unflattened_macro_encodings=unflattened_macro_encodings,
-            unflattened_macro_encodings_mask=unflattened_macro_encodings_mask,
+            macro_encodings=macro_encodings,
+            micro_encodings=micro_encodings,
             encoded_symbols=encoded_symbols,
             encoded_cfg_nodes_after_bridge=encoded_cfg_nodes_after_bridge)

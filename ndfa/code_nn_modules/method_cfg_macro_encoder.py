@@ -12,6 +12,7 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_gnn_encoder import CFGGNNEncoder
 from ndfa.code_nn_modules.cfg_single_path_macro_encoder import CFGSinglePathMacroEncoder
+from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 
 
 __all__ = ['MethodCFGMacroEncoder', 'MethodCFGMacroEncodings']
@@ -19,8 +20,7 @@ __all__ = ['MethodCFGMacroEncoder', 'MethodCFGMacroEncodings']
 
 @dataclass
 class MethodCFGMacroEncodings:
-    unflattened_macro_encodings: torch.Tensor
-    unflattened_macro_encodings_mask: torch.Tensor
+    macro_encodings: FlattenedTensor
     cfg_nodes_encodings: Optional[torch.Tensor] = None
 
 
@@ -90,22 +90,20 @@ class MethodCFGMacroEncoder(nn.Module):
             combined_cfg_expressions_encodings=encoded_combined_code_expressions,
             pdg=code_task_input.pdg)
 
-        unflattened_macro_encodings = None
-        unflattened_macro_encodings_mask = None
+        macro_encodings = None
         if self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGPaths:
             # note: norm inside `CFGPathsMacroEncoder`
             cfg_paths_macro_encodings: CFGPathsMacroEncodings = self.cfg_paths_encoder(
                 cfg_nodes_encodings=encoded_cfg_nodes,
                 pdg_input=code_task_input.pdg)
+            # TODO: Could it be a possible case that we do fold but we want to pass the combined paths
+            #  as the macro encodings?
             if cfg_paths_macro_encodings.folded_nodes_encodings is not None:
                 encoded_cfg_nodes = cfg_paths_macro_encodings.folded_nodes_encodings
             else:
                 # TODO: check the un-flattenning of `combined_paths`.
                 #  The desired shape: (batch_size, max_nr_paths_in_example, embd)
-                unflattened_combined_paths = cfg_paths_macro_encodings.combined_paths_unflattener(
-                    cfg_paths_macro_encodings.combined_paths)
-                unflattened_macro_encodings = unflattened_combined_paths
-                unflattened_macro_encodings_mask = cfg_paths_macro_encodings.combined_paths_unflattener_mask
+                macro_encodings = cfg_paths_macro_encodings.combined_paths
                 from warnings import warn
                 warn('The un-flattening of the combined paths is not checked!')
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
@@ -131,13 +129,12 @@ class MethodCFGMacroEncoder(nn.Module):
         else:
             assert False
 
-        if unflattened_macro_encodings is None:
-            unflattened_cfg_nodes_encodings = \
-                code_task_input.pdg.unflatten_cfg_nodes_encodings(encoded_cfg_nodes)
-            unflattened_macro_encodings = unflattened_cfg_nodes_encodings
-            unflattened_macro_encodings_mask = code_task_input.pdg.get_cfg_nodes_encodings_unflattener_mask()
+        if macro_encodings is None:
+            macro_encodings = FlattenedTensor(
+                flattened=encoded_cfg_nodes,
+                unflattener_mask=code_task_input.pdg.get_cfg_nodes_encodings_unflattener_mask(),
+                unflattener=code_task_input.pdg.unflatten_cfg_nodes_encodings)
 
         return MethodCFGMacroEncodings(
-            unflattened_macro_encodings=unflattened_macro_encodings,
-            unflattened_macro_encodings_mask=unflattened_macro_encodings_mask,
+            macro_encodings=macro_encodings,
             cfg_nodes_encodings=encoded_cfg_nodes)
