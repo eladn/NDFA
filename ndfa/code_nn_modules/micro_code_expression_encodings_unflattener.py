@@ -6,10 +6,10 @@ from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpre
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 
 
-__all__ = ['unflatten_micro_code_expression_encodings']
+__all__ = ['micro_code_expression_encodings_as_unflattenable']
 
 
-def unflatten_micro_code_expression_encodings(
+def micro_code_expression_encodings_as_unflattenable(
         micro_encoder_params: CodeExpressionEncoderParams,
         code_task_input: MethodCodeInputTensors,
         code_expression_encodings: CodeExpressionEncodingsTensors) -> FlattenedTensor:

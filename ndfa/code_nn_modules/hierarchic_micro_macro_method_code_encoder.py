@@ -21,7 +21,7 @@ from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method impor
 from ndfa.code_nn_modules.params.method_cfg_macro_encoder_params import MethodCFGMacroEncoderParams
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
-from ndfa.code_nn_modules.micro_code_expression_encodings_unflattener import unflatten_micro_code_expression_encodings
+from ndfa.code_nn_modules.micro_code_expression_encodings_unflattener import micro_code_expression_encodings_as_unflattenable
 
 
 __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodCodeEncodings']
@@ -167,7 +167,7 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
             encodings_of_symbols_occurrences=encodings_of_symbols_occurrences,
             symbols_indices_of_symbols_occurrences=symbols_indices_of_symbols_occurrences)
 
-        unflattenable_final_micro_encodings = unflatten_micro_code_expression_encodings(
+        unflattenable_final_micro_encodings = micro_code_expression_encodings_as_unflattenable(
             micro_encoder_params=self.params.last_local_expression_encoder,
             code_task_input=code_task_input,
             code_expression_encodings=final_encoded_code_expressions)
