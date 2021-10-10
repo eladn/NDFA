@@ -141,8 +141,12 @@ class MethodCodeEncoderParams(HasDispatchableField):
         description="The max number of .")
 
     max_sub_identifier_vocab_size: int = conf_field(
-        default=1000,
+        default=5000,
         description="The max size of the sub-identifiers vocabulary.")
+
+    max_identifier_vocab_size: int = conf_field(
+        default=5000,
+        description="The max size of the identifiers vocabulary.")
 
     identifier_encoder: IdentifierEncoderParams = conf_field(
         default_factory=IdentifierEncoderParams,

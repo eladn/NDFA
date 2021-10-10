@@ -43,7 +43,7 @@ class CodeTaskVocabs(NamedTuple):
         identifiers_vocab = Vocabulary.load_or_create(
             preprocessed_data_dir_path=pp_data_path, vocab_name='identifiers',
             special_words_sorted_by_idx=vocabs_pad_unk_special_words + ('<EOI>',), min_word_freq=40,
-            max_vocab_size_wo_specials=model_hps.method_code_encoder.max_sub_identifier_vocab_size,
+            max_vocab_size_wo_specials=model_hps.method_code_encoder.max_identifier_vocab_size,
             carpus_generator=identifiers_carpus_generator)
 
         sub_identifiers_carpus_generator = None if raw_train_data_path is None else lambda: (
