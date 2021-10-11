@@ -25,7 +25,7 @@ class MethodCodeEncoderParams(HasDispatchableField):
                 'hierarchic': 'hierarchic_micro_macro_encoder'}))
     method_encoder_type: str = conf_field(
         # default='whole-method',
-        default='method-cfg-v2',
+        default='hierarchic',
         choices=('whole-method', 'method-cfg', 'method-cfg-v2', 'hierarchic'),
         description="Representation type of the code "
                     "(main architecture of the method-code-encoder).")
