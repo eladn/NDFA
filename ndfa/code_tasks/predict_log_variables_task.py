@@ -26,6 +26,7 @@ from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_ex
 from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMixin
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
+from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
