@@ -7,6 +7,7 @@ from ndfa.code_nn_modules.code_task_input import CodeExpressionTokensSequenceInp
     SubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
+from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.nn_utils.functions.last_item_in_sequence import get_last_item_in_sequence
 
 
@@ -60,7 +61,7 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
             sub_ast_expressions_input: SubASTInputTensors,
             method_ast_input: MethodASTInputTensors) -> Tuple[torch.Tensor, torch.LongTensor]:
         if self.code_expression_encoder_params.encoder_type == 'ast':
-            if self.code_expression_encoder_params.ast_encoder.encoder_type == 'set-of-paths':
+            if self.code_expression_encoder_params.ast_encoder.encoder_type == ASTEncoderParams.EncoderType.SetOfPaths:
                 assert code_expression_encodings.ast_paths_by_type is not None
                 all_symbols_occurrences = []
                 for paths_type, ast_paths in code_expression_encodings.ast_paths_by_type.items():
@@ -110,7 +111,8 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                 all_symbols_occurrences.verify_matching_shapes()
                 encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = all_symbols_occurrences
             else:
-                assert self.code_expression_encoder_params.ast_encoder.encoder_type in {'tree', 'paths-folded'}
+                assert self.code_expression_encoder_params.ast_encoder.encoder_type in \
+                       {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}
                 assert code_expression_encodings.ast_nodes is not None
                 encoded_ast_nodes = code_expression_encodings.ast_nodes
                 ast_nodes_with_symbol_leaf_nodes_indices = method_ast_input.ast_nodes_with_symbol_leaf_nodes_indices.indices

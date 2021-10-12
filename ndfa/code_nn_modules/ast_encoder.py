@@ -31,14 +31,15 @@ class ASTEncoder(nn.Module):
         self.primitive_type_embedding_dim = self.encoder_params.ast_node_embedding_dim
         self.modifier_embedding_dim = self.encoder_params.ast_node_embedding_dim
 
-        if self.encoder_params.encoder_type in {'paths-folded', 'set-of-paths'}:
+        if self.encoder_params.encoder_type in \
+                {ASTEncoderParams.EncoderType.PathsFolded, ASTEncoderParams.EncoderType.SetOfPaths}:
             self.ast_paths_encoder = ASTPathsEncoder(
                 ast_node_embedding_dim=self.encoder_params.ast_node_embedding_dim,
                 encoder_params=self.encoder_params,
                 is_first_encoder_layer=self.is_first_encoder_layer,
                 ast_traversal_orientation_vocab=code_task_vocabs.ast_traversal_orientation,
                 norm_params=norm_params, dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.encoder_type == 'tree':
+        elif self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.Tree:
             self.ast_treelstm_up = ASTTreeLSTMEncoder(
                 ast_node_embedding_dim=self.encoder_params.ast_node_embedding_dim,
                 direction='leaves_to_root', norm_params=norm_params, dropout_rate=dropout_rate)
@@ -52,14 +53,15 @@ class ASTEncoder(nn.Module):
             self,
             previous_code_expression_encodings: CodeExpressionEncodingsTensors,
             sub_ast_input: Optional[SubASTInputTensors] = None) -> CodeExpressionEncodingsTensors:
-        if self.encoder_params.encoder_type in {'paths-folded', 'set-of-paths'}:
+        if self.encoder_params.encoder_type in \
+                {ASTEncoderParams.EncoderType.PathsFolded, ASTEncoderParams.EncoderType.SetOfPaths}:
             return self.ast_paths_encoder(
                 ast_nodes_encodings=previous_code_expression_encodings.ast_nodes,
                 sub_ast_input=sub_ast_input,
                 ast_paths_last_states=previous_code_expression_encodings.ast_paths_by_type
                 if previous_code_expression_encodings.ast_paths_types ==
                    self.ast_paths_encoder.encoder_params.ast_paths_types else None)
-        elif self.encoder_params.encoder_type == 'tree':
+        elif self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.Tree:
             ast_nodes_encodings_up = self.ast_treelstm_up(
                 ast_nodes_embeddings=previous_code_expression_encodings.ast_nodes,
                 ast_batch=sub_ast_input.dgl_tree)

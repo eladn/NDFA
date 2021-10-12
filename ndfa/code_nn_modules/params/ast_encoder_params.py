@@ -1,3 +1,4 @@
+from enum import Enum
 from dataclasses import dataclass
 from typing import Tuple, Optional
 
@@ -13,16 +14,20 @@ __all__ = ['ASTEncoderParams']
 
 @dataclass
 class ASTEncoderParams(HasDispatchableField):
+    class EncoderType(Enum):
+        PathsFolded = 'PathsFolded'
+        SetOfPaths = 'SetOfPaths'
+        Tree = 'Tree'
+
     @classmethod
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'paths-folded': ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges'],  # TODO: remove 'paths_combiner_params'?
-                'set-of-paths': ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges'],
-                'tree': []}))
-    encoder_type: str = conf_field(
-        default='paths-folded',
-        choices=('set-of-paths', 'tree', 'paths-folded'),
+                cls.EncoderType.PathsFolded: ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges'],  # TODO: remove 'paths_combiner_params'?
+                cls.EncoderType.SetOfPaths: ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges'],
+                cls.EncoderType.Tree: []}))
+    encoder_type: EncoderType = conf_field(
+        default=EncoderType.PathsFolded,
         description="Representation type of the AST (specific architecture of the AST code encoder).")
 
     ast_node_embedding_dim: int = conf_field(

@@ -4,6 +4,7 @@ from typing import Tuple
 
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
+from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
     HierarchicMicroMacroMethodCodeEncoderParams
 from ndfa.code_nn_modules.method_code_encoder import EncodedMethodCode
@@ -57,7 +58,7 @@ class MethodCodeEncodingsFeeder(nn.Module):
                 encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
             elif self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'ast':
                 if self.method_code_encoder_params.whole_method_expression_encoder.ast_encoder.encoder_type == \
-                        'set-of-paths':
+                        ASTEncoderParams.EncoderType.SetOfPaths:
                     # TODO: for 'leaves_sequence' we might want to have the whole sequence rather than the combined path
                     # TODO: is it ok that the outputs are defragmented?
                     #  (the masks might have `True` after a `False` for the same examples)
@@ -77,7 +78,7 @@ class MethodCodeEncodingsFeeder(nn.Module):
                         torch.cat(all_encoder_outputs_mask, dim=1)
                     assert encoder_outputs.shape[:-1] == encoder_outputs_mask.shape
                 elif self.method_code_encoder_params.whole_method_expression_encoder.ast_encoder.encoder_type in \
-                        {'tree', 'paths-folded'}:
+                        {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}:
                     encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
                         encoded_method_code.whole_method_ast_nodes_encoding)
                     encoder_outputs_mask = code_task_input.ast.ast_node_major_types.unflattener_mask

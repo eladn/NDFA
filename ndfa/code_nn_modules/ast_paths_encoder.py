@@ -31,7 +31,8 @@ class ASTPathsEncoder(nn.Module):
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(ASTPathsEncoder, self).__init__()
         self.encoder_params = encoder_params
-        assert self.encoder_params.encoder_type in {'paths-folded', 'set-of-paths'}
+        assert self.encoder_params.encoder_type in \
+               {ASTEncoderParams.EncoderType.PathsFolded, ASTEncoderParams.EncoderType.SetOfPaths}
         self.ast_node_embedding_dim = ast_node_embedding_dim
         assert all(
             ast_paths_type in {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences',
@@ -73,7 +74,7 @@ class ASTPathsEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for ast_paths_type in self.encoder_params.ast_paths_types})
 
-        if self.encoder_params.encoder_type == 'paths-folded':
+        if self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.PathsFolded:
             self.nodes_representation_path_folder = ScatterCombiner(
                 encoding_dim=self.ast_node_embedding_dim,
                 combiner_params=self.encoder_params.nodes_folding_params)
@@ -183,7 +184,7 @@ class ASTPathsEncoder(nn.Module):
                 ast_paths_last_states=None if ast_paths_last_states is None else ast_paths_last_states[ast_paths_type])
             for ast_paths_type in self.encoder_params.ast_paths_types}
 
-        if self.encoder_params.encoder_type == 'paths-folded':
+        if self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.PathsFolded:
             ast_paths_masks = {
                 ast_paths_type: sub_ast_input.get_ast_paths_node_indices(ast_paths_type).sequences_mask
                 for ast_paths_type in encoded_paths_by_path_type.keys()}
