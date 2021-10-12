@@ -74,7 +74,7 @@ class ModelExecutionParams:
 
     pp_compression_method: str = conf_field(
         default='none',
-        choices=('none', 'gzip', 'bz2', 'lzma'),
+        choices=('none', 'gzip', 'bz2', 'lzma', 'snappy', 'lz4hc', 'xpress', 'zstd', 'zstdnotfinal'),
         description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
         arg_names=['--pp-compress'])
 

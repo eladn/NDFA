@@ -85,7 +85,11 @@ class DBMKeyValueStore(KeyValueStoreInterface):
 class ZipKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode, compression):
         from zipfile import ZipFile, ZIP_LZMA, ZIP_BZIP2, ZIP_STORED, ZIP_DEFLATED
-        compression = {'none': ZIP_STORED, 'gzip': ZIP_DEFLATED, 'bz2': ZIP_BZIP2, 'lzma': ZIP_LZMA}[compression]
+        compression_translation = {'none': ZIP_STORED, 'gzip': ZIP_DEFLATED, 'bz2': ZIP_BZIP2, 'lzma': ZIP_LZMA}
+        if compression not in compression_translation:
+            raise ValueError(f'Unsupported compression type `{compression}` for zip storage method. '
+                             f'Supported methods: {list(compression_translation.keys())}.')
+        compression = compression_translation[compression]
         self.zip_file = ZipFile(path, mode, compression=compression)
 
     @classmethod
@@ -120,7 +124,11 @@ class ZipKeyValueStore(KeyValueStoreInterface):
 class TarKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode, compression):
         from tarfile import open as tarfile_open
-        compression_suffix = {'none': '', 'gzip': 'gz', 'bz2': 'bz2', 'lzma': 'xz'}[compression]
+        compression_translation = {'none': '', 'gzip': 'gz', 'bz2': 'bz2', 'lzma': 'xz'}
+        if compression not in compression_translation:
+            raise ValueError(f'Unsupported compression type `{compression}` for tar storage method. '
+                             f'Supported methods: {list(compression_translation.keys())}.')
+        compression_suffix = compression_translation[compression]
         self.tar_file = tarfile_open(path, f'{mode}:{compression_suffix}')
 
     @classmethod
@@ -158,13 +166,23 @@ class TarKeyValueStore(KeyValueStoreInterface):
 
 class RocksDBKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode, compression):
+        compressions_translation = {'bz2': 'bzip2', 'none': 'no', 'lzma': 'lz4', 'gzip': 'zlib'}
+        if compression in compressions_translation:
+            compression = compressions_translation[compression]
+        allowed_compressions = \
+            {'no', 'snappy', 'zlib', 'bzip2', 'lz4', 'lz4hc', 'xpress', 'zstd', 'zstdnotfinal', 'disable'}
+        if compression not in allowed_compressions:
+            raise ValueError(f'Unsupported compression type `{compression}` for RocksDB storage method. '
+                             f'Supported methods: {list(allowed_compressions)}.')
         import rocksdb
+        compression_type = getattr(rocksdb.CompressionType, f'{compression}_compression')
         if mode == 'x' and os.path.exists(path):
             shutil.rmtree(path)  # TODO: fix it to remove all chunks!
         # Note: These are pre-coocked production-ready options;
         #       Read more here: https://python-rocksdb.readthedocs.io/en/latest/tutorial/index.html#open
         options = rocksdb.Options(
             create_if_missing=mode == 'x',
+            compression=compression_type,
             max_open_files=300000,
             write_buffer_size=67108864,
             max_write_buffer_number=3,
