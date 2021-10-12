@@ -13,6 +13,7 @@ except ImportError:
     dgl = None
 
 from .misc import compose_fns, CollateData, CollatableValuesTuple, MapFn, get_original_type
+from .mixins import HasSelfIndexingGroupMixin
 
 
 __all__ = ['TensorsDataClass']
@@ -289,7 +290,13 @@ class TensorsDataClass:
         if batched_obj._batch_size is None:
             batched_obj._batch_size = len(inputs)
         if is_most_outer_call:
-            batched_obj.post_collate_indices_fix((), (), collate_data)
+            batched_flattened_tensors_with_self_indexing_group = \
+                batched_obj.find_batched_flattened_tensors_with_self_indexing_group()
+            batched_obj.post_collate_indices_fix(
+                parents=(),
+                fields_path=(),
+                collate_data=collate_data,
+                batched_flattened_tensors_with_self_indexing_group=batched_flattened_tensors_with_self_indexing_group)
             batched_obj.post_collate_remove_unnecessary_collate_info()
         return batched_obj
 
@@ -326,15 +333,35 @@ class TensorsDataClass:
         batched_obj._batch_size = len(inputs)
         return batched_obj
 
+    def find_batched_flattened_tensors_with_self_indexing_group(self) -> Dict[str, HasSelfIndexingGroupMixin]:
+        output_dict: Dict[str, HasSelfIndexingGroupMixin] = {}
+        if isinstance(self, HasSelfIndexingGroupMixin) and self.self_indexing_group is not None:
+            output_dict[self.self_indexing_group] = self
+        for field_name in self.get_all_fields():
+            field_value = self.access_field(field_name)
+            if isinstance(field_value, TensorsDataClass):
+                field_recursive_results = field_value.find_batched_flattened_tensors_with_self_indexing_group()
+                if len(set(field_recursive_results.keys()) & set(output_dict.keys())) != 0:
+                    print(set(field_recursive_results.keys()) & set(output_dict.keys()))
+                assert len(set(field_recursive_results.keys()) & set(output_dict.keys())) == 0
+                output_dict.update(field_recursive_results)
+        return output_dict
+
     def post_collate_indices_fix(
-            self, parents: Tuple['TensorsDataClass', ...],
-            fields_path: Tuple[str, ...], collate_data: CollateData):
+            self,
+            parents: Tuple['TensorsDataClass', ...],
+            fields_path: Tuple[str, ...],
+            collate_data: CollateData,
+            batched_flattened_tensors_with_self_indexing_group: Dict[str, HasSelfIndexingGroupMixin]):
         for field_name in self.get_all_fields():
             field_value = self.access_field(field_name)
             if isinstance(field_value, TensorsDataClass):
                 field_value.post_collate_indices_fix(
-                    parents=parents + (self,), fields_path=fields_path + (field_name,),
-                    collate_data=collate_data)
+                    parents=parents + (self,),
+                    fields_path=fields_path + (field_name,),
+                    collate_data=collate_data,
+                    batched_flattened_tensors_with_self_indexing_group=
+                    batched_flattened_tensors_with_self_indexing_group)
 
     def post_collate_remove_unnecessary_collate_info(self):
         for field_name in self.get_all_fields():

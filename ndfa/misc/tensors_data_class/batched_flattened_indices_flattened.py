@@ -5,7 +5,7 @@ from typing import List, Union, Optional, Tuple, Dict, Set, Any, final, Callable
 from .misc import CollateData
 from .tensors_data_class import TensorsDataClass
 from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndicesTensorMixin, \
-    TensorDataClassWithSingleSequenceFieldMixin
+    TensorDataClassWithSingleSequenceFieldMixin, HasSelfIndexingGroupMixin
 from .batch_flattened import BatchFlattenedTensorsDataClassMixin
 from .batch_flattened_seq import BatchFlattenedSequencesDataClassMixin
 
@@ -54,11 +54,17 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClassMixin(BatchFlattenedTensor
             for example_idx, inp in enumerate(inputs)], dim=0)
         return flattened
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
-                                 collate_data: CollateData):
+    def post_collate_indices_fix(
+            self,
+            parents: Tuple['TensorsDataClass', ...],
+            fields_path: Tuple[str, ...],
+            collate_data: CollateData,
+            batched_flattened_tensors_with_self_indexing_group: Dict[str, HasSelfIndexingGroupMixin]):
         if self.tgt_indexing_group is None:
             raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
-        addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
+        addressed_flattened_tensor = \
+            batched_flattened_tensors_with_self_indexing_group.get(self.tgt_indexing_group, None)
+        # addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])  # old expensive impl
         if addressed_flattened_tensor is None:
             raise ValueError(
                 f'Not found field in tensors data class which is addressable '
@@ -68,7 +74,8 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClassMixin(BatchFlattenedTensor
             fixes = addressed_flattened_tensor.batched_index_offset_additive_fix_per_example[self.example_index]
             assert original_indices.size()[:fixes.ndim] == fixes.size()
             if original_indices.ndim > fixes.ndim:
-                fixes = fixes.view(fixes.size() + (1,) * (original_indices.ndim - fixes.ndim)).expand(original_indices.size())
+                fixes = fixes.view(fixes.size() + (1,) * (original_indices.ndim - fixes.ndim)).expand(
+                    original_indices.size())
             offsets_fixes = torch.where(
                 original_indices < self.within_example_indexing_start,
                 torch.zeros(1, dtype=original_indices.dtype, device=original_indices.device),
@@ -124,10 +131,17 @@ class BatchedFlattenedIndicesFlattenedSequencesDataClassMixin(
             inputs, collate_data=collate_data)
         return flattened
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
-                                 collate_data: CollateData):
+    def post_collate_indices_fix(
+            self,
+            parents: Tuple['TensorsDataClass', ...],
+            fields_path: Tuple[str, ...],
+            collate_data: CollateData,
+            batched_flattened_tensors_with_self_indexing_group: Dict[str, HasSelfIndexingGroupMixin]):
         super(BatchedFlattenedIndicesFlattenedSequencesDataClassMixin, self).post_collate_indices_fix(
-            parents=parents, fields_path=fields_path, collate_data=collate_data)
+            parents=parents,
+            fields_path=fields_path,
+            collate_data=collate_data,
+            batched_flattened_tensors_with_self_indexing_group=batched_flattened_tensors_with_self_indexing_group)
         sequences_fields = self.get_data_fields()
         for field in sequences_fields:
             # Fill 0s (without example offset) for sequences paddings.

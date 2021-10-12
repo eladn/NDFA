@@ -4,7 +4,7 @@ from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 
 from .misc import CollateData
 from .tensors_data_class import TensorsDataClass
-from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndicesTensorMixin
+from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndicesTensorMixin, HasSelfIndexingGroupMixin
 
 
 __all__ = ['BatchedFlattenedIndicesTensor', 'batch_flattened_indices_tensor_field']
@@ -39,15 +39,21 @@ class BatchedFlattenedIndicesTensor(
         collated.within_example_indexing_start = inputs[0].within_example_indexing_start
         return collated
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
-                                 collate_data: CollateData):
+    def post_collate_indices_fix(
+            self, parents: Tuple['TensorsDataClass', ...],
+            fields_path: Tuple[str, ...],
+            collate_data: CollateData,
+            batched_flattened_tensors_with_self_indexing_group: Dict[str, HasSelfIndexingGroupMixin]):
         if self.tgt_indexing_group is None:
             raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
-        addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
+        addressed_flattened_tensor = \
+            batched_flattened_tensors_with_self_indexing_group.get(self.tgt_indexing_group, None)
+        # addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])  # old expensive impl
         if addressed_flattened_tensor is None:
             raise ValueError(
                 f'Not found field in tensors data class which is addressable '
                 f'via index group `{self.tgt_indexing_group}`.')
+        # assert isinstance(addressed_flattened_tensor, BatchFlattenedTensorsDataClassMixin)
         for field in self.get_indices_fields():
             original_indices = getattr(self, field.name)
             assert addressed_flattened_tensor.batched_index_offset_additive_fix_per_example.size(0) == \

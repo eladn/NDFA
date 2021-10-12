@@ -6,7 +6,7 @@ from typing import List, Union, Optional, Tuple, Dict, Set, Any, final
 
 from .misc import collate_tensors_with_variable_shapes, CollateData, inverse_permutation
 from .tensors_data_class import TensorsDataClass
-from .mixins import HasTargetIndexingGroupMixin
+from .mixins import HasTargetIndexingGroupMixin, HasSelfIndexingGroupMixin
 
 
 __all__ = ['BatchedFlattenedIndicesPseudoRandomPermutation', 'batch_flattened_indices_pseudo_random_permutation_field']
@@ -42,11 +42,17 @@ class BatchedFlattenedIndicesPseudoRandomPermutation(HasTargetIndexingGroupMixin
         collated.tgt_indexing_group = inputs[0].tgt_indexing_group
         return collated
 
-    def post_collate_indices_fix(self, parents: Tuple['TensorsDataClass', ...], fields_path: Tuple[str, ...],
-                                 collate_data: CollateData):
+    def post_collate_indices_fix(
+            self,
+            parents: Tuple['TensorsDataClass', ...],
+            fields_path: Tuple[str, ...],
+            collate_data: CollateData,
+            batched_flattened_tensors_with_self_indexing_group: Dict[str, HasSelfIndexingGroupMixin]):
         if self.tgt_indexing_group is None:
             raise ValueError(f'`{self.__class__.__name__}` must have an `tgt_indexing_group`.')
-        addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])
+        addressed_flattened_tensor = \
+            batched_flattened_tensors_with_self_indexing_group.get(self.tgt_indexing_group, None)
+        # addressed_flattened_tensor = self.find_addressed_batched_flattened_tensor(parents[0])  # old expensive impl
         if addressed_flattened_tensor is None:
             raise ValueError(
                 f'Not found field in tensors data class which is addressable '

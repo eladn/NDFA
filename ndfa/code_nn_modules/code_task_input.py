@@ -158,7 +158,7 @@ class PDGInputTensors(TensorsDataClass):
 class IdentifiersInputTensors(TensorsDataClass):
     # (nr_sub_parts_in_batch, )  # TODO: is it necessary?
     sub_parts_batch: BatchFlattenedTensor = \
-        batch_flattened_tensor_field(self_indexing_group='identifiers_sub_parts')
+        batch_flattened_tensor_field(self_indexing_group='identifiers_sub_parts__')
     # (nr_sub_parts_in_batch, )
     sub_parts_vocab_word_index: BatchFlattenedTensor = \
         batch_flattened_tensor_field(self_indexing_group='identifiers_sub_parts')
@@ -166,16 +166,16 @@ class IdentifiersInputTensors(TensorsDataClass):
     # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     identifier_sub_parts_index: BatchedFlattenedIndicesFlattenedSeq = \
         batched_flattened_indices_flattened_seq_field(
-            self_indexing_group='identifiers', tgt_indexing_group='identifiers_sub_parts')
+            self_indexing_group='identifiers__', tgt_indexing_group='identifiers_sub_parts')
     # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier)
     identifier_sub_parts_vocab_word_index: BatchFlattenedSeq = \
         batch_flattened_seq_field(self_indexing_group='identifiers')
     # (nr_identifiers_in_batch, )
     identifiers_vocab_word_index: BatchFlattenedTensor = \
-        batch_flattened_tensor_field(self_indexing_group='identifiers')
+        batch_flattened_tensor_field(self_indexing_group='identifiers___')
     # (nr_identifiers_in_batch, batch_max_nr_sub_parts_in_identifier, nr_hashing_features)
     identifier_sub_parts_hashings: BatchFlattenedSeq = \
-        batch_flattened_seq_field(self_indexing_group='identifiers')
+        batch_flattened_seq_field(self_indexing_group='identifiers____')
     # (nr_sub_parts_obfuscation_embeddings)
     sub_parts_obfuscation: BatchFlattenedPseudoRandomSamplerFromRange = \
         batch_flattened_pseudo_random_sampler_from_range_field(
