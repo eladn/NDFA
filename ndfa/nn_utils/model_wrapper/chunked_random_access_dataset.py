@@ -3,6 +3,7 @@ import io
 import abc
 import math
 import torch
+import shutil
 import itertools
 import numpy as np
 from warnings import warn
@@ -155,8 +156,56 @@ class TarKeyValueStore(KeyValueStoreInterface):
         return 'r'
 
 
+class RocksDBKeyValueStore(KeyValueStoreInterface):
+    def __init__(self, path, mode, compression):
+        import rocksdb
+        if mode == 'x' and os.path.exists(path):
+            shutil.rmtree(path)  # TODO: fix it to remove all chunks!
+        # Note: These are pre-coocked production-ready options;
+        #       Read more here: https://python-rocksdb.readthedocs.io/en/latest/tutorial/index.html#open
+        options = rocksdb.Options(
+            create_if_missing=mode == 'x',
+            max_open_files=300000,
+            write_buffer_size=67108864,
+            max_write_buffer_number=3,
+            target_file_size_base=67108864,
+            table_factory=rocksdb.BlockBasedTableFactory(
+                filter_policy=rocksdb.BloomFilterPolicy(10),
+                block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
+                block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2))))
+        self.db = rocksdb.DB(path, options)
+
+    @classmethod
+    def open(cls, path, mode, compression) -> 'RocksDBKeyValueStore':
+        return RocksDBKeyValueStore(path=path, mode=mode, compression=compression)
+
+    def close(self):
+        del self.db
+
+    def get_value_by_key(self, key: str) -> bytes:
+        return self.db.get(key.encode('ascii'))
+
+    def write_member(self, key: str, value: bytes) -> int:
+        self.db.put(key.encode('ascii'), value)
+        # return len(value)  # it is not the actual total & compressed size :( I don't know how to get it.
+        return 0  # so chunks won't be created.
+
+    @classmethod
+    def get_new_and_truncate_write_mode(cls) -> 'str':
+        return 'x'
+
+    @classmethod
+    def get_read_mode(cls) -> 'str':
+        return 'r'
+
+
 def get_key_value_store(storage_method: str = 'dbm', compression_method: str = 'none'):
-    return {'dbm': DBMKeyValueStore, 'zip': ZipKeyValueStore, 'tar': TarKeyValueStore}[storage_method]
+    kv_store_methods_by_name = {
+        'dbm': DBMKeyValueStore,
+        'zip': ZipKeyValueStore,
+        'tar': TarKeyValueStore,
+        'rocksdb': RocksDBKeyValueStore}
+    return kv_store_methods_by_name[storage_method]
 
 
 class ChunkedRandomAccessDatasetWriter:
@@ -229,7 +278,7 @@ class ChunkedRandomAccessDatasetWriter:
                     warn(f'Overwriting existing preprocessed files {cur_chunk_files_found_in_pp_dir} '
                          f'in dir `{os.path.dirname(self.cur_chunk_filepath)}`.')
                     for filename in cur_chunk_files_found_in_pp_dir:
-                        os.remove(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
+                        shutil.rmtree(os.path.join(os.path.dirname(self.cur_chunk_filepath), filename))
             self.cur_chunk_file = self.key_value_store_type.open(
                 self.cur_chunk_filepath, self.key_value_store_type.get_new_and_truncate_write_mode(),
                 compression=self.compression_method)
@@ -260,7 +309,7 @@ class ChunkedRandomAccessDatasetWriter:
             warn(f'Removing existing preprocessed files {chunk_files_found_in_pp_dir} '
                  f'in dir `{os.path.dirname(chunk_filepath)}`.')
             for filename in chunk_files_found_in_pp_dir:
-                os.remove(os.path.join(os.path.dirname(chunk_filepath), filename))
+                shutil.rmtree(os.path.join(os.path.dirname(chunk_filepath), filename))
 
 
 class ChunkedRandomAccessDataset(Dataset):

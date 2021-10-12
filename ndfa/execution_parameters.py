@@ -67,8 +67,8 @@ class ModelExecutionParams:
         arg_names=['--pp-override'])
 
     pp_storage_method: str = conf_field(
-        default='zip',
-        choices=('zip', 'tar', 'dbm'),
+        default='rocksdb',
+        choices=('zip', 'tar', 'dbm', 'rocksdb'),
         description="Override existing preprocessed data if such exist in the given `pp_data` destination path.",
         arg_names=['--pp-storage-method'])
 
