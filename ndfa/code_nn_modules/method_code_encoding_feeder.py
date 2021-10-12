@@ -33,13 +33,13 @@ class MethodCodeEncodingsFeeder(nn.Module):
 
     def forward(self, code_task_input: MethodCodeInputTensors, encoded_method_code: EncodedMethodCode) \
             -> Tuple[torch.Tensor, torch.BoolTensor]:
-        if self.method_code_encoder_params.method_encoder_type == 'method-cfg':
+        if self.method_code_encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFG:
             encoder_outputs = encoded_method_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
-        elif self.method_code_encoder_params.method_encoder_type == 'method-cfg-v2':
+        elif self.method_code_encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFGV2:
             encoder_outputs = encoded_method_code.encoded_cfg_nodes_after_bridge
             encoder_outputs_mask = code_task_input.pdg.cfg_nodes_control_kind.unflattener_mask
-        elif self.method_code_encoder_params.method_encoder_type == 'hierarchic':
+        elif self.method_code_encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
             if self.method_code_encoder_params.hierarchic_micro_macro_encoder.decoder_feeding_policy == \
                     HierarchicMicroMacroMethodCodeEncoderParams.DecoderFeedingPolicy.MacroItems:
                 unflattanable_encodings = encoded_method_code.macro_encodings
@@ -50,7 +50,8 @@ class MethodCodeEncodingsFeeder(nn.Module):
                 assert False
             encoder_outputs = unflattanable_encodings.get_unflattened()
             encoder_outputs_mask = unflattanable_encodings.get_unflattener_mask()
-        elif self.method_code_encoder_params.method_encoder_type == 'whole-method':
+            # assert torch.allclose(encoder_outputs[~encoder_outputs_mask], torch.tensor(.0))
+        elif self.method_code_encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
             if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding
                 encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask

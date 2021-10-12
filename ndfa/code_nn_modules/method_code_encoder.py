@@ -54,14 +54,14 @@ class MethodCodeEncoder(nn.Module):
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         # TODO: use `encoder_params.method_encoder_type` in forward()!
-        if self.encoder_params.method_encoder_type == 'method-cfg':
+        if self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFG:
             self.method_cfg_encoder = MethodCFGEncoder(
                 code_task_vocabs=code_task_vocabs,
                 encoder_params=self.encoder_params.method_cfg_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFGV2:
             self.method_cfg_encoder_v2 = MethodCFGEncoderV2(
                 code_task_vocabs=code_task_vocabs,
                 encoder_params=self.encoder_params.method_cfg_encoder,
@@ -70,7 +70,7 @@ class MethodCodeEncoder(nn.Module):
                 norm_params=NormWrapperParams(norm_type=NormWrapperParams.NormType.Layer),  # TODO: put in HP!
                 symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.method_encoder_type == 'hierarchic':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
             self.hierarchic_micro_macro_method_encoder = HierarchicMicroMacroMethodCodeEncoder(
                 code_task_vocabs=code_task_vocabs,
                 params=self.encoder_params.hierarchic_micro_macro_encoder,
@@ -79,7 +79,7 @@ class MethodCodeEncoder(nn.Module):
                 norm_params=NormWrapperParams(norm_type=NormWrapperParams.NormType.Layer),  # TODO: put in HP!
                 symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.method_encoder_type == 'whole-method':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
             self.whole_method_code_embedder = CodeExpressionEmbedder(
                 code_task_vocabs=code_task_vocabs,
                 encoder_params=self.encoder_params.whole_method_expression_encoder,
@@ -124,7 +124,7 @@ class MethodCodeEncoder(nn.Module):
         unflattened_cfg_nodes_encodings = None
         macro_encodings, micro_encodings = None, None
         encoded_cfg_nodes_after_bridge = None
-        if self.encoder_params.method_encoder_type == 'method-cfg':
+        if self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFG:
             encoded_method_cfg: EncodedMethodCFG = self.method_cfg_encoder(
                 code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
             unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
@@ -137,7 +137,7 @@ class MethodCodeEncoder(nn.Module):
                     self.encoder_decoder_bridge_dense_layers,
                     encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
                     .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
-        elif self.encoder_params.method_encoder_type == 'method-cfg-v2':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.MethodCFGV2:
             encoded_method_cfg: EncodedMethodCFGV2 = self.method_cfg_encoder_v2(
                 code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
             unflattened_cfg_nodes_encodings = code_task_input.pdg.cfg_nodes_control_kind.unflatten(
@@ -150,7 +150,7 @@ class MethodCodeEncoder(nn.Module):
                     self.encoder_decoder_bridge_dense_layers,
                     encoded_method_cfg.encoded_cfg_nodes.flatten(0, 1))\
                     .view(encoded_cfg_nodes_after_bridge.size()[:-1] + (-1,))
-        elif self.encoder_params.method_encoder_type == 'hierarchic':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
             hierarchic_method_encodings: HierarchicMicroMacroMethodCodeEncodings = \
                 self.hierarchic_micro_macro_method_encoder(
                     code_task_input=code_task_input, encoded_identifiers=encoded_identifiers)
@@ -158,7 +158,7 @@ class MethodCodeEncoder(nn.Module):
             micro_encodings = hierarchic_method_encodings.unflattenable_final_micro_encodings
             # TODO: apply bridge to the macro/micro encodings!
             encoded_symbols = hierarchic_method_encodings.symbols_encodings
-        elif self.encoder_params.method_encoder_type == 'whole-method':
+        elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
             embedded_method_code: CodeExpressionEncodingsTensors = self.whole_method_code_embedder(
                 encoded_identifiers=encoded_identifiers,
                 tokenized_expressions_input=code_task_input.method_tokenized_code,

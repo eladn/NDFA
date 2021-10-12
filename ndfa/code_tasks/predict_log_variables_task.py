@@ -200,11 +200,12 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
             embedding_dim=self.model_hps.method_code_encoder.symbol_embedding_dim,
             padding_idx=self.code_task_vocabs.symbols_special_words.get_word_idx('<PAD>'))
 
-        if self.model_hps.method_code_encoder.method_encoder_type in {'method-cfg', 'method-cfg-v2'}:
+        if self.model_hps.method_code_encoder.method_encoder_type in \
+                {MethodCodeEncoderParams.EncoderType.MethodCFG, MethodCodeEncoderParams.EncoderType.MethodCFGV2}:
             encoder_output_dim = self.model_hps.method_code_encoder.method_cfg_encoder.cfg_node_encoding_dim
-        elif self.model_hps.method_code_encoder.method_encoder_type == 'hierarchic':
+        elif self.model_hps.method_code_encoder.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
             encoder_output_dim = self.model_hps.method_code_encoder.hierarchic_micro_macro_encoder.macro_encoding_dim
-        elif self.model_hps.method_code_encoder.method_encoder_type == 'whole-method':
+        elif self.model_hps.method_code_encoder.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
             # TODO: put in HPs
             encoder_output_dim = \
                 self.model_hps.method_code_encoder.whole_method_expression_encoder.tokens_seq_encoder.token_encoding_dim \
