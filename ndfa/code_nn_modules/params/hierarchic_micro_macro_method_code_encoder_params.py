@@ -42,7 +42,7 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
     global_context_encoder: MethodCFGMacroEncoderParams = conf_field(
         default_factory=MethodCFGMacroEncoderParams)
     decoder_feeding_policy: DecoderFeedingPolicy = conf_field(
-        default=DecoderFeedingPolicy.MacroItems)
+        default=DecoderFeedingPolicy.MicroItems)
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:
