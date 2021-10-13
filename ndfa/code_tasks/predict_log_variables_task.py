@@ -351,18 +351,20 @@ def preprocess_logging_call_example(
                 (logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT) and
                 (raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type ==
                  SerASTNodeType.METHOD_CALL_EXPR) and
-                (len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1) and
+                (code_task_input.ast.ast_leaves_sequence_node_indices is None or
+                 len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1) and
                 logging_call_pdg_node.code_sub_token_range_ref is not None and
                 logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx ==
                 logging_call_pdg_node_ast_node.code_sub_token_range_ref.begin_token_idx),
             min_val=1)]
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    is_log_stmt_included_in_any_l2l_path = any(
-        ast_path[0] == logging_call_pdg_node_ast_node_idx or ast_path[-1] == logging_call_pdg_node_ast_node_idx
-        for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences)
-    if not is_log_stmt_included_in_any_l2l_path:
-        warn('Log-stmt ast-node is not included in any sampled AST leaf-to-leaf path.')
+    if code_task_input.ast.ast_leaf_to_leaf_paths_node_indices is not None:
+        is_log_stmt_included_in_any_l2l_path = any(
+            ast_path[0] == logging_call_pdg_node_ast_node_idx or ast_path[-1] == logging_call_pdg_node_ast_node_idx
+            for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences)
+        if not is_log_stmt_included_in_any_l2l_path:
+            warn('Log-stmt ast-node is not included in any sampled AST leaf-to-leaf path.')
 
     # DBG: Calc probability (per example) for not including the log-stmt in any sampled AST leaf2leaf path.
     # nr_ast_leaves = len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences[0])

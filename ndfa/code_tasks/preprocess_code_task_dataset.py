@@ -613,7 +613,7 @@ def preprocess_method_ast(
         method: SerMethod, method_ast: SerMethodAST,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None,
         sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None) -> MethodASTInputTensors:
-    pp_method_ast_paths = True  # TODO: make it a preprocess parameter
+    pp_method_ast_paths = False  # TODO: make it a preprocess parameter
     method_ast_paths: Optional[ASTPaths] = None
 
     # Note: For some sub-AST that have to be masked-out:
