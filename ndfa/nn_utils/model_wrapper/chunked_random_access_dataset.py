@@ -7,7 +7,7 @@ import shutil
 import itertools
 import numpy as np
 from warnings import warn
-from typing import Optional, Type
+from typing import Optional, Tuple, Sequence
 from torch.utils.data.dataset import Dataset
 
 
@@ -51,6 +51,9 @@ class KeyValueStoreInterface(abc.ABC):
     @abc.abstractmethod
     def get_read_mode(cls) -> 'str':
         ...
+
+    def get_values_by_keys(self, keys: Sequence[str]) -> Tuple[bytes, ...]:
+        return tuple(self.get_value_by_key(key) for key in keys)
 
 
 class DBMKeyValueStore(KeyValueStoreInterface):
@@ -203,6 +206,11 @@ class RocksDBKeyValueStore(KeyValueStoreInterface):
     def get_value_by_key(self, key: str) -> bytes:
         return self.db.get(key.encode('ascii'))
 
+    def get_values_by_keys(self, keys: Sequence[str]) -> Tuple[bytes, ...]:
+        encoded_keys = [key.encode('ascii') for key in keys]
+        value_by_key = self.db.multi_get(encoded_keys)
+        return tuple(value_by_key[key] for key in encoded_keys)
+
     def write_member(self, key: str, value: bytes) -> int:
         self.db.put(key.encode('ascii'), value)
         # return len(value)  # it is not the actual total & compressed size :( I don't know how to get it.
@@ -343,7 +351,7 @@ class ChunkedRandomAccessDataset(Dataset):
         self._kvstore_chunks_lengths = []
         for chunk_idx in itertools.count():
             filepath = f'{self.pp_data_path_prefix}.{chunk_idx}.pt'
-            if not os.path.isfile(filepath) and not os.path.isfile(filepath + '.dat'):
+            if not os.path.exists(filepath) and not os.path.exists(filepath + '.dat'):
                 if chunk_idx == 0:
                     raise ValueError(f'Could not find dataset in path `{self.pp_data_path_prefix}`.')
                 else:
@@ -358,6 +366,7 @@ class ChunkedRandomAccessDataset(Dataset):
         self._kvstore_chunks_lengths = np.array(self._kvstore_chunks_lengths)
         self._kvstore_chunks_stop_indices = np.cumsum(self._kvstore_chunks_lengths)
         self._kvstore_chunks_start_indices = self._kvstore_chunks_stop_indices - self._kvstore_chunks_lengths
+        self.parallel_deserialize_worker = None
 
     def _open_chunk(self, chunk_idx: int) -> KeyValueStoreInterface:
         return self.key_value_store_type.open(
@@ -389,11 +398,43 @@ class ChunkedRandomAccessDataset(Dataset):
             for kvstore_opened_chunks in self._kvstore_opened_chunks_per_pid.values():
                 for chunk_kvstore in kvstore_opened_chunks.values():
                     chunk_kvstore.close()
+        if self.parallel_deserialize_worker is not None:
+            del self.parallel_deserialize_worker
 
-    def __getitem__(self, idx):
-        assert isinstance(idx, int) and idx <= self._len
-        chunk_kvstore = self._get_chunk(chunk_idx=self._get_chunk_idx_contains_item(idx))
-        binary_serialized_example = chunk_kvstore.get_value_by_key(str(idx))
-        with io.BytesIO(binary_serialized_example) as bytes_io_stream:
-            bytes_io_stream.seek(0)
-            return torch.load(bytes_io_stream)
+    def __getitem__(self, possibly_batched_index):
+        if isinstance(possibly_batched_index, int):
+            assert possibly_batched_index <= self._len
+            chunk_kvstore = self._get_chunk(chunk_idx=self._get_chunk_idx_contains_item(possibly_batched_index))
+            binary_serialized_example = chunk_kvstore.get_value_by_key(str(possibly_batched_index))
+            with io.BytesIO(binary_serialized_example) as bytes_io_stream:
+                bytes_io_stream.seek(0)
+                return torch.load(bytes_io_stream)
+        elif isinstance(possibly_batched_index, (list, tuple)):
+            assert all(isinstance(index, int) and index <= self._len for index in possibly_batched_index)
+            assert len(self._kvstore_chunks_lengths) == 1
+            chunk_kvstore = self._get_chunk(chunk_idx=self._get_chunk_idx_contains_item(possibly_batched_index[0]))
+            binary_serialized_examples = chunk_kvstore.get_values_by_keys([str(idx) for idx in possibly_batched_index])
+
+            # concurrent version:
+            #   [doesn't help. i checked on my 2 cores Mac with batch-size=32:
+            #    for 2 "jobs" it adds ~10sec, for 4 "jobs" it adds even more]
+            # from joblib import Parallel, delayed
+            # if self.parallel_deserialize_worker is None:
+            #     self.parallel_deserialize_worker = Parallel(n_jobs=2)
+            # def load_example(binary_serialized_example: bytes):
+            #     with io.BytesIO(binary_serialized_example) as bytes_io_stream:
+            #         bytes_io_stream.seek(0)
+            #         return torch.load(bytes_io_stream)
+            # loaded_examples = self.parallel_deserialize_worker(
+            #     delayed(load_example)(binary_serialized_example)
+            #     for binary_serialized_example in binary_serialized_examples)
+            # return loaded_examples
+
+            loaded_examples = []
+            for binary_serialized_example in binary_serialized_examples:
+                with io.BytesIO(binary_serialized_example) as bytes_io_stream:
+                    bytes_io_stream.seek(0)
+                    loaded_examples.append(torch.load(bytes_io_stream))
+            return loaded_examples
+        else:
+            assert False

@@ -8,7 +8,7 @@ import functools
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
-from torch.utils.data.dataloader import DataLoader
+from torch.utils.data.dataloader import DataLoader, RandomSampler, BatchSampler
 from typing import Optional, Tuple
 import itertools
 from warnings import warn
@@ -151,8 +151,8 @@ def main():
         'num_workers': dataloader_num_workers,
         'pin_memory': exec_params.dataloader_pin_memory,
         'persistent_workers': False} if use_gpu else {}
-    torch_ver_major, torch_ver_minor = (int(v) for v in torch.__version__.split('.')[:2])
-    if use_gpu and dataloader_num_workers > 0 and (torch_ver_major > 1 or torch_ver_major == 1 and torch_ver_minor >= 8):
+    torch_version = tuple(int(v) for v in torch.__version__.split('.')[:2])
+    if use_gpu and dataloader_num_workers > 0 and torch_version >= (1, 8):
         dataloader_prefetch_factor = 20  # TODO: pass `prefetch_factor` from a param
         dataloader_cuda_kwargs['prefetch_factor'] = dataloader_prefetch_factor
 
@@ -202,12 +202,24 @@ def main():
             pp_data_path=exec_params.pp_data_dir_path,
             pp_storage_method=exec_params.pp_storage_method,
             pp_compression_method=exec_params.pp_compression_method)
+        # train_loader = DataLoader(
+        #     train_dataset,
+        #     batch_size=exec_params.batch_size,
+        #     collate_fn=functools.partial(
+        #         task.collate_examples,
+        #         model_hps=exec_params.experiment_setting.model_hyper_params),
+        #     shuffle=True, **dataloader_cuda_kwargs)
         train_loader = DataLoader(
-            train_dataset, batch_size=exec_params.batch_size,
+            train_dataset,
+            batch_size=None,
+            sampler=BatchSampler(
+                RandomSampler(range(len(train_dataset))),
+                batch_size=exec_params.batch_size, drop_last=False),
             collate_fn=functools.partial(
                 task.collate_examples,
                 model_hps=exec_params.experiment_setting.model_hyper_params),
-            shuffle=True, **dataloader_cuda_kwargs)
+            shuffle=False,
+            **dataloader_cuda_kwargs)
         eval_loader = None
         if exec_params.perform_evaluation:
             eval_dataset = task.create_dataset(

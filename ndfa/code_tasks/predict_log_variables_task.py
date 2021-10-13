@@ -311,13 +311,18 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
             storage_method=storage_method, compression_method=compression_method)
         # TODO: add hash of task props & model HPs to perprocessed file name.
 
-    def __getitem__(self, idx):
-        example = super(PredictLogVarsTaskDataset, self).__getitem__(idx)
-        assert isinstance(example, PredictLogVarsTaggedExample)
-        assert all(hasattr(example, field.name) for field in dataclasses.fields(PredictLogVarsTaggedExample))
-        assert isinstance(example.code_task_input, MethodCodeInputTensors)
-        assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputTensors))
-        return example
+    def __getitem__(self, possibly_batched_index):
+        example = super(PredictLogVarsTaskDataset, self).__getitem__(possibly_batched_index)
+        if isinstance(example, PredictLogVarsTaggedExample):
+            # assert all(hasattr(example, field.name) for field in dataclasses.fields(PredictLogVarsTaggedExample))
+            # assert isinstance(example.code_task_input, MethodCodeInputTensors)
+            # assert all(hasattr(example.code_task_input, field.name) for field in dataclasses.fields(MethodCodeInputTensors))
+            return example
+        elif isinstance(example, list):
+            assert all(isinstance(ex, PredictLogVarsTaggedExample) for ex in example)
+            return example
+        else:
+            assert False
 
 
 def preprocess_logging_call_example(
