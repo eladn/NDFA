@@ -227,14 +227,25 @@ def main():
                 dataset_props=exec_params.experiment_setting.dataset,
                 datafold=DataFold.Validation,
                 pp_data_path=exec_params.pp_data_dir_path,
-            pp_storage_method=exec_params.pp_storage_method,
-            pp_compression_method=exec_params.pp_compression_method)
+                pp_storage_method=exec_params.pp_storage_method,
+                pp_compression_method=exec_params.pp_compression_method)
+            # eval_loader = DataLoader(
+            #     eval_dataset, batch_size=exec_params.batch_size,
+            #     collate_fn=functools.partial(
+            #         task.collate_examples,
+            #         model_hps=exec_params.experiment_setting.model_hyper_params),
+            #     shuffle=True, **dataloader_cuda_kwargs)
             eval_loader = DataLoader(
-                eval_dataset, batch_size=exec_params.batch_size,
+                eval_dataset,
+                batch_size=None,
+                sampler=BatchSampler(
+                    RandomSampler(range(len(eval_dataset))),
+                    batch_size=exec_params.batch_size, drop_last=False),
                 collate_fn=functools.partial(
                     task.collate_examples,
                     model_hps=exec_params.experiment_setting.model_hyper_params),
-                shuffle=True, **dataloader_cuda_kwargs)
+                shuffle=False,
+                **dataloader_cuda_kwargs)
 
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
 
