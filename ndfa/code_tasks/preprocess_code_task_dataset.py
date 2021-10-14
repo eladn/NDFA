@@ -1150,9 +1150,12 @@ def preprocess_sub_asts(
                     for parent_ast_node_idx, siblings_sequence in sub_ast_paths.siblings_sequences.items()],
             ),  # tgt_indexing_group='ast_nodes'),
             dgl_tree=dgl_ast)
-        assert len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
-        assert len(sub_ast_input_tensors.ast_leaf_to_root_paths_node_indices.sequences) > 0
-        assert len(sub_ast_input_tensors.siblings_sequences_node_indices.sequences) > 0
+        assert sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices is None or \
+               len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
+        assert sub_ast_input_tensors.ast_leaf_to_root_paths_node_indices is None or \
+               len(sub_ast_input_tensors.ast_leaf_to_root_paths_node_indices.sequences) > 0
+        assert sub_ast_input_tensors.siblings_sequences_node_indices is None or \
+               len(sub_ast_input_tensors.siblings_sequences_node_indices.sequences) > 0
     else:
         sub_ast_input_tensors = SubASTInputTensors(
             ast_leaf_to_leaf_paths_node_indices=None,
