@@ -32,7 +32,8 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, MethodCodePreprocessParams, \
-    ASTPreprocessParams, HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams
+    ASTPreprocessParams, HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams, \
+    ASTPathsPreprocessParams
 
 
 __all__ = [
@@ -1478,10 +1479,11 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
     return NDFAModelPreprocessParams(
         method_code=MethodCodePreprocessParams(
             hierarchic=HierarchicMethodEncoderPreprocessParams(
-                micro_ast=ASTPreprocessParams(),
+                micro_ast=ASTPreprocessParams(
+                    paths=ASTPathsPreprocessParams(
+                        traversal=True, leaf_to_leaf=True, leaf_to_root=True)),
                 control_flow_paths=ControlFlowPathsPreprocessParams(
-                    traversal_edges=True, full_paths=True
-                ))))
+                    traversal_edges=True, full_paths=True))))
 
 
 class PPExampleFnType(Protocol):
