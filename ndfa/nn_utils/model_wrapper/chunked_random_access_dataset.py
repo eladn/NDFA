@@ -186,15 +186,16 @@ class RocksDBKeyValueStore(KeyValueStoreInterface):
         options = rocksdb.Options(
             create_if_missing=mode == 'x',
             compression=compression_type,
-            max_open_files=300000,
+            max_open_files=120,  # 300000
             write_buffer_size=67108864,
             max_write_buffer_number=3,
             target_file_size_base=67108864,
             table_factory=rocksdb.BlockBasedTableFactory(
+                # no_block_cache=True,
                 filter_policy=rocksdb.BloomFilterPolicy(10),
                 block_cache=rocksdb.LRUCache(2 * (1024 ** 3)),
                 block_cache_compressed=rocksdb.LRUCache(500 * (1024 ** 2))))
-        self.db = rocksdb.DB(path, options)
+        self.db = rocksdb.DB(db_name=path, opts=options, read_only=(mode == 'r'))
 
     @classmethod
     def open(cls, path, mode, compression) -> 'RocksDBKeyValueStore':
