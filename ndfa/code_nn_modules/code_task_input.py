@@ -191,40 +191,41 @@ def dataclasses_field_wo_defaults():
     return dataclasses.field()
 
 
+# TODO: `ASTPathsInputTensors`
 @dataclasses.dataclass
 class SubASTInputTensors(TensorsDataClass):
-    ast_leaf_to_leaf_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+    ast_leaf_to_leaf_paths_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(
             tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
             nr_sequences_to_sample_per_example=lambda collate_data:
             collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
-    ast_leaf_to_leaf_paths_child_place: BatchFlattenedSeq = \
+    ast_leaf_to_leaf_paths_child_place: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
             nr_sequences_to_sample_per_example=lambda collate_data:
             collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
-    ast_leaf_to_leaf_paths_vertical_direction: BatchFlattenedSeq = \
+    ast_leaf_to_leaf_paths_vertical_direction: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
             nr_sequences_to_sample_per_example=lambda collate_data:
             collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
-    ast_leaf_to_root_paths_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+    ast_leaf_to_root_paths_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(
             tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
             nr_sequences_to_sample_per_example=lambda collate_data:
             collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading)
-    ast_leaf_to_root_paths_child_place: BatchFlattenedSeq = \
+    ast_leaf_to_root_paths_child_place: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
             nr_sequences_to_sample_per_example=lambda collate_data:
             collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading)
-    ast_leaves_sequence_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+    ast_leaves_sequence_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    siblings_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+    siblings_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    siblings_w_parent_sequences_node_indices: BatchedFlattenedIndicesFlattenedSeq = \
+    siblings_w_parent_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
-    dgl_tree: dgl.DGLGraph = dataclasses_field_wo_defaults()  # To avoid IDE errors
+    dgl_tree: Optional[dgl.DGLGraph] = dataclasses_field_wo_defaults()  # To avoid IDE errors
 
     def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
         if path_type == 'leaf_to_leaf':

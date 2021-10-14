@@ -27,6 +27,7 @@ from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMix
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
+from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -44,12 +45,14 @@ class PredictLogVarsTask(CodeTaskBase):
 
     def preprocess_raw_example(
             self, model_hps: NDFAModelHyperParams,
+            preprocess_params: NDFAModelPreprocessParams,
             code_task_vocabs: CodeTaskVocabs,
             raw_example: Any,
             add_tag: bool = True) \
             -> 'PredictLogVarsTaggedExample':
         return preprocess_logging_call_example(
-            model_hps=model_hps, code_task_vocabs=code_task_vocabs, raw_example=raw_example, add_tag=add_tag)
+            model_hps=model_hps, preprocess_params=preprocess_params,
+            code_task_vocabs=code_task_vocabs, raw_example=raw_example, add_tag=add_tag)
 
     def build_model(self, model_hps: NDFAModelHyperParams, pp_data_path: str) -> 'PredictLogVarsModel':
         vocabs = self.create_or_load_code_task_vocabs(model_hps=model_hps, pp_data_path=pp_data_path)
@@ -327,11 +330,12 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
 
 def preprocess_logging_call_example(
         model_hps: NDFAModelHyperParams,
+        preprocess_params: NDFAModelPreprocessParams,
         code_task_vocabs: CodeTaskVocabs,
         raw_example: RawExtractedExample,
         add_tag: bool = True) -> typing.Optional[PredictLogVarsTaggedExample]:  # FIXME: is it really optional?
     code_task_input = preprocess_code_task_example(
-        model_hps=model_hps, code_task_vocabs=code_task_vocabs,
+        model_hps=model_hps, preprocess_params=preprocess_params, code_task_vocabs=code_task_vocabs,
         method=raw_example.method, method_pdg=raw_example.method_pdg, method_ast=raw_example.method_ast,
         remove_edges_from_pdg_nodes_idxs={raw_example.logging_call.pdg_node_idx},
         pdg_nodes_to_mask={raw_example.logging_call.pdg_node_idx: '<LOG_PRED>'})
@@ -351,7 +355,7 @@ def preprocess_logging_call_example(
                 (logging_call_pdg_node_ast_node.type == SerASTNodeType.EXPRESSION_STMT) and
                 (raw_example.method_ast.nodes[raw_example.logging_call.ast_node_idx].type ==
                  SerASTNodeType.METHOD_CALL_EXPR) and
-                (code_task_input.ast.ast_leaves_sequence_node_indices is None or
+                (code_task_input.ast is None or code_task_input.ast.ast_leaves_sequence_node_indices is None or
                  len(code_task_input.ast.ast_leaves_sequence_node_indices.sequences) == 1) and
                 logging_call_pdg_node.code_sub_token_range_ref is not None and
                 logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx ==
@@ -359,7 +363,7 @@ def preprocess_logging_call_example(
             min_val=1)]
     PreprocessLimitation.enforce_limitations(limitations=limitations)
 
-    if code_task_input.ast.ast_leaf_to_leaf_paths_node_indices is not None:
+    if code_task_input.ast is not None and code_task_input.ast.ast_leaf_to_leaf_paths_node_indices is not None:
         is_log_stmt_included_in_any_l2l_path = any(
             ast_path[0] == logging_call_pdg_node_ast_node_idx or ast_path[-1] == logging_call_pdg_node_ast_node_idx
             for ast_path in code_task_input.ast.ast_leaf_to_leaf_paths_node_indices.sequences)
@@ -388,11 +392,12 @@ def preprocess_logging_call_example(
 
     # Shallow sanity-check for logging-call masking (note we don't really verify here the whole expression/sub-ast is
     # masked, but it is checked by `preprocess_code_task_example()`).
-    assert code_task_vocabs.tokens_kinds.idx2word[code_task_input.method_tokenized_code.token_type.sequences[0][
-        logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx].item()] == '<LOG_PRED>'
-    assert code_task_vocabs.pdg_node_control_kinds.idx2word[
+    assert code_task_input.method_tokenized_code is None or code_task_vocabs.tokens_kinds.idx2word[
+           code_task_input.method_tokenized_code.token_type.sequences[0][
+               logging_call_pdg_node.code_sub_token_range_ref.begin_token_idx].item()] == '<LOG_PRED>'
+    assert code_task_input.pdg is None or code_task_vocabs.pdg_node_control_kinds.idx2word[
                code_task_input.pdg.cfg_nodes_control_kind.tensor[logging_call_pdg_node.idx].item()] == '<LOG_PRED>'
-    assert code_task_vocabs.ast_node_major_types.idx2word[
+    assert code_task_input.ast is None or code_task_vocabs.ast_node_major_types.idx2word[
                code_task_input.ast.ast_node_types.tensor[logging_call_pdg_node_ast_node_idx].item()] == '<LOG_PRED>'
 
     symbols_idxs_used_in_logging_call = get_symbol_idxs_used_in_logging_call(example=raw_example)

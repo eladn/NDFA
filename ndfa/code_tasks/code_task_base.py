@@ -12,6 +12,7 @@ from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_da
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties, task_names
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
+from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
 
 
 __all__ = ['CodeTaskBase']
@@ -43,7 +44,9 @@ class CodeTaskBase(abc.ABC):
 
     @abc.abstractmethod
     def preprocess_raw_example(
-            self, model_hps: NDFAModelHyperParams, code_task_vocabs: CodeTaskVocabs,
+            self, model_hps: NDFAModelHyperParams,
+            preprocess_params: NDFAModelPreprocessParams,
+            code_task_vocabs: CodeTaskVocabs,
             raw_example: Any, add_tag: bool = True) -> Any:
         ...
 
