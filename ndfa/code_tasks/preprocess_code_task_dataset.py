@@ -1543,7 +1543,7 @@ def preprocess_code_task_dataset(
                     functools.partial(
                         catch_preprocess_limit_exceed_error,
                         pp_example_fn, model_hps, preprocess_params, code_task_vocabs),
-                    iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path))):
+                    iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
                 assert pp_example_as_bytes_or_errors_list is not None
                 if isinstance(pp_example_as_bytes_or_errors_list, list):
                     errors_list = pp_example_as_bytes_or_errors_list
