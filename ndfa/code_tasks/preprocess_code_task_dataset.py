@@ -309,16 +309,18 @@ def preprocess_symbols(
         symbols_identifier_indices=BatchedFlattenedIndicesFlattenedTensor(
             torch.LongTensor([symbol.identifier_idx for symbol in method_pdg.symbols]),
         ),  # self_indexing_group='symbols', tgt_indexing_group='identifiers'),
-        symbols_appearances_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([symbol_occurrence.symbol_idx for symbol_occurrence in symbols_occurrences]),
-        ),  # tgt_indexing_group='symbols'),
-        symbols_appearances_expression_token_idx=BatchFlattenedTensor(
-            torch.LongTensor([symbol_occurrence.within_expr_token_idx for symbol_occurrence in symbols_occurrences])),
-        symbols_appearances_cfg_expression_idx=None
-        if not preprocess_params.method_code.hierarchic or
-           not preprocess_params.method_code.hierarchic.micro_tokens_seq else BatchedFlattenedIndicesFlattenedTensor(
-            torch.LongTensor([symbol_occurrence.expression_idx for symbol_occurrence in symbols_occurrences]),
-        ))  # tgt_indexing_group='cfg_code_expressions'))
+        # not used
+        # symbols_appearances_symbol_idx=BatchedFlattenedIndicesFlattenedTensor(
+        #     torch.LongTensor([symbol_occurrence.symbol_idx for symbol_occurrence in symbols_occurrences]),
+        # ),  # tgt_indexing_group='symbols'),
+        # symbols_appearances_expression_token_idx=BatchFlattenedTensor(
+        #     torch.LongTensor([symbol_occurrence.within_expr_token_idx for symbol_occurrence in symbols_occurrences])),
+        # symbols_appearances_cfg_expression_idx=None
+        # if not preprocess_params.method_code.hierarchic or
+        #    not preprocess_params.method_code.hierarchic.micro_tokens_seq else BatchedFlattenedIndicesFlattenedTensor(
+        #     torch.LongTensor([symbol_occurrence.expression_idx for symbol_occurrence in symbols_occurrences]),
+        # ))  # tgt_indexing_group='cfg_code_expressions'))
+    )
     return symbols
 
 

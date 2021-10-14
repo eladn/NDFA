@@ -88,16 +88,17 @@ class SymbolsInputTensors(TensorsDataClass):
     symbols_identifier_indices: BatchedFlattenedIndicesFlattenedTensor = \
         batched_flattened_indices_flattened_tensor_field(
             self_indexing_group='symbols', tgt_indexing_group='identifiers')
-    # (nr_symbols_appearances,)
-    symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
-        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
-    # (nr_symbols_appearances,)
-    symbols_appearances_expression_token_idx: Optional[BatchFlattenedTensor] = \
-        batch_flattened_tensor_field(default=None)
-    # (nr_symbols_appearances,)
-    symbols_appearances_cfg_expression_idx: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
-        batched_flattened_indices_flattened_tensor_field(
-            default=None, tgt_indexing_group='cfg_code_expressions')
+    # not used
+    # # (nr_symbols_appearances,)
+    # symbols_appearances_symbol_idx: BatchedFlattenedIndicesFlattenedTensor = \
+    #     batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='symbols')
+    # # (nr_symbols_appearances,)
+    # symbols_appearances_expression_token_idx: Optional[BatchFlattenedTensor] = \
+    #     batch_flattened_tensor_field(default=None)
+    # # (nr_symbols_appearances,)
+    # symbols_appearances_cfg_expression_idx: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
+    #     batched_flattened_indices_flattened_tensor_field(
+    #         default=None, tgt_indexing_group='cfg_code_expressions')
 
 
 @dataclasses.dataclass
