@@ -282,7 +282,8 @@ def preprocess_identifiers(method_pdg: SerMethodPDG, code_task_vocabs: CodeTaskV
 
 
 def preprocess_symbols(
-        method: SerMethod, method_pdg: SerMethodPDG, pdg_nodes_to_mask: Dict[int, str]) \
+        preprocess_params: NDFAModelPreprocessParams, method: SerMethod,
+        method_pdg: SerMethodPDG, pdg_nodes_to_mask: Dict[int, str]) \
         -> SymbolsInputTensors:
     _counter = itertools.count()
     pdg_node_idx_to_expression_idx_mapping = {
@@ -313,9 +314,11 @@ def preprocess_symbols(
         ),  # tgt_indexing_group='symbols'),
         symbols_appearances_expression_token_idx=BatchFlattenedTensor(
             torch.LongTensor([symbol_occurrence.within_expr_token_idx for symbol_occurrence in symbols_occurrences])),
-        symbols_appearances_cfg_expression_idx=BatchedFlattenedIndicesFlattenedTensor(
+        symbols_appearances_cfg_expression_idx=None
+        if not preprocess_params.method_code.hierarchic or
+           not preprocess_params.method_code.hierarchic.micro_tokens_seq else BatchedFlattenedIndicesFlattenedTensor(
             torch.LongTensor([symbol_occurrence.expression_idx for symbol_occurrence in symbols_occurrences]),
-        ))  # tgt_indexing_group='code_expressions'))
+        ))  # tgt_indexing_group='cfg_code_expressions'))
     return symbols
 
 
@@ -1436,7 +1439,9 @@ def preprocess_code_task_example(
         pdg_nodes_to_mask = {}
 
     identifiers = preprocess_identifiers(method_pdg=method_pdg, code_task_vocabs=code_task_vocabs)
-    symbols = preprocess_symbols(method=method, method_pdg=method_pdg, pdg_nodes_to_mask=pdg_nodes_to_mask)
+    symbols = preprocess_symbols(
+        preprocess_params=preprocess_params, method=method,
+        method_pdg=method_pdg, pdg_nodes_to_mask=pdg_nodes_to_mask)
 
     # We ignore the whole sub-ASTs of PDG nodes to mask.
     # TODO: Keep only the root node of this sub-AST, make the it a leaf (remove it's descendents),
