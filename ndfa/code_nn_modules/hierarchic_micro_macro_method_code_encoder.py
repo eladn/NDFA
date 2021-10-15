@@ -146,8 +146,7 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                     self.code_expression_encoder_after_macro(
                         previous_code_expression_encodings=global_context_aware_micro_encodings,
                         tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
-                        cfg_nodes_expressions_ast=code_task_input.pdg.cfg_nodes_expressions_ast,
-                        cfg_nodes_has_expression_mask=code_task_input.pdg.cfg_nodes_has_expression_mask.tensor)
+                        sub_ast_input=code_task_input.pdg.cfg_nodes_expressions_ast)
             else:
                 final_encoded_code_expressions = global_context_aware_micro_encodings
         else:
