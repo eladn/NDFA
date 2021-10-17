@@ -137,7 +137,7 @@ class MethodCFGMacroEncoder(nn.Module):
         if macro_encodings is None:
             macro_encodings = FlattenedTensor(
                 flattened=encoded_cfg_nodes,
-                unflattener_mask=code_task_input.pdg.get_cfg_nodes_encodings_unflattener_mask(),
+                unflattener_mask_getter=lambda: code_task_input.pdg.get_cfg_nodes_encodings_unflattener_mask(),
                 unflattener_fn=code_task_input.pdg.unflatten_cfg_nodes_encodings)
 
         return MethodCFGMacroEncodings(
