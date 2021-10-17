@@ -1549,6 +1549,10 @@ def preprocess_code_task_dataset(
             compression_method=compression_method)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
+            # TODO: have two parallel `tqdm` progress bars:
+            #  (1) reading examples from iterator: it means how many examples are being/finished preprocessed;
+            #  (2) over the `imap_unordered` loop: it means how many examples have been exported
+            #  See here: https://github.com/tqdm/tqdm/issues/407#issuecomment-322932800
             for pp_example_as_bytes_or_errors_list in pool.imap_unordered(
                     functools.partial(
                         catch_preprocess_limit_exceed_error,
