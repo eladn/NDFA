@@ -6,11 +6,12 @@ import random
 import itertools
 import functools
 import dataclasses
+from pprint import pprint
 from warnings import warn
 import multiprocessing as mp
 from typing_extensions import Protocol
-from collections import defaultdict, namedtuple
 from torch_geometric.data import Data as TGData
+from collections import defaultdict, namedtuple, Counter
 from sklearn.feature_extraction.text import HashingVectorizer
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
     Union, Sequence, TypeVar, NamedTuple, Tuple, Generic
@@ -36,6 +37,7 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessPar
     ASTPathsPreprocessParams, NGramsPreprocessParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
+from ndfa.misc.online_mean_variance_accumulator import OnlineMeanVarianceAccumulators
 
 
 __all__ = [
@@ -1588,6 +1590,9 @@ def preprocess_code_task_dataset(
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,
             override=pp_override, storage_method=storage_method,
             compression_method=compression_method)
+        pp_limitations_exceedings_counter = Counter()
+        pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
+            defaultdict(OnlineMeanVarianceAccumulators)
         with mp.Pool(processes=nr_processes) as pool:
             # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
             # TODO: have two parallel `tqdm` progress bars:
@@ -1603,7 +1608,14 @@ def preprocess_code_task_dataset(
                 if isinstance(pp_example_as_bytes_or_errors_list, list):
                     errors_list = pp_example_as_bytes_or_errors_list
                     assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in errors_list)
-                    pass  # TODO: add to limit exceed statistics
+                    # Add to limitations exceedings statistics
+                    for pp_limitation in errors_list:
+                        limitation_side_str = \
+                            "+" if pp_limitation.max_val is not None and \
+                                   pp_limitation.value > pp_limitation.max_val else "-"
+                        limitation_name = f'{pp_limitation.object_name}{limitation_side_str}'
+                        pp_limitations_exceedings_counter[limitation_name] += 1
+                        pp_limitations_exceedings_values[limitation_name].insert_point(pp_limitation.value)
                 else:
                     pp_example_as_bytes = pp_example_as_bytes_or_errors_list
                     chunks_examples_writer.write_example(pp_example_as_bytes)
@@ -1616,3 +1628,16 @@ def preprocess_code_task_dataset(
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
         print(f'Finished pre-processing data-fold: `{datafold.name}`.')
+
+        # Print limitations exceedings statistics (to understand why most of the filtered-out items fell)
+        pp_limitations_exceedings_counter_ordered = pp_limitations_exceedings_counter.most_common()
+        pp_limitations_exceedings_counter_total = sum(pp_limitations_exceedings_counter.values())
+        descending_freqs = {
+            limitation_name: round(100 * value / pp_limitations_exceedings_counter_total, 2)
+            for limitation_name, value in pp_limitations_exceedings_counter_ordered}
+        values_stats = {
+            limitation_name: {
+                'freq': f'{freq}% [{pp_limitations_exceedings_counter[limitation_name]:,}]',
+                **pp_limitations_exceedings_values[limitation_name].generate_printable_stats_dict()}
+            for limitation_name, freq in descending_freqs.items()}
+        pprint(values_stats, sort_dicts=False)
