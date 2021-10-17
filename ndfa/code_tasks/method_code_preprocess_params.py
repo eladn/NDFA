@@ -18,17 +18,38 @@ class ASTPathsPreprocessParams:
     siblings_sequences: bool = False
     siblings_w_parent_sequences: bool = False
 
+    @classmethod
+    def full(cls):
+        return ASTPathsPreprocessParams(
+            traversal=True,
+            leaf_to_leaf=True,
+            leaf_to_root=True,
+            leaves_sequence=True,
+            siblings_sequences=True,
+            siblings_w_parent_sequences=True)
+
 
 @dataclasses.dataclass
 class ASTPreprocessParams:
     paths: Optional[ASTPathsPreprocessParams] = None
     tree: bool = False
 
+    @classmethod
+    def full(cls):
+        return ASTPreprocessParams(
+            paths=ASTPathsPreprocessParams.full(),
+            tree=True)
+
+
 
 @dataclasses.dataclass
 class NGramsPreprocessParams:
     min_n: int = 1
     max_n: int = 6
+
+    @classmethod
+    def full(cls):
+        return NGramsPreprocessParams()
 
 
 @dataclasses.dataclass
@@ -38,6 +59,14 @@ class ControlFlowPathsPreprocessParams:
     ngrams: Optional[NGramsPreprocessParams] = None
     cfg_nodes_random_permutation: bool = False
 
+    @classmethod
+    def full(cls):
+        return ControlFlowPathsPreprocessParams(
+            traversal_edges=True,
+            full_paths=True,
+            ngrams=NGramsPreprocessParams.full(),
+            cfg_nodes_random_permutation=True)
+
 
 @dataclasses.dataclass
 class HierarchicMethodEncoderPreprocessParams:
@@ -45,7 +74,16 @@ class HierarchicMethodEncoderPreprocessParams:
     micro_tokens_seq: bool = False
     macro_ast: Optional[ASTPreprocessParams] = None
     control_flow_paths: Optional[ControlFlowPathsPreprocessParams] = None
-    control_flow_graph = False
+    control_flow_graph: bool = False
+
+    @classmethod
+    def full(cls):
+        return HierarchicMethodEncoderPreprocessParams(
+            micro_ast=ASTPreprocessParams.full(),
+            micro_tokens_seq=True,
+            macro_ast=ASTPreprocessParams.full(),
+            control_flow_paths=ControlFlowPathsPreprocessParams.full(),
+            control_flow_graph=True)
 
 
 @dataclasses.dataclass
@@ -58,7 +96,19 @@ class MethodCodePreprocessParams:
     def general_ast(self):
         return self.whole_method_ast or self.hierarchic and (self.hierarchic.macro_ast or self.hierarchic.micro_ast)
 
+    @classmethod
+    def full(cls):
+        return MethodCodePreprocessParams(
+            whole_method_ast=ASTPreprocessParams.full(),
+            whole_method_tokens_seq=True,
+            hierarchic=HierarchicMethodEncoderPreprocessParams.full())
+
 
 @dataclasses.dataclass
 class NDFAModelPreprocessParams:
     method_code: MethodCodePreprocessParams
+
+    @classmethod
+    def full(cls):
+        """Get an instance with all options present."""
+        return NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams.full())
