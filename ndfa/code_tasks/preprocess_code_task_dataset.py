@@ -1625,9 +1625,10 @@ def preprocess_code_task_dataset(
                     #     assert isinstance(pp_example, TensorsDataClass)
                     #     chunks_examples_writer.write_example(pp_example)
 
+        nr_preprocessed_examples = chunks_examples_writer.total_nr_examples
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
-        print(f'Finished pre-processing data-fold: `{datafold.name}`.')
+        print(f'Finished pre-processing data-fold: `{datafold.name}` with {nr_preprocessed_examples:,} examples.')
 
         # Print limitations exceedings statistics (to understand why most of the filtered-out items fell)
         pp_limitations_exceedings_counter_ordered = pp_limitations_exceedings_counter.most_common()
