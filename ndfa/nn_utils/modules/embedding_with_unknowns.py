@@ -15,7 +15,6 @@ class EmbeddingWithUnknowns(nn.Module):
     def __init__(self, vocab: Vocabulary,
                  embedding_dim: int,
                  embedding_params: EmbeddingWithUnknownsParams,
-                 nr_obfuscation_words: Optional[int] = None,
                  nr_hashing_features: Optional[int] = None,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(EmbeddingWithUnknowns, self).__init__()
@@ -27,7 +26,8 @@ class EmbeddingWithUnknowns(nn.Module):
                {'learnable', 'fixed_orthogonal'}
         self.vocab = vocab
         self.embedding_dim = embedding_dim
-        self.nr_obfuscation_words = len(vocab) if nr_obfuscation_words is None else nr_obfuscation_words
+        self.nr_obfuscation_words = \
+            len(vocab) if embedding_params.nr_obfuscation_words is None else embedding_params.nr_obfuscation_words
         self.use_hashing_trick = False if self.embedding_params.obfuscation_type == 'replace_all' else \
             self.embedding_params.use_hashing_trick
         if self.embedding_params.use_hashing_trick and self.embedding_params.obfuscation_type == 'replace_all':

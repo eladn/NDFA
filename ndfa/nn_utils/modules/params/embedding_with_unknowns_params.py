@@ -1,3 +1,4 @@
+from typing import Optional
 from dataclasses import dataclass
 
 from ndfa.misc.configurations_utils import conf_field
@@ -21,3 +22,4 @@ class EmbeddingWithUnknownsParams:
         default=0.3)
     use_vocab: bool = conf_field(default=True)
     use_hashing_trick: bool = conf_field(default=False)
+    nr_obfuscation_words: Optional[int] = conf_field(default=64)
