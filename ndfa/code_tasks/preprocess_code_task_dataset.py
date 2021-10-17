@@ -609,7 +609,7 @@ def enforce_limits_and_sample_ast_paths(
             warn(f'Not all AST nodes has been chosen in sampled AST leaf-to-leaf paths -- '
                  f'missing {nr_ast_leaves - nr_ast_nodes_occurred_in_sampled_ast_paths} / {nr_ast_leaves} leaves; '
                  f'sampled {len(ast_paths.leaf_to_leaf_paths):,} / {int(nr_ast_leaves * (nr_ast_leaves - 1) / 2):,} '
-                 f'paths.')
+                 f'({100 * len(ast_paths.leaf_to_leaf_paths) / (nr_ast_leaves * (nr_ast_leaves - 1) / 2):.2f}%) paths.')
 
         # DBG: calc appx prob for not including a certain AST node in any sampled AST leaf-to-leaf path:
         # nr_ast_l2l_paths = math.comb(len(ast_paths.leaves_sequence), 2)
