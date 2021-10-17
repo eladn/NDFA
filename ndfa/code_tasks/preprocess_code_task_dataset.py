@@ -33,7 +33,9 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, MethodCodePreprocessParams, \
     ASTPreprocessParams, HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams, \
-    ASTPathsPreprocessParams
+    ASTPathsPreprocessParams, NGramsPreprocessParams
+from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
+from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
 
 
 __all__ = [
@@ -1483,17 +1485,56 @@ def preprocess_code_task_example(
         pdg=pdg_input_tensors, ast=method_ast_input_tensors)
 
 
+def create_preprocess_params_from_ast_encoder_params(ast_encoder_params: ASTEncoderParams) -> ASTPreprocessParams:
+    if ast_encoder_params.encoder_type == ast_encoder_params.EncoderType.Tree:
+        return ASTPreprocessParams(tree=True)
+    assert ast_encoder_params.encoder_type in \
+           {ast_encoder_params.EncoderType.SetOfPaths, ast_encoder_params.EncoderType.PathsFolded}
+    ast_paths_params = ASTPathsPreprocessParams(
+        traversal=ast_encoder_params.paths_add_traversal_edges,
+        leaf_to_leaf='leaf_to_leaf' in ast_encoder_params.ast_paths_types,
+        leaf_to_root='leaf_to_root' in ast_encoder_params.ast_paths_types,
+        leaves_sequence='leaves_sequence' in ast_encoder_params.ast_paths_types,
+        siblings_sequences='siblings_sequences' in ast_encoder_params.ast_paths_types,
+        siblings_w_parent_sequences='siblings_w_parent_sequences' in ast_encoder_params.ast_paths_types)
+    return ASTPreprocessParams(paths=ast_paths_params)
+
+
 def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> NDFAModelPreprocessParams:
-    # TODO: impl correctly! it is just a mock
-    warn('not fully implemented!')
-    return NDFAModelPreprocessParams(
-        method_code=MethodCodePreprocessParams(
-            hierarchic=HierarchicMethodEncoderPreprocessParams(
-                micro_ast=ASTPreprocessParams(
-                    paths=ASTPathsPreprocessParams(
-                        traversal=True, leaf_to_leaf=True, leaf_to_root=True)),
-                control_flow_paths=ControlFlowPathsPreprocessParams(
-                    traversal_edges=True, full_paths=True))))
+    pp_params = NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams())
+    if model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.Hierarchic:
+        hierarchic_params = model_hps.method_code_encoder.hierarchic_micro_macro_encoder
+        control_flow_paths_params = None
+        if hierarchic_params.global_context_encoder.encoder_type == \
+            hierarchic_params.global_context_encoder.EncoderType.CFGPaths:
+            cfg_paths_encoder = hierarchic_params.global_context_encoder.paths_encoder
+            control_flow_paths_params = ControlFlowPathsPreprocessParams(
+                traversal_edges=cfg_paths_encoder.edge_types_insertion_mode in
+                                {EdgeTypeInsertionMode.AsStandAloneToken, EdgeTypeInsertionMode.MixWithNodeEmbedding},
+                full_paths=not cfg_paths_encoder.is_ngrams,
+                ngrams=NGramsPreprocessParams(
+                    min_n=cfg_paths_encoder.ngrams.min_n, max_n=cfg_paths_encoder.ngrams.max_n)
+                if cfg_paths_encoder.is_ngrams else None)
+        pp_params.method_code.hierarchic = HierarchicMethodEncoderPreprocessParams(
+            micro_ast=None if not hierarchic_params.local_expression_encoder.encoder_type == 'ast' else
+            create_preprocess_params_from_ast_encoder_params(hierarchic_params.local_expression_encoder.ast_encoder),
+            micro_tokens_seq=hierarchic_params.local_expression_encoder.encoder_type == 'FlatTokensSeq',
+            macro_ast=None if hierarchic_params.global_context_encoder.encoder_type !=
+                      hierarchic_params.global_context_encoder.EncoderType.UpperASTPaths else
+                      create_preprocess_params_from_ast_encoder_params(
+                          hierarchic_params.global_context_encoder.macro_trimmed_ast_encoder),
+            control_flow_paths=control_flow_paths_params,
+            control_flow_graph=hierarchic_params.global_context_encoder.encoder_type ==
+                               hierarchic_params.global_context_encoder.EncoderType.CFGGNN)
+
+    elif model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.WholeMethod:
+        code_encoder = model_hps.method_code_encoder.whole_method_expression_encoder
+        if code_encoder.encoder_type == 'FlatTokensSeq':
+            pp_params.method_code.whole_method_tokens_seq = True
+        elif code_encoder.encoder_type == 'ast':
+            pp_params.method_code.whole_method_ast = create_preprocess_params_from_ast_encoder_params(
+                code_encoder.ast_encoder)
+    return pp_params
 
 
 class PPExampleFnType(Protocol):
