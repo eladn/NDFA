@@ -119,6 +119,69 @@ def main():
 
     task = CodeTaskBase.load_task(exec_params.experiment_setting.task)
 
+    """
+    This is a POC for finding the relevant tensor fields that the model actually needs.
+    The idea is to remove the rest while performing the preprocessing, so that the pp_data would be smaller.
+    However, if a some (used) TensorDataClass has self_index_group, we should find the matching field that
+      has the same tgt_index_group and add it's relevant sub-fields so that the collate() could use it.
+    Also, in some places in the model, we might access a tensor (for example to pass it as a parameter to 
+      some other model), and it marks this field as used. We should replace these with "proxies" that touches
+      this field only if really needed.
+    Additionally, we should handle the ngrams dynamic dictionaries somehow (each example may have different ngram-ns).
+    """
+    # if exec_params.perform_preprocessing:
+    #     os.makedirs(exec_params.pp_data_dir_path, exist_ok=True)
+    #
+    #     model = task.build_model(
+    #         model_hps=exec_params.experiment_setting.model_hyper_params,
+    #         pp_data_path=exec_params.pp_data_dir_path)
+    #
+    #     code_task_vocabs = task.create_or_load_code_task_vocabs(
+    #         model_hps=exec_params.experiment_setting.model_hyper_params,
+    #         pp_data_path=exec_params.pp_data_dir_path,
+    #         raw_train_data_path=exec_params.raw_train_data_path)
+    #
+    #     for raw_example in task.iterate_raw_examples(
+    #             model_hps=exec_params.experiment_setting.model_hyper_params,
+    #             raw_extracted_data_dir=exec_params.raw_train_data_path):
+    #         try:
+    #             from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
+    #             pp_example = task.preprocess_raw_example(
+    #                 model_hps=exec_params.experiment_setting.model_hyper_params,
+    #                 preprocess_params=NDFAModelPreprocessParams.all(),
+    #                 code_task_vocabs=code_task_vocabs,
+    #                 raw_example=raw_example, add_tag=True)
+    #             if isinstance(pp_example, PreprocessLimitExceedError):
+    #                 continue
+    #         except PreprocessLimitExceedError:
+    #             continue
+    #
+    #         code_task_input = pp_example.code_task_input
+    #         model.to(device)
+    #         model.eval()
+    #         example_hashes = [pp_example.example_hash]
+    #         from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
+    #         from ndfa.misc.tensors_data_class import CollateData
+    #         code_task_input = MethodCodeInputTensors.collate(
+    #             [code_task_input], collate_data=CollateData(example_hashes=example_hashes, model_hps=model.model_hps))
+    #         lazy_usage_history = {}
+    #         identity_map_fn = lambda field_val: field_val
+    #         code_task_input = code_task_input.deep_lazy_map(
+    #             map_fn=identity_map_fn,
+    #             mapper_override_group='identity_to_check_hist',
+    #             lazy_map_usage_history=lazy_usage_history)
+    #         # print(lazy_usage_history)
+    #         assert sum(1 for key, tensors in lazy_usage_history.items() if tensors) == 0
+    #         output = model(code_task_input=code_task_input)
+    #         # TODO: add the loss criterion calculation with the ground-truth tensor.
+    #         print(['.'.join(tuple(str(a) for a in key) + (str(tensor),)) for key, tensors in lazy_usage_history.items() if tensors for tensor in tensors])
+    #         break
+    #
+    #     # TODO: make a nested structured dict with the required fields.
+    #     # TODO: find the additional relevant indexing fixing fields (with `tgt_index_group`) and add them to the required fields dict.
+    #     # TODO: perform the preprocess for all the dataset
+    #     raise NotImplementedError
+
     if exec_params.perform_preprocessing:
         os.makedirs(exec_params.pp_data_dir_path, exist_ok=True)
         task.preprocess_dataset(
