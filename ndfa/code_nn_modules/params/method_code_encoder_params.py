@@ -102,9 +102,12 @@ class MethodCodeEncoderParams(HasDispatchableField):
     nr_cfg_node_sub_ast_leaf_to_root_paths_to_sample_during_pp: Optional[int] = conf_field(
         default=20,
         description="The number of .")
+    min_nr_pdg_nodes_with_expression: int = conf_field(
+        default=4,
+        description="The min number of .")
     min_nr_pdg_nodes: int = conf_field(
         default=6,
-        description="The max number of .")
+        description="The min number of .")
     max_nr_pdg_nodes: int = conf_field(
         default=80,
         description="The max number of .")

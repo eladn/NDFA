@@ -169,7 +169,7 @@ def enforce_code_task_input_pp_limitations(
         (int(pdg_node.code_sub_token_range_ref is not None) for pdg_node in method_pdg.pdg_nodes), start=0)
     limitations.append(PreprocessLimitation(
         object_name='#pdg_nodes_with_expression', value=nr_pdg_nodes_with_expression,
-        min_val=4))  # TODO: plug-in HP here.
+        min_val=model_hps.method_code_encoder.min_nr_pdg_nodes_with_expression))
     longest_pdg_node_expression = max(
         (len(get_pdg_node_tokenized_expression(method, pdg_node))
          for pdg_node in method_pdg.pdg_nodes
