@@ -112,7 +112,7 @@ class MethodCodeEncoderParams(HasDispatchableField):
         default=80,
         description="The max number of .")
     max_nr_tokens_in_pdg_node_expression: int = conf_field(
-        default=30,
+        default=50,
         description="The max number of .")
     max_nr_pdg_edges: int = conf_field(
         default=300,
