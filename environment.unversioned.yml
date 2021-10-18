@@ -12,6 +12,7 @@ dependencies:
   - pytorch=%PYTORCH_VERSION%
   - torchvision
   - torchaudio
+  - python-rocksdb
   - pip
   - pip:
       - -r file:requirements.txt

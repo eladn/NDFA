@@ -12,6 +12,7 @@ dependencies:
   - pytorch=1.8.0
   - torchvision
   - torchaudio
+  - python-rocksdb
   - pip
   - pip:
       - -r file:requirements.txt
