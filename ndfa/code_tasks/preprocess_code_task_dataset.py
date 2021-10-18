@@ -632,7 +632,7 @@ def preprocess_method_ast(
         code_task_vocabs: CodeTaskVocabs,
         method: SerMethod, method_ast: SerMethodAST,
         sub_ast_root_indices_to_ignore: Optional[Set[int]] = None,
-        sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None) -> MethodASTInputTensors:
+        sub_ast_root_indices_to_mask: Optional[Dict[int, str]] = None) -> Optional[MethodASTInputTensors]:
 
     # Note: For some sub-AST that have to be masked-out:
     #       - Completely ignore the descendants of this sub-AST (the ast-nodes except its root):
@@ -659,6 +659,8 @@ def preprocess_method_ast(
     assert len(set(method_ast_paths.postorder_traversal_sequence) &
                masked_sub_asts_info.transitive_ast_nodes_indices_to_ignore) == 0
 
+    # Note: We perform this step even if not needed, only to ensure the same enforcing of preprocess
+    # limitations-exceedings in all cases.
     method_ast_paths = enforce_limits_and_sample_ast_paths(
         ast_paths=method_ast_paths,
         max_nr_ast_leaf_to_leaf_paths=model_hps.method_code_encoder.max_nr_method_ast_leaf_to_leaf_paths,
@@ -679,6 +681,7 @@ def preprocess_method_ast(
         nodes_indices_per_sub_ast=[ast_nodes_indices],
         ast_paths_per_sub_ast=None if method_ast_paths is None else [method_ast_paths])
 
+    # Note: There are no further limitations-exceeding checkings - we can finish here.
     if not preprocess_params.method_code.general_ast:
         return None
 
@@ -1183,12 +1186,18 @@ def preprocess_sub_asts_for_cfg_expressions(
         preprocess_params: ASTPreprocessParams,
         code_task_vocabs: CodeTaskVocabs, method_pdg: SerMethodPDG,
         method_ast: SerMethodAST, pdg_nodes_to_mask: Dict[int, str],
-        cfg_sub_asts_info: CFGSubASTsInfo) -> PDGExpressionsSubASTInputTensors:
+        cfg_sub_asts_info: CFGSubASTsInfo) -> Optional[PDGExpressionsSubASTInputTensors]:
+    # Note: We perform this step even if not needed, only to ensure the same enforcing of preprocess
+    # limitations-exceedings in all cases.
     sub_ast_input_tensors = preprocess_sub_asts(
         preprocess_params=preprocess_params,
         code_task_vocabs=code_task_vocabs, method_ast=method_ast,
         nodes_indices_per_sub_ast=list(cfg_sub_asts_info.pdg_node_to_ast_node_indices.values()),
         ast_paths_per_sub_ast=list(cfg_sub_asts_info.ast_paths_per_pdg_node.values()))
+
+    # Note: There are no further limitations-exceeding checkings - we can finish here.
+    if preprocess_params is None:
+        return None
 
     cfg_nodes_expressions_sub_ast_input_tensors = PDGExpressionsSubASTInputTensors(
         **{field.name: getattr(sub_ast_input_tensors, field.name)
