@@ -65,7 +65,7 @@ class IdentifierEncoder(nn.Module):
                 word_hashes=identifiers_input.identifier_sub_parts_hashings.sequences
                 if identifiers_input.identifier_sub_parts_hashings is not None else None,
                 batch_unique_word_idx=identifiers_input.identifier_sub_parts_index.sequences,
-                obfuscation_vocab_random_indices_shuffle=identifiers_input.sub_parts_obfuscation.sample)
+                obfuscation_vocab_random_indices_shuffle_getter=lambda: identifiers_input.sub_parts_obfuscation.sample)
             identifiers_sub_parts_embeddings = identifiers_sub_parts_embeddings.masked_fill(
                     ~identifiers_input.identifier_sub_parts_index.sequences_mask.unsqueeze(-1)
                         .expand(identifiers_sub_parts_embeddings.shape), 0)
@@ -86,4 +86,5 @@ class IdentifierEncoder(nn.Module):
                 vocab_word_idx=identifiers_input.identifiers_vocab_word_index.tensor,
                 word_hashes=None,  # identifiers.identifier_hashings.tensor  # TODO
                 batch_unique_word_idx=torch.arange(nr_identifiers),
-                obfuscation_vocab_random_indices_shuffle=identifiers_input.identifiers_obfuscation.sample)
+                obfuscation_vocab_random_indices_shuffle_getter=
+                lambda: identifiers_input.identifiers_obfuscation.sample)

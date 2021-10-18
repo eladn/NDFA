@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from warnings import warn
-from typing import Optional
+from typing import Optional, Callable
 
 from ndfa.nn_utils.misc.misc import get_activation_layer
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -88,7 +88,7 @@ class EmbeddingWithUnknowns(nn.Module):
     def forward(self, vocab_word_idx: Optional[torch.LongTensor] = None,
                 word_hashes: Optional[torch.LongTensor] = None,
                 batch_unique_word_idx: Optional[torch.LongTensor] = None,
-                obfuscation_vocab_random_indices_shuffle: Optional[torch.LongTensor] = None):
+                obfuscation_vocab_random_indices_shuffle_getter: Optional[Callable[[], torch.LongTensor]] = None):
         input_words_shape = None
         if vocab_word_idx is not None:
             input_words_shape = vocab_word_idx.shape
@@ -109,7 +109,8 @@ class EmbeddingWithUnknowns(nn.Module):
 
         if self.embedding_params.obfuscation_type != 'none':
             assert batch_unique_word_idx is not None
-            assert obfuscation_vocab_random_indices_shuffle is not None
+            assert obfuscation_vocab_random_indices_shuffle_getter is not None
+            obfuscation_vocab_random_indices_shuffle = obfuscation_vocab_random_indices_shuffle_getter()
             words_obfuscated_indices = obfuscation_vocab_random_indices_shuffle[batch_unique_word_idx]
             words_obfuscated_indices = words_obfuscated_indices % self.nr_obfuscation_words
             if self.embedding_params.obfuscation_embeddings_type == 'learnable':
