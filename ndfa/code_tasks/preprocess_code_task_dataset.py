@@ -1536,6 +1536,8 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
         elif code_encoder.encoder_type == 'ast':
             pp_params.method_code.whole_method_ast = create_preprocess_params_from_ast_encoder_params(
                 code_encoder.ast_encoder)
+        else:
+            assert False
     return pp_params
 
 
