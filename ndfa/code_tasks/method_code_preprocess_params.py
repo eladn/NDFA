@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import dataclasses
 from typing import Optional
 
@@ -112,3 +114,7 @@ class NDFAModelPreprocessParams:
     def full(cls):
         """Get an instance with all options present."""
         return NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams.full())
+
+    def get_hash(self) -> str:
+        return base64.urlsafe_b64encode(hashlib.sha1(repr(self).encode('utf8')).digest()) \
+            .strip().decode('ascii').strip('=')

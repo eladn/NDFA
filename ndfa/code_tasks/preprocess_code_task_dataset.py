@@ -32,12 +32,10 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, Symbols
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
-from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, MethodCodePreprocessParams, \
-    ASTPreprocessParams, HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams, \
-    ASTPathsPreprocessParams, NGramsPreprocessParams
-from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
-from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
+from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, ASTPreprocessParams, \
+    HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams
 from ndfa.misc.online_mean_variance_accumulator import OnlineMeanVarianceAccumulators
+from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 
 
 __all__ = [
@@ -670,7 +668,9 @@ def preprocess_method_ast(
         nr_ast_leaf_to_root_paths_to_sample=
         model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_pp)
 
-    if not preprocess_params.method_code.whole_method_ast or not preprocess_params.method_code.whole_method_ast.paths:
+    # For the reason mentioned above, we do perform the paths sampling anyway, but when not needed we nullish it.
+    if not preprocess_params.method_code.whole_method_ast or \
+            not preprocess_params.method_code.whole_method_ast.paths:
         method_ast_paths: Optional[ASTPaths] = None
 
     ast_nodes_indices = \
@@ -1496,60 +1496,6 @@ def preprocess_code_task_example(
         pdg=pdg_input_tensors, ast=method_ast_input_tensors)
 
 
-def create_preprocess_params_from_ast_encoder_params(ast_encoder_params: ASTEncoderParams) -> ASTPreprocessParams:
-    if ast_encoder_params.encoder_type == ast_encoder_params.EncoderType.Tree:
-        return ASTPreprocessParams(tree=True)
-    assert ast_encoder_params.encoder_type in \
-           {ast_encoder_params.EncoderType.SetOfPaths, ast_encoder_params.EncoderType.PathsFolded}
-    ast_paths_params = ASTPathsPreprocessParams(
-        traversal=ast_encoder_params.paths_add_traversal_edges,
-        leaf_to_leaf='leaf_to_leaf' in ast_encoder_params.ast_paths_types,
-        leaf_to_root='leaf_to_root' in ast_encoder_params.ast_paths_types,
-        leaves_sequence='leaves_sequence' in ast_encoder_params.ast_paths_types,
-        siblings_sequences='siblings_sequences' in ast_encoder_params.ast_paths_types,
-        siblings_w_parent_sequences='siblings_w_parent_sequences' in ast_encoder_params.ast_paths_types)
-    return ASTPreprocessParams(paths=ast_paths_params)
-
-
-def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> NDFAModelPreprocessParams:
-    pp_params = NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams())
-    if model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.Hierarchic:
-        hierarchic_params = model_hps.method_code_encoder.hierarchic_micro_macro_encoder
-        control_flow_paths_params = None
-        if hierarchic_params.global_context_encoder.encoder_type == \
-            hierarchic_params.global_context_encoder.EncoderType.CFGPaths:
-            cfg_paths_encoder = hierarchic_params.global_context_encoder.paths_encoder
-            control_flow_paths_params = ControlFlowPathsPreprocessParams(
-                traversal_edges=cfg_paths_encoder.edge_types_insertion_mode in
-                                {EdgeTypeInsertionMode.AsStandAloneToken, EdgeTypeInsertionMode.MixWithNodeEmbedding},
-                full_paths=not cfg_paths_encoder.is_ngrams,
-                ngrams=NGramsPreprocessParams(
-                    min_n=cfg_paths_encoder.ngrams.min_n, max_n=cfg_paths_encoder.ngrams.max_n)
-                if cfg_paths_encoder.is_ngrams else None)
-        pp_params.method_code.hierarchic = HierarchicMethodEncoderPreprocessParams(
-            micro_ast=None if not hierarchic_params.local_expression_encoder.encoder_type == 'ast' else
-            create_preprocess_params_from_ast_encoder_params(hierarchic_params.local_expression_encoder.ast_encoder),
-            micro_tokens_seq=hierarchic_params.local_expression_encoder.encoder_type == 'FlatTokensSeq',
-            macro_ast=None if hierarchic_params.global_context_encoder.encoder_type !=
-                      hierarchic_params.global_context_encoder.EncoderType.UpperASTPaths else
-                      create_preprocess_params_from_ast_encoder_params(
-                          hierarchic_params.global_context_encoder.macro_trimmed_ast_encoder),
-            control_flow_paths=control_flow_paths_params,
-            control_flow_graph=hierarchic_params.global_context_encoder.encoder_type ==
-                               hierarchic_params.global_context_encoder.EncoderType.CFGGNN)
-
-    elif model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.WholeMethod:
-        code_encoder = model_hps.method_code_encoder.whole_method_expression_encoder
-        if code_encoder.encoder_type == 'FlatTokensSeq':
-            pp_params.method_code.whole_method_tokens_seq = True
-        elif code_encoder.encoder_type == 'ast':
-            pp_params.method_code.whole_method_ast = create_preprocess_params_from_ast_encoder_params(
-                code_encoder.ast_encoder)
-        else:
-            assert False
-    return pp_params
-
-
 class PPExampleFnType(Protocol):
     def __call__(self, model_hps: NDFAModelHyperParams, preprocess_params: NDFAModelPreprocessParams,
                  code_task_vocabs: CodeTaskVocabs, raw_example: Any) -> Any: ...
@@ -1594,10 +1540,9 @@ def preprocess_code_task_dataset(
         if raw_dataset_path is None:
             continue
         print(f'Starting pre-processing data-fold: `{datafold.name}` ..')
-        # TODO: add hash of task props & model HPs to perprocessed file name.
-        # TODO: aggregate limit exceed statistics and print in the end.
+        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocess_params.get_hash()}'
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
-            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
+            pp_data_path_prefix=os.path.join(pp_data_path, pp_data_filename),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,
             override=pp_override, storage_method=storage_method,
             compression_method=compression_method)

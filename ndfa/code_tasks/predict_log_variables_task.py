@@ -28,6 +28,7 @@ from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_
 from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
+from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -84,8 +85,9 @@ class PredictLogVarsTask(CodeTaskBase):
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
             pp_compression_method: str = 'none') -> Dataset:
+        preprocess_params = create_preprocess_params_from_model_hps(model_hps)
         return PredictLogVarsTaskDataset(
-            datafold=datafold, pp_data_path=pp_data_path,
+            preprocess_params=preprocess_params, datafold=datafold, pp_data_path=pp_data_path,
             storage_method=pp_storage_method, compression_method=pp_compression_method)
 
     def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
@@ -306,13 +308,16 @@ class PredictLogVarsModelLoss(nn.Module):
 
 class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
     def __init__(
-            self, datafold: DataFold, pp_data_path: str,
+            self,
+            preprocess_params: NDFAModelPreprocessParams,
+            datafold: DataFold,
+            pp_data_path: str,
             storage_method: str = 'dbm',
             compression_method: str = 'none'):
         super(PredictLogVarsTaskDataset, self).__init__(
-            pp_data_path_prefix=os.path.join(pp_data_path, f'pp_{datafold.value.lower()}'),
+            pp_data_path_prefix=os.path.join(
+                pp_data_path, f'pp_{datafold.value.lower()}_{preprocess_params.get_hash()}'),
             storage_method=storage_method, compression_method=compression_method)
-        # TODO: add hash of task props & model HPs to perprocessed file name.
 
     def __getitem__(self, possibly_batched_index):
         example = super(PredictLogVarsTaskDataset, self).__getitem__(possibly_batched_index)
