@@ -1,10 +1,10 @@
 import multiprocessing
+import sys
 import numpy as np
 import io
 import os
-import base64
-import hashlib
 import functools
+import subprocess
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
@@ -76,8 +76,9 @@ def main():
         torch.cuda.empty_cache()
 
     experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
-    expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest())\
-        .strip().decode('ascii').strip('=')
+    expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
+    model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
+    model_hps_hash_base64 = exec_params.experiment_setting.model_hyper_params.get_sha1_base64()
 
     loaded_checkpoint = None
     if exec_params.should_load_model:
@@ -105,8 +106,9 @@ def main():
             loaded_checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
         exec_params.experiment_setting = load_experiment_setting_from_yaml(loaded_checkpoint['experiment_setting_yaml'])
         experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
-        expr_settings_hash_base64 = base64.urlsafe_b64encode(hashlib.sha1(experiment_setting_yaml.encode('utf8')).digest()) \
-            .strip().decode('ascii').strip('=')
+        expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
+        model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
+        model_hps_hash_base64 = exec_params.experiment_setting.model_hyper_params.get_sha1_base64()
         print(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
               f'Ignoring experiment settings from other inputs.')
 
@@ -316,6 +318,23 @@ def main():
         if exec_params.use_notify:
             from ndfa.nn_utils.model_wrapper.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
+
+        if exec_params.use_gdrive_logger:
+            from ndfa.nn_utils.model_wrapper.gdrive_train_logger_callback import GDriveTrainLoggerCallback
+            from ndfa.nn_utils.model_wrapper.gdrive_train_logger import GDriveTrainLogger
+            gdrive_logger = GDriveTrainLogger(
+                model_hps_hash=model_hps_hash_base64,
+                experiment_settings_hash=expr_settings_hash_base64)
+            gdrive_logger.upload_string_as_text_file(experiment_setting_yaml, 'experiment_settings.yaml')
+            gdrive_logger.upload_string_as_text_file(model_hps_yaml, 'model_hps.yaml')
+            with subprocess.Popen(
+                    args=['git', 'log', '--name-status', 'HEAD^..HEAD'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL) as process:
+                git_log_str = process.communicate()[0].decode("utf-8")
+                gdrive_logger.upload_string_as_text_file(git_log_str, 'git_commit.txt')
+            gdrive_logger.upload_string_as_text_file(' '.join(sys.argv), 'exec_command.txt')
+            train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         print('Starting training.')
         fit(

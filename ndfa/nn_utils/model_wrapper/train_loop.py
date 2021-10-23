@@ -156,7 +156,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             for callback in callbacks:
                 callback.step_start(
-                    epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps)
+                    epoch_nr=epoch_nr, step_nr=batch_idx + 1,
+                    nr_steps=nr_steps, avg_throughput=avg_throughput)
             cur_step_start_time = time.time()
             _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
@@ -189,7 +190,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     callback.step_end_before_evaluation(
                         epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
                         batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
-                        epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
+                        epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
+                        avg_throughput=avg_throughput)
 
                 print(f'Performing evaluation (over validation) DURING epoch #{epoch_nr} '
                       f'(after step {batch_idx + 1}/{nr_steps}):')
@@ -213,7 +215,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                         epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
                         batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
                         epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
-                        validation_loss=val_loss, validation_metrics_results=val_metrics_results)
+                        validation_loss=val_loss, validation_metrics_results=val_metrics_results,
+                        avg_throughput=avg_throughput)
 
                 model.train()
                 criterion.train()
@@ -222,7 +225,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 callback.step_end(
                     epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
                     batch_loss=batch_loss, batch_nr_examples=batch_nr_examples, epoch_avg_loss=train_epoch_avg_loss,
-                    epoch_moving_win_loss=train_epoch_window_loss)
+                    epoch_moving_win_loss=train_epoch_window_loss, avg_throughput=avg_throughput)
 
         # TODO: make it a callback of `epoch_end`
         if save_checkpoint_fn is not None:
@@ -233,7 +236,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             for callback in callbacks:
                 callback.epoch_end_before_evaluation(
                     epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
-                    epoch_moving_win_loss=train_epoch_window_loss)
+                    epoch_moving_win_loss=train_epoch_window_loss,
+                    avg_throughput=avg_throughput)
 
             print(f'Performing evaluation (over validation) after epoch #{epoch_nr}:')
             val_loss, val_metrics_results = evaluate(
@@ -253,11 +257,14 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 callback.epoch_end_after_evaluation(
                     epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
                     epoch_moving_win_loss=train_epoch_window_loss,
-                    validation_loss=val_loss, validation_metrics_results=val_metrics_results)
+                    validation_loss=val_loss, validation_metrics_results=val_metrics_results,
+                    avg_throughput=avg_throughput)
 
         for callback in callbacks:
             callback.epoch_end(
-                epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss)
+                epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                epoch_moving_win_loss=train_epoch_window_loss,
+                avg_throughput=avg_throughput)
 
         for lr_scheduler in lr_schedulers:
             if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
-from ndfa.misc.configurations_utils import conf_field
+from ndfa.misc.configurations_utils import conf_field, DeterministicallyHashable
 
 
 __all__ = [
@@ -25,7 +25,7 @@ class TargetSymbolsDecoderParams:
 
 
 @dataclass
-class NDFAModelHyperParams:
+class NDFAModelHyperParams(DeterministicallyHashable):
     activation_fn: str = conf_field(
         default='leaky_relu',
         choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh', 'none'),

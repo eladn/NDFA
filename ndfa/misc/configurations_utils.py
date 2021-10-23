@@ -1,6 +1,8 @@
 import abc
 import enum
 import typing
+import base64
+import hashlib
 import argparse
 import omegaconf
 import dataclasses
@@ -10,7 +12,7 @@ from typing import TypeVar, Union, Container, Optional, Type, Tuple, List, Dict,
 
 __all__ = ['create_argparser_from_dataclass_conf_structure', 'reinstantiate_omegaconf_container',
            'create_conf_dotlist_from_parsed_args', 'DispatchField', 'HasDispatchableField',
-           'conf_field', 'get_conf_field_info', 'ConfFieldInfo']
+           'conf_field', 'get_conf_field_info', 'ConfFieldInfo', 'DeterministicallyHashable']
 
 
 @dataclasses.dataclass
@@ -269,3 +271,13 @@ def conf_field(
 
 def get_conf_field_info(field: dataclasses.Field) -> Optional[ConfFieldInfo]:
     return field.metadata.get('__ConfFieldInfo', None)
+
+
+class DeterministicallyHashable:
+    def get_sha1_base64(self) -> str:
+        return base64.urlsafe_b64encode(self.get_sha1()).strip().decode('ascii').strip('=')
+
+    def get_sha1(self) -> bytes:
+        self_repr = OmegaConf.to_yaml(OmegaConf.structured(self))
+        # self_repr = repr(self)
+        return hashlib.sha1(self_repr.encode('utf8')).digest()

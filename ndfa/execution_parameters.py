@@ -109,6 +109,11 @@ class ModelExecutionParams:
         description="Use tensorboard during training.",
         arg_names=['--use-tensorboard'])
 
+    use_gdrive_logger: bool = conf_field(
+        default=False,
+        description="Use gdrive logger during training.",
+        arg_names=['--use-gdrive-logger'])
+
     num_train_epochs: int = conf_field(
         default=20,
         description="The max number of epochs to train the model. Stopping earlier must be done manually (kill).")

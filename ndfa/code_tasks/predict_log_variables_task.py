@@ -316,7 +316,7 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
             compression_method: str = 'none'):
         super(PredictLogVarsTaskDataset, self).__init__(
             pp_data_path_prefix=os.path.join(
-                pp_data_path, f'pp_{datafold.value.lower()}_{preprocess_params.get_hash()}'),
+                pp_data_path, f'pp_{datafold.value.lower()}_{preprocess_params.get_sha1_base64()}'),
             storage_method=storage_method, compression_method=compression_method)
 
     def __getitem__(self, possibly_batched_index):

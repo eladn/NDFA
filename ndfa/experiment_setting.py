@@ -3,14 +3,14 @@ from dataclasses import dataclass
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams, NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
-from ndfa.misc.configurations_utils import conf_field
+from ndfa.misc.configurations_utils import conf_field, DeterministicallyHashable
 
 
 __all__ = ['ExperimentSetting']
 
 
 @dataclass
-class ExperimentSetting:
+class ExperimentSetting(DeterministicallyHashable):
     task: CodeTaskProperties = conf_field(
         default_factory=CodeTaskProperties,
         description="Parameters of the code-related task to tackle.",

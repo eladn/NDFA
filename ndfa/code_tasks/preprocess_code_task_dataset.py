@@ -1540,7 +1540,7 @@ def preprocess_code_task_dataset(
         if raw_dataset_path is None:
             continue
         print(f'Starting pre-processing data-fold: `{datafold.name}` ..')
-        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocess_params.get_hash()}'
+        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocess_params.get_sha1_base64()}'
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path_prefix=os.path.join(pp_data_path, pp_data_filename),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,

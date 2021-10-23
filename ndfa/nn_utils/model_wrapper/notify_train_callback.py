@@ -31,7 +31,7 @@ class NotifyCallback(TrainCallback):
             self.high_verbosity_notify.close()
 
     def step_end(self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
-                 epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage):
+                 epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
         if self.high_verbosity_notify is None:
             return
         if self.high_verbosity_last_msg_time is None or \
@@ -46,8 +46,9 @@ class NotifyCallback(TrainCallback):
                 pass
             self.high_verbosity_last_msg_time = time.time()
 
-    def epoch_end_after_evaluation(self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
-                                   validation_loss: float, validation_metrics_results: Dict[str, float]):
+    def epoch_end_after_evaluation(
+            self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
+            validation_loss: float, validation_metrics_results: Dict[str, float], avg_throughput: float):
         # TODO: For pretty printing the evaluation metric results:
         #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
         msg = f'Completed performing training & evaluation for epoch #{epoch_nr}.' \
@@ -66,9 +67,10 @@ class NotifyCallback(TrainCallback):
         except:
             pass
 
-    def step_end_after_evaluation(self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float,
-                                  batch_nr_examples: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
-                                  validation_loss: float, validation_metrics_results: Dict[str, float]):
+    def step_end_after_evaluation(
+            self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
+            epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, validation_loss: float,
+            validation_metrics_results: Dict[str, float], avg_throughput: float):
         # TODO: For pretty printing the evaluation metric results:
         #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
         msg = f'Completed performing evaluation DURING epoch #{epoch_nr} ' \
