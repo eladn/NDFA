@@ -23,6 +23,7 @@ from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
     reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
+from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -68,13 +69,6 @@ def load_experiment_setting_from_yaml(yaml: str) -> ExperimentSetting:
 def main():
     exec_params = load_exec_params()
 
-    use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()
-    device = torch.device("cuda" if use_gpu else "cpu")
-    print(f'Using device: {device} (is CUDA available: {torch.cuda.is_available()})')
-
-    if device.type == 'cuda':
-        torch.cuda.empty_cache()
-
     experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
     expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
     model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
@@ -109,8 +103,20 @@ def main():
         expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
         model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
         model_hps_hash_base64 = exec_params.experiment_setting.model_hyper_params.get_sha1_base64()
-        print(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
-              f'Ignoring experiment settings from other inputs.')
+        warn(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
+             f'Ignoring experiment settings from other inputs.')
+
+    if exec_params.get_pp_data_params_hash:
+        preprocess_params = create_preprocess_params_from_model_hps(
+            model_hps=exec_params.experiment_setting.model_hyper_params)
+        print(preprocess_params.get_sha1_base64())
+        exit(0)
+
+    use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()
+    device = torch.device("cuda" if use_gpu else "cpu")
+    print(f'Using device: {device} (is CUDA available: {torch.cuda.is_available()})')
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
 
     print(f'Experiment setting [hash=`{expr_settings_hash_base64}`]:')
     print(experiment_setting_yaml)

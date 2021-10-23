@@ -56,6 +56,10 @@ class ModelExecutionParams:
         description="Perform preprocessing of the raw dataset.",
         arg_names=['--preprocess'])
 
+    get_pp_data_params_hash: bool = conf_field(
+        default=False,
+        description="Get the hash of the required preprocessed data params matching the given model hyper params.")
+
     pp_nr_processes: Optional[int] = conf_field(
         default=4,
         description="Number of processes to use for preprocessing.",
