@@ -14,9 +14,8 @@ __all__ = ['GDriveTrainLogger']
 
 
 class GDriveTrainLogger:
-    def __init__(self, model_hps_hash: str, experiment_settings_hash: str):
-        with open('credentials/train_results_gdrive_folder_id.txt', 'r') as file:
-            self.gdrive_base_folder_id = file.readline().strip()
+    def __init__(self, gdrive_folder_id: str, model_hps_hash: str, experiment_settings_hash: str):
+        self.gdrive_base_folder_id = gdrive_folder_id
         self.gdrive_service = self._create_gdrive_service()
         self.train_folder_name = \
             f'model={model_hps_hash}__' \

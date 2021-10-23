@@ -111,8 +111,12 @@ class ModelExecutionParams:
 
     use_gdrive_logger: bool = conf_field(
         default=False,
-        description="Use gdrive logger during training.",
+        description="Use google drive logger during training.",
         arg_names=['--use-gdrive-logger'])
+
+    train_results_gdrive_folder_id: Optional[str] = conf_field(
+        default=None,
+        description="Google drive folder ID for storing training logs.")
 
     num_train_epochs: int = conf_field(
         default=20,

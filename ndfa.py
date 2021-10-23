@@ -323,6 +323,7 @@ def main():
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger_callback import GDriveTrainLoggerCallback
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger import GDriveTrainLogger
             gdrive_logger = GDriveTrainLogger(
+                gdrive_folder_id=exec_params.train_results_gdrive_folder_id,
                 model_hps_hash=model_hps_hash_base64,
                 experiment_settings_hash=expr_settings_hash_base64)
             gdrive_logger.upload_string_as_text_file(experiment_setting_yaml, 'experiment_settings.yaml')
