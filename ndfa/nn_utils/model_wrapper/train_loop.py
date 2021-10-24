@@ -115,7 +115,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         evaluation_time_consumption_ratio: float = 1/8,
         min_train_epoch_minutes_to_perform_evaluation_during: float = 40,
         perform_evaluation_before_starting_training: bool = True,
-        gradient_clip_param: Optional[float] = None):
+        gradient_clip_param: Optional[float] = None,
+        progress_bar_min_interval_sec: float = 0.1):
     if callbacks is None:
         callbacks = ()
     model.to(device)
@@ -126,7 +127,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         evaluate_start_time = time.time()
         val_loss, val_metrics_results = evaluate(
             model=model, device=device, valid_loader=valid_loader, criterion=criterion,
-            evaluation_metrics_types=evaluation_metrics_types)
+            evaluation_metrics_types=evaluation_metrics_types,
+            progress_bar_min_interval_sec=progress_bar_min_interval_sec)
         evaluation_avg_duration = time.time() - evaluate_start_time
         # TODO: For pretty printing the evaluation metric results:
         #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
@@ -151,7 +153,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             task_time_consumption_ratio=evaluation_time_consumption_ratio,
             task_duration_est=evaluation_avg_duration)
         train_epoch_window_loss = WindowAverage(max_window_size=50)
-        train_data_loader_with_progress = tqdm(train_loader, dynamic_ncols=True, position=0, leave=True)
+        train_data_loader_with_progress = tqdm(
+            train_loader, dynamic_ncols=True, position=0, leave=True, mininterval=progress_bar_min_interval_sec)
         nr_steps = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             for callback in callbacks:
@@ -199,7 +202,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 evaluate_start_time = time.time()
                 val_loss, val_metrics_results = evaluate(
                     model=model, device=device, valid_loader=valid_loader, criterion=criterion,
-                    evaluation_metrics_types=evaluation_metrics_types)
+                    evaluation_metrics_types=evaluation_metrics_types,
+                    progress_bar_min_interval_sec=progress_bar_min_interval_sec)
                 last_evaluation_duration = time.time() - evaluate_start_time
                 evaluation_scheduler.report_task_performed(
                     cur_step_nr=batch_idx + 1, duration=last_evaluation_duration)
@@ -242,7 +246,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             print(f'Performing evaluation (over validation) after epoch #{epoch_nr}:')
             val_loss, val_metrics_results = evaluate(
                 model=model, device=device, valid_loader=valid_loader, criterion=criterion,
-                evaluation_metrics_types=evaluation_metrics_types)
+                evaluation_metrics_types=evaluation_metrics_types,
+                progress_bar_min_interval_sec=progress_bar_min_interval_sec)
             evaluate_start_time = time.time()
             last_evaluation_duration = time.time() - evaluate_start_time
             evaluation_avg_duration = last_evaluation_duration if evaluation_avg_duration is None else \
@@ -273,9 +278,10 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 lr_scheduler.step()
 
 
-def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,
-             evaluation_metrics_types: List[Type[EvaluationMetric]], lazy_move_to_device_history=None) \
-        -> Tuple[float, Dict[str, float]]:
+def evaluate(
+        model: nn.Module, device: torch.device, valid_loader: DataLoader, criterion: nn.Module,
+        evaluation_metrics_types: List[Type[EvaluationMetric]], lazy_move_to_device_history=None,
+        progress_bar_min_interval_sec: float = 0.1) -> Tuple[float, Dict[str, float]]:
     if lazy_move_to_device_history is None:
         lazy_move_to_device_history = {'x': {}, 'y': {}}
     else:
@@ -289,7 +295,8 @@ def evaluate(model: nn.Module, device: torch.device, valid_loader: DataLoader, c
     metrics = [metric() for metric in evaluation_metrics_types]
     eval_epoch_loss_sum = eval_epoch_nr_examples = 0
     with torch.no_grad():
-        for x_batch, y_batch in tqdm(valid_loader, dynamic_ncols=True, position=0, leave=True):
+        for x_batch, y_batch in tqdm(
+                valid_loader, dynamic_ncols=True, position=0, leave=True, mininterval=progress_bar_min_interval_sec):
             x_batch = x_batch.lazy_to(device, lazy_move_to_device_history['x']) \
                 if hasattr(x_batch, 'lazy_to') else x_batch.to(device)
             y_batch = y_batch.lazy_to(device, lazy_move_to_device_history['y']) \

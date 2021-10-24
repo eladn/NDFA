@@ -173,6 +173,9 @@ class ModelExecutionParams:
     dataloader_pin_memory: bool = conf_field(
         default=True)
 
+    progress_bar_min_interval_sec: float = conf_field(
+        default=0.1)
+
     @property
     def perform_prediction(self):
         return bool(self.predict_pp_data_path) or bool(self.predict_raw_data_path)

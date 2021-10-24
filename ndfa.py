@@ -359,7 +359,8 @@ def main():
             evaluation_metrics_types=task.evaluation_metrics(
                 model_hps=exec_params.experiment_setting.model_hyper_params),
             callbacks=train_callbacks,
-            gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip)
+            gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip,
+            progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
@@ -383,7 +384,8 @@ def main():
             valid_loader=eval_loader,
             criterion=criterion,
             evaluation_metrics_types=task.evaluation_metrics(
-                model_hps=exec_params.experiment_setting.model_hyper_params))
+                model_hps=exec_params.experiment_setting.model_hyper_params),
+            progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
         # TODO: For pretty printing the evaluation metric results:
         #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
         print(f'Completed performing evaluation.'
