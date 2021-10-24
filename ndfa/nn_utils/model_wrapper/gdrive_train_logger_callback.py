@@ -50,7 +50,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
                 'epoch_avg_loss': epoch_avg_loss,
                 'epoch_moving_win_loss': epoch_moving_win_loss.get_window_avg(),
                 'avg_throughput': avg_throughput,
-                'epoch_time': self.cur_epoch_time.min}
+                'epoch_time': self.cur_epoch_time.total_seconds() // 60}
             self.partial_epochs_results[epoch_nr][step_nr] = partial_epoch_results
             self.gdrive_train_logger.upload_as_json_file(
                 self.partial_epochs_results, 'partial_epochs_results.json')
@@ -66,7 +66,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
     def epoch_end_after_evaluation(
             self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
             validation_loss: float, validation_metrics_results: Dict[str, float], avg_throughput: float):
-        eval_time = (datetime.datetime.now() - self.eval_start_time).min
+        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() // 60
         self.eval_start_time = None
         epoch_results = {
             'epoch_nr': epoch_nr,
@@ -75,7 +75,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
             'validation_loss': validation_loss,
             'validation_metrics': validation_metrics_results,
             'avg_throughput': avg_throughput,
-            'epoch_time': self.cur_epoch_time.min,
+            'epoch_time': self.cur_epoch_time.total_seconds() // 60,
             'eval_time': eval_time}
         self.full_epochs_results[epoch_nr] = epoch_results
         self.gdrive_train_logger.upload_as_json_file(
@@ -93,7 +93,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
             self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
             epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, validation_loss: float,
             validation_metrics_results: Dict[str, float], avg_throughput: float):
-        eval_time = (datetime.datetime.now() - self.eval_start_time).min
+        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() // 60
         self.eval_start_time = None
         epoch_results = {
             'epoch_nr': epoch_nr,
@@ -104,7 +104,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
             'validation_loss': validation_loss,
             'validation_metrics': validation_metrics_results,
             'avg_throughput': avg_throughput,
-            'epoch_time': self.cur_epoch_time.min,
+            'epoch_time': self.cur_epoch_time.total_seconds() // 60,
             'eval_time': eval_time}
         self.partial_epochs_eval_results[epoch_nr][step_nr] = epoch_results
         self.gdrive_train_logger.upload_as_json_file(
