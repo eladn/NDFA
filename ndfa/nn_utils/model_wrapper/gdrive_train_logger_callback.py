@@ -58,14 +58,16 @@ class GDriveTrainLoggerCallback(TrainCallback):
 
     def epoch_end_before_evaluation(
             self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
-        self.cur_epoch_time += (datetime.datetime.now() - self.epoch_last_taken_start_time)
-        self.epoch_last_taken_start_time = None
+        if self.epoch_last_taken_start_time is not None:
+            self.cur_epoch_time += (datetime.datetime.now() - self.epoch_last_taken_start_time)
+            self.epoch_last_taken_start_time = None
         self.eval_start_time = datetime.datetime.now()
 
     def epoch_end_after_evaluation(
             self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
             validation_loss: float, validation_metrics_results: Dict[str, float], avg_throughput: float):
         eval_time = (datetime.datetime.now() - self.eval_start_time).min
+        self.eval_start_time = None
         epoch_results = {
             'epoch_nr': epoch_nr,
             'epoch_avg_loss': epoch_avg_loss,
@@ -82,8 +84,9 @@ class GDriveTrainLoggerCallback(TrainCallback):
     def step_end_before_evaluation(
             self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
             epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
-        self.cur_epoch_time += (datetime.datetime.now() - self.epoch_last_taken_start_time)
-        self.epoch_last_taken_start_time = None
+        if self.epoch_last_taken_start_time is not None:
+            self.cur_epoch_time += (datetime.datetime.now() - self.epoch_last_taken_start_time)
+            self.epoch_last_taken_start_time = None
         self.eval_start_time = datetime.datetime.now()
 
     def step_end_after_evaluation(
