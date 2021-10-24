@@ -3,7 +3,8 @@ import json
 import pickle
 import datetime
 import tempfile
-from typing import Optional
+import subprocess
+from typing import Optional, List
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2 import service_account
@@ -22,6 +23,14 @@ class GDriveTrainLogger:
             f'expr={experiment_settings_hash}__' \
             f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}'
         self.train_folder_id = self._create_gdrive_folder(folder_name=self.train_folder_name)
+
+    def run_subprocess_and_upload_stdout_as_text_file(self, subprocess_args: List[str], filename: str):
+        with subprocess.Popen(
+                args=subprocess_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL) as process:
+            process_stdout = process.communicate()[0].decode("utf-8")
+            self.upload_string_as_text_file(process_stdout, filename)
 
     def upload_string_as_text_file(self, text: str, filename: str):
         with tempfile.NamedTemporaryFile('w') as file:
