@@ -183,7 +183,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                  'ep': f'{epoch_nr}',
                  'loss (ep avg)': f'{train_epoch_avg_loss:.4f}',
                  'loss (win avg)': f'{train_epoch_window_loss.get_window_avg():.4f}',
-                 'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'})
+                 'loss (win stbl avg)': f'{train_epoch_window_loss.get_window_avg_wo_outliers():.4f}'},
+                refresh=False)
 
             if valid_loader is not None and evaluation_scheduler.whether_to_call_this_step(
                     cur_step_nr=batch_idx + 1,
