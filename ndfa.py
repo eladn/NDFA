@@ -1,18 +1,18 @@
-import multiprocessing
-import sys
-import numpy as np
 import io
 import os
+import sys
+import itertools
 import functools
-import subprocess
+import multiprocessing
+from warnings import warn
+from typing import Optional, Tuple
+
+import numpy as np
+from omegaconf import OmegaConf
 import torch
 import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader, RandomSampler, BatchSampler
-from typing import Optional, Tuple
-import itertools
-from warnings import warn
-from omegaconf import OmegaConf
 
 from ndfa.execution_parameters import ModelExecutionParams
 from ndfa.experiment_setting import ExperimentSetting
@@ -332,15 +332,34 @@ def main():
                 gdrive_folder_id=exec_params.train_results_gdrive_folder_id,
                 model_hps_hash=model_hps_hash_base64,
                 experiment_settings_hash=expr_settings_hash_base64)
-            gdrive_logger.upload_string_as_text_file(experiment_setting_yaml, 'experiment_settings.yaml')
-            gdrive_logger.upload_string_as_text_file(model_hps_yaml, 'model_hps.yaml')
-            with subprocess.Popen(
-                    args=['git', 'log', '--name-status', 'HEAD^..HEAD'],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL) as process:
-                git_log_str = process.communicate()[0].decode("utf-8")
-                gdrive_logger.upload_string_as_text_file(git_log_str, 'git_commit.txt')
-            gdrive_logger.upload_string_as_text_file(' '.join(sys.argv), 'exec_command.txt')
+            gdrive_logger.upload_string_as_text_file(
+                experiment_setting_yaml, filename='experiment_settings.yaml')
+            gdrive_logger.upload_string_as_text_file(
+                expr_settings_hash_base64, filename='experiment_settings_hash.txt')
+            gdrive_logger.upload_string_as_text_file(
+                model_hps_yaml, filename='model_hps.yaml')
+            gdrive_logger.upload_string_as_text_file(
+                model_hps_hash_base64, filename='model_hps_hash.txt')
+            gdrive_logger.upload_string_as_text_file(
+                ' '.join(sys.argv), filename='exec_command.txt')
+            gdrive_logger.upload_string_as_text_file(
+                f'{exec_params.experiment_setting.dataset.name}\n{exec_params.experiment_setting.dataset.datafold}',
+                filename='dataset_name.txt')
+            gdrive_logger.upload_string_as_text_file(
+                f'{repr(model)}\n#params: {sum(weight.nelement() for weight in model.parameters()):,}',
+                filename='model_description.txt')
+            gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
+                subprocess_args=['git', 'log', '--name-status', 'HEAD^..HEAD'], filename='git_commit.txt')
+            try:
+                gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
+                    subprocess_args=['printenv'], filename='environment.txt')
+            except:
+                pass
+            try:
+                gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
+                    subprocess_args=['nvidia_smi'], filename='nvidia_smi.txt')
+            except:
+                pass
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         print('Starting training.')
