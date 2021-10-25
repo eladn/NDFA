@@ -115,3 +115,4 @@ class GDriveTrainLoggerCallback(TrainCallback):
         self.cur_epoch_time = None
         self.epoch_last_taken_start_time = None
         self.eval_start_time = None
+        self.partial_epoch_results_last_msg_time = None

@@ -147,12 +147,13 @@ class GDriveTrainLoggerBackgroundWorker:
 
                 if target_file_name in self.filename_to_file_id_mapping:
                     file_id = self.filename_to_file_id_mapping[target_file_name]
-                    file = self.gdrive_service.files().get(fileId=file_id).execute()
+                    # we don't need loading the file, as we don't update it's metadata fields.
+                    # file = self.gdrive_service.files().get(fileId=file_id).execute()
                     media = MediaFileUpload(
                         local_file_path, mimetype=mimetype)  # , resumable=True
                     updated_file = self.gdrive_service.files().update(
                         fileId=file_id,
-                        body=file,
+                        # body=file,  # no need to update metadata fields
                         # newRevision=False,  # only valid param for API v2
                         media_body=media).execute()
                     return file_id
