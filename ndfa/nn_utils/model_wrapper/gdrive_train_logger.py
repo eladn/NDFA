@@ -153,7 +153,7 @@ class GDriveTrainLoggerBackgroundWorker:
                     updated_file = self.gdrive_service.files().update(
                         fileId=file_id,
                         body=file,
-                        newRevision=False,
+                        # newRevision=False,  # only valid param for API v2
                         media_body=media).execute()
                     return file_id
                 else:
