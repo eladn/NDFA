@@ -357,7 +357,7 @@ def main():
                 filename='dataset_name.txt')
             gdrive_logger.upload_string_as_text_file(
                 f'{repr(model)}\n#params: {sum(weight.nelement() for weight in model.parameters()):,}',
-                filename='model_description.txt')
+                filename='model_architecture_description.txt')
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
                 subprocess_args=['git', 'log', '--name-status', 'HEAD^..HEAD'], filename='git_commit.txt')
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
