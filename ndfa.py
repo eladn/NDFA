@@ -24,6 +24,7 @@ from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedEr
 from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
     reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
+from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessedDataParams
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -108,9 +109,10 @@ def main():
 
     if exec_params.get_pp_data_params_hash:
         preprocess_params = create_preprocess_params_from_model_hps(
-            model_hps=exec_params.experiment_setting.model_hyper_params,
-            dataset_props=exec_params.experiment_setting.dataset)
-        print(preprocess_params.get_sha1_base64())
+            model_hps=exec_params.experiment_setting.model_hyper_params)
+        preprocessed_data_params = NDFAModelPreprocessedDataParams(
+            preprocess_params=preprocess_params, dataset_props=exec_params.experiment_setting.dataset)
+        print(preprocessed_data_params.get_sha1_base64())
         exit(0)
 
     use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()

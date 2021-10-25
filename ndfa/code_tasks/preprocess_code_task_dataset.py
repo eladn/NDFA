@@ -33,7 +33,7 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, ASTPreprocessParams, \
-    HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams
+    HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams, NDFAModelPreprocessedDataParams
 from ndfa.misc.online_mean_variance_accumulator import OnlineMeanVarianceAccumulators
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
@@ -1536,13 +1536,14 @@ def preprocess_code_task_dataset(
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
         (DataFold.Test, raw_test_data_path))
-    preprocess_params = create_preprocess_params_from_model_hps(
-        model_hps=model_hps, dataset_props=dataset_props)
+    preprocess_params = create_preprocess_params_from_model_hps(model_hps=model_hps)
+    preprocessed_data_params = NDFAModelPreprocessedDataParams(
+        preprocess_params=preprocess_params, dataset_props=dataset_props)
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:
             continue
         print(f'Starting pre-processing data-fold: `{datafold.name}` ..')
-        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocess_params.get_sha1_base64()}'
+        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocessed_data_params.get_sha1_base64()}'
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path_prefix=os.path.join(pp_data_path, pp_data_filename),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,

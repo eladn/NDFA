@@ -27,7 +27,7 @@ from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMix
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
-from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
+from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, NDFAModelPreprocessedDataParams
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 
 
@@ -85,10 +85,11 @@ class PredictLogVarsTask(CodeTaskBase):
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
             pp_compression_method: str = 'none') -> Dataset:
-        preprocess_params = create_preprocess_params_from_model_hps(
-            model_hps=model_hps, dataset_props=dataset_props)
+        preprocess_params = create_preprocess_params_from_model_hps(model_hps=model_hps)
+        preprocessed_data_params = NDFAModelPreprocessedDataParams(
+            preprocess_params=preprocess_params, dataset_props=dataset_props)
         return PredictLogVarsTaskDataset(
-            preprocess_params=preprocess_params, datafold=datafold, pp_data_path=pp_data_path,
+            preprocessed_data_params=preprocessed_data_params, datafold=datafold, pp_data_path=pp_data_path,
             storage_method=pp_storage_method, compression_method=pp_compression_method)
 
     def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
@@ -310,14 +311,14 @@ class PredictLogVarsModelLoss(nn.Module):
 class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
     def __init__(
             self,
-            preprocess_params: NDFAModelPreprocessParams,
+            preprocessed_data_params: NDFAModelPreprocessedDataParams,
             datafold: DataFold,
             pp_data_path: str,
             storage_method: str = 'dbm',
             compression_method: str = 'none'):
         super(PredictLogVarsTaskDataset, self).__init__(
             pp_data_path_prefix=os.path.join(
-                pp_data_path, f'pp_{datafold.value.lower()}_{preprocess_params.get_sha1_base64()}'),
+                pp_data_path, f'pp_{datafold.value.lower()}_{preprocessed_data_params.get_sha1_base64()}'),
             storage_method=storage_method, compression_method=compression_method)
 
     def __getitem__(self, possibly_batched_index):

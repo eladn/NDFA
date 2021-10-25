@@ -1,5 +1,3 @@
-import base64
-import hashlib
 import dataclasses
 from typing import Optional
 
@@ -10,7 +8,7 @@ from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
 __all__ = [
     'ASTPathsPreprocessParams', 'ASTPreprocessParams', 'NGramsPreprocessParams',
     'ControlFlowPathsPreprocessParams', 'HierarchicMethodEncoderPreprocessParams',
-    'MethodCodePreprocessParams', 'NDFAModelPreprocessParams'
+    'MethodCodePreprocessParams', 'NDFAModelPreprocessParams', 'NDFAModelPreprocessedDataParams'
 ]
 
 
@@ -112,11 +110,15 @@ class MethodCodePreprocessParams:
 @dataclasses.dataclass
 class NDFAModelPreprocessParams(DeterministicallyHashable):
     method_code: MethodCodePreprocessParams
-    dataset_props: DatasetProperties
 
     @classmethod
     def full(cls):
         """Get an instance with all options present."""
         return NDFAModelPreprocessParams(
-            method_code=MethodCodePreprocessParams.full(),
-            dataset_props=DatasetProperties())
+            method_code=MethodCodePreprocessParams.full())
+
+
+@dataclasses.dataclass
+class NDFAModelPreprocessedDataParams(DeterministicallyHashable):
+    preprocess_params: NDFAModelPreprocessParams
+    dataset_props: DatasetProperties
