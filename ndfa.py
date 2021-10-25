@@ -353,7 +353,7 @@ def main():
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
                 subprocess_args=['printenv'], filename='environment.txt', ignore_fault=True)
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
-                subprocess_args=['nvidia_smi'], filename='nvidia_smi.txt', ignore_fault=True)
+                subprocess_args=['nvidia-smi'], filename='nvidia-smi.txt', ignore_fault=True)
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         print('Starting training.')
