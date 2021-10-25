@@ -4,6 +4,7 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessPar
     ASTPathsPreprocessParams, NGramsPreprocessParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
 
 
 __all__ = ['create_preprocess_params_from_model_hps']
@@ -24,8 +25,9 @@ def create_preprocess_params_from_ast_encoder_params(ast_encoder_params: ASTEnco
     return ASTPreprocessParams(paths=ast_paths_params)
 
 
-def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> NDFAModelPreprocessParams:
-    pp_params = NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams())
+def create_preprocess_params_from_model_hps(
+        model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties) -> NDFAModelPreprocessParams:
+    pp_params = NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams(), dataset_props=dataset_props)
     if model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.Hierarchic:
         hierarchic_params = model_hps.method_code_encoder.hierarchic_micro_macro_encoder
         control_flow_paths_params = None

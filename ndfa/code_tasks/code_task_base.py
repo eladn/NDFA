@@ -24,14 +24,14 @@ class CodeTaskBase(abc.ABC):
         pass
 
     def preprocess_dataset(
-            self, model_hps: NDFAModelHyperParams, pp_data_path: str, raw_train_data_path: str,
-            raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
-            pp_nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
-            compression_method: str = 'none'):
+            self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties, pp_data_path: str,
+            raw_train_data_path: str, raw_validation_data_path: Optional[str] = None,
+            raw_test_data_path: Optional[str] = None, pp_nr_processes: int = 4, pp_override: bool = False,
+            storage_method: str = 'dbm', compression_method: str = 'none'):
         code_task_vocabs = self.create_or_load_code_task_vocabs(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
         preprocess_code_task_dataset(
-            model_hps=model_hps, pp_data_path=pp_data_path,
+            model_hps=model_hps, dataset_props=dataset_props, pp_data_path=pp_data_path,
             raw_extracted_examples_generator=functools.partial(self.iterate_raw_examples, model_hps=model_hps),
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
             raw_train_data_path=raw_train_data_path, raw_validation_data_path=raw_validation_data_path,

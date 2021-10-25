@@ -4,6 +4,7 @@ import dataclasses
 from typing import Optional
 
 from ndfa.misc.configurations_utils import DeterministicallyHashable
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
 
 
 __all__ = [
@@ -111,8 +112,11 @@ class MethodCodePreprocessParams:
 @dataclasses.dataclass
 class NDFAModelPreprocessParams(DeterministicallyHashable):
     method_code: MethodCodePreprocessParams
+    dataset_props: DatasetProperties
 
     @classmethod
     def full(cls):
         """Get an instance with all options present."""
-        return NDFAModelPreprocessParams(method_code=MethodCodePreprocessParams.full())
+        return NDFAModelPreprocessParams(
+            method_code=MethodCodePreprocessParams.full(),
+            dataset_props=DatasetProperties())

@@ -108,7 +108,8 @@ def main():
 
     if exec_params.get_pp_data_params_hash:
         preprocess_params = create_preprocess_params_from_model_hps(
-            model_hps=exec_params.experiment_setting.model_hyper_params)
+            model_hps=exec_params.experiment_setting.model_hyper_params,
+            dataset_props=exec_params.experiment_setting.dataset)
         print(preprocess_params.get_sha1_base64())
         exit(0)
 
@@ -194,6 +195,7 @@ def main():
         os.makedirs(exec_params.pp_data_dir_path, exist_ok=True)
         task.preprocess_dataset(
             model_hps=exec_params.experiment_setting.model_hyper_params,
+            dataset_props=exec_params.experiment_setting.dataset,
             pp_data_path=exec_params.pp_data_dir_path,
             raw_train_data_path=exec_params.raw_train_data_path,
             raw_validation_data_path=exec_params.raw_validation_data_path,
@@ -344,7 +346,7 @@ def main():
             gdrive_logger.upload_string_as_text_file(
                 ' '.join(sys.argv), filename='exec_command.txt')
             gdrive_logger.upload_string_as_text_file(
-                f'{exec_params.experiment_setting.dataset.name}\n{exec_params.experiment_setting.dataset.datafold}',
+                f'{exec_params.experiment_setting.dataset.name}\n{exec_params.experiment_setting.dataset.folding}',
                 filename='dataset_name.txt')
             gdrive_logger.upload_string_as_text_file(
                 f'{repr(model)}\n#params: {sum(weight.nelement() for weight in model.parameters()):,}',

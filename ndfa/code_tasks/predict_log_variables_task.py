@@ -85,7 +85,8 @@ class PredictLogVarsTask(CodeTaskBase):
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
             pp_compression_method: str = 'none') -> Dataset:
-        preprocess_params = create_preprocess_params_from_model_hps(model_hps)
+        preprocess_params = create_preprocess_params_from_model_hps(
+            model_hps=model_hps, dataset_props=dataset_props)
         return PredictLogVarsTaskDataset(
             preprocess_params=preprocess_params, datafold=datafold, pp_data_path=pp_data_path,
             storage_method=pp_storage_method, compression_method=pp_compression_method)

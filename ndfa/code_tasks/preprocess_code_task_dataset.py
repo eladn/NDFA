@@ -36,6 +36,7 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessPar
     HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams
 from ndfa.misc.online_mean_variance_accumulator import OnlineMeanVarianceAccumulators
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
+from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
 
 
 __all__ = [
@@ -1525,7 +1526,7 @@ def catch_preprocess_limit_exceed_error(
 
 
 def preprocess_code_task_dataset(
-        model_hps: NDFAModelHyperParams, pp_data_path: str,
+        model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties, pp_data_path: str,
         raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
         raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
@@ -1535,7 +1536,8 @@ def preprocess_code_task_dataset(
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
         (DataFold.Test, raw_test_data_path))
-    preprocess_params = create_preprocess_params_from_model_hps(model_hps)
+    preprocess_params = create_preprocess_params_from_model_hps(
+        model_hps=model_hps, dataset_props=dataset_props)
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:
             continue
