@@ -325,6 +325,7 @@ def main():
             from ndfa.nn_utils.model_wrapper.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
 
+        gdrive_logger = None
         if exec_params.use_gdrive_logger:
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger_callback import GDriveTrainLoggerCallback
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger import GDriveTrainLogger
@@ -374,6 +375,9 @@ def main():
             callbacks=train_callbacks,
             gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip,
             progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
+
+        if gdrive_logger is not None:
+            gdrive_logger.close()
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
