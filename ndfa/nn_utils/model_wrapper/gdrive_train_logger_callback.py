@@ -66,7 +66,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
     def epoch_end_after_evaluation(
             self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
             validation_loss: float, validation_metrics_results: Dict[str, float], avg_throughput: float):
-        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() // 60
+        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() / 60
         self.eval_start_time = None
         epoch_results = {
             'epoch_nr': epoch_nr,
@@ -93,7 +93,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
             self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
             epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, validation_loss: float,
             validation_metrics_results: Dict[str, float], avg_throughput: float):
-        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() // 60
+        eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() / 60
         self.eval_start_time = None
         epoch_results = {
             'epoch_nr': epoch_nr,
