@@ -107,11 +107,11 @@ def main():
         warn(f'Using experiment settings from loaded checkpoint [hash=`{expr_settings_hash_base64}`]. '
              f'Ignoring experiment settings from other inputs.')
 
+    preprocess_params = create_preprocess_params_from_model_hps(
+        model_hps=exec_params.experiment_setting.model_hyper_params)
+    preprocessed_data_params = NDFAModelPreprocessedDataParams(
+        preprocess_params=preprocess_params, dataset_props=exec_params.experiment_setting.dataset)
     if exec_params.get_pp_data_params_hash:
-        preprocess_params = create_preprocess_params_from_model_hps(
-            model_hps=exec_params.experiment_setting.model_hyper_params)
-        preprocessed_data_params = NDFAModelPreprocessedDataParams(
-            preprocess_params=preprocess_params, dataset_props=exec_params.experiment_setting.dataset)
         print(preprocessed_data_params.get_sha1_base64())
         exit(0)
 
@@ -345,6 +345,11 @@ def main():
                 model_hps_yaml, filename='model_hps.yaml')
             gdrive_logger.upload_string_as_text_file(
                 model_hps_hash_base64, filename='model_hps_hash.txt')
+            gdrive_logger.upload_string_as_text_file(
+                OmegaConf.to_yaml(OmegaConf.structured(preprocessed_data_params)),
+                filename='preprocessed_data_params.yaml')
+            gdrive_logger.upload_string_as_text_file(
+                preprocessed_data_params.get_sha1_base64(), filename='preprocessed_data_params_hash.txt')
             gdrive_logger.upload_string_as_text_file(
                 ' '.join(sys.argv), filename='exec_command.txt')
             gdrive_logger.upload_string_as_text_file(
