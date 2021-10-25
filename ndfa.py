@@ -358,26 +358,27 @@ def main():
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         print('Starting training.')
-        fit(
-            nr_epochs=exec_params.experiment_setting.train_hyper_params.nr_epochs,
-            model=model,
-            device=device,
-            train_loader=train_loader,
-            valid_loader=eval_loader,
-            optimizer=optimizer,
-            lr_schedulers=lr_schedulers,
-            criterion=criterion,
-            nr_gradient_accumulation_steps=
-            exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size,
-            save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
-            evaluation_metrics_types=task.evaluation_metrics(
-                model_hps=exec_params.experiment_setting.model_hyper_params),
-            callbacks=train_callbacks,
-            gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip,
-            progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
-
-        if gdrive_logger is not None:
-            gdrive_logger.close()
+        try:
+            fit(
+                nr_epochs=exec_params.experiment_setting.train_hyper_params.nr_epochs,
+                model=model,
+                device=device,
+                train_loader=train_loader,
+                valid_loader=eval_loader,
+                optimizer=optimizer,
+                lr_schedulers=lr_schedulers,
+                criterion=criterion,
+                nr_gradient_accumulation_steps=
+                exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size,
+                save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
+                evaluation_metrics_types=task.evaluation_metrics(
+                    model_hps=exec_params.experiment_setting.model_hyper_params),
+                callbacks=train_callbacks,
+                gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip,
+                progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
+        finally:
+            if gdrive_logger is not None:
+                gdrive_logger.close()
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
