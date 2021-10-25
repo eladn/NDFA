@@ -329,7 +329,7 @@ def main():
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger_callback import GDriveTrainLoggerCallback
             from ndfa.nn_utils.model_wrapper.gdrive_train_logger import GDriveTrainLogger
             gdrive_logger = GDriveTrainLogger(
-                gdrive_folder_id=exec_params.train_results_gdrive_folder_id,
+                gdrive_base_folder_id=exec_params.train_results_gdrive_folder_id,
                 model_hps_hash=model_hps_hash_base64,
                 experiment_settings_hash=expr_settings_hash_base64)
             gdrive_logger.upload_string_as_text_file(
@@ -350,16 +350,10 @@ def main():
                 filename='model_description.txt')
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
                 subprocess_args=['git', 'log', '--name-status', 'HEAD^..HEAD'], filename='git_commit.txt')
-            try:
-                gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
-                    subprocess_args=['printenv'], filename='environment.txt')
-            except:
-                pass
-            try:
-                gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
-                    subprocess_args=['nvidia_smi'], filename='nvidia_smi.txt')
-            except:
-                pass
+            gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
+                subprocess_args=['printenv'], filename='environment.txt', ignore_fault=True)
+            gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
+                subprocess_args=['nvidia_smi'], filename='nvidia_smi.txt', ignore_fault=True)
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         print('Starting training.')
