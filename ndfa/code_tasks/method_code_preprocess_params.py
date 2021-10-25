@@ -44,7 +44,6 @@ class ASTPreprocessParams:
             tree=True)
 
 
-
 @dataclasses.dataclass
 class NGramsPreprocessParams:
     min_n: int = 1
