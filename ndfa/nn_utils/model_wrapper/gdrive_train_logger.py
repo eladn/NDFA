@@ -178,7 +178,10 @@ class GDriveTrainLoggerBackgroundWorker:
         # time.
         if os.path.exists('credentials/gdrive_token.pickle'):
             with open('credentials/gdrive_token.pickle', 'rb') as token:
-                creds = pickle.load(token)
+                try:
+                    creds = pickle.load(token)
+                except:
+                    pass
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -187,8 +190,12 @@ class GDriveTrainLoggerBackgroundWorker:
                 creds = service_account.Credentials.from_service_account_file(
                     credentials_file_path, scopes=['https://www.googleapis.com/auth/drive'])
             # Save the credentials for the next run
-            with open('credentials/gdrive_token.pickle', 'wb') as token:
-                pickle.dump(creds, token)
+            try:
+                with open('credentials/gdrive_token.pickle', 'wb') as token:
+                    pickle.dump(creds, token)
+            except:
+                if os.path.isfile('credentials/gdrive_token.pickle'):
+                    os.remove('credentials/gdrive_token.pickle')
         return creds
 
     @classmethod
