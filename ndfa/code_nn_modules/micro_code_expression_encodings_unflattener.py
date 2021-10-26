@@ -23,7 +23,9 @@ def micro_code_expression_encodings_as_unflattenable(
             return code_task_input.ast.batch_flattened_ast_nodes_as_unflattenable(
                 code_expression_encodings.ast_nodes)
         elif micro_encoder_params.ast_encoder.encoder_type == ASTEncoderParams.EncoderType.SetOfPaths:
-            raise NotImplementedError  # TODO: impl!
+            return code_task_input.ast.batch_flattened_combined_ast_paths_as_unflattenable(
+                {path_type: path_encodings.combined
+                 for path_type, path_encodings in code_expression_encodings.ast_paths_by_type.items()})
         else:
             assert False
     else:

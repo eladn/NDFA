@@ -1,8 +1,8 @@
 import torch
-import dataclasses
-from typing import Optional, Callable
-from torch_geometric.data import Data as TGData
 import dgl
+import dataclasses
+from torch_geometric.data import Data as TGData
+from typing import Optional, Callable, Dict, List
 
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, \
@@ -315,8 +315,26 @@ class MethodASTInputTensors(SubASTInputTensors):
             self, ast_nodes_encodings: torch.Tensor) -> FlattenedTensor:
         return FlattenedTensor(
             flattened=ast_nodes_encodings,
-            unflattener_mask=self.get_ast_nodes_unflattener_mask(),
+            unflattener_mask_getter=self.get_ast_nodes_unflattener_mask,
             unflattener_fn=self.get_ast_nodes_unflattener())
+
+    def get_ast_paths_unflattener_mask(self, paths_types: List[str]) -> torch.Tensor:
+        raise NotImplementedError  # TODO: impl
+
+    def get_ast_paths_unflattener(self, paths_types: List[str]) -> Callable[[torch.Tensor], torch.Tensor]:
+        def unflatten(all_combined_paths_encodings: torch.Tensor):
+            raise NotImplementedError  # TODO: impl
+
+        return unflatten
+
+    def batch_flattened_combined_ast_paths_as_unflattenable(
+            self, combined_ast_paths_encodings_by_type: Dict[str, torch.Tensor]) -> FlattenedTensor:
+        return FlattenedTensor(
+            flattened=torch.cat(list(combined_ast_paths_encodings_by_type.values()), dim=0),
+            unflattener_mask_getter=lambda: self.get_ast_paths_unflattener_mask(
+                paths_types=list(combined_ast_paths_encodings_by_type.keys())),
+            unflattener_fn=self.get_ast_paths_unflattener(
+                paths_types=list(combined_ast_paths_encodings_by_type.keys())))
 
 
 @dataclasses.dataclass
