@@ -47,7 +47,8 @@ class MethodCodeEncoderParams(HasDispatchableField):
         arg_prefix='hierarchic_encoder')
     # relevant only if `method_encoder_type == EncoderType.WholeMethod`
     whole_method_expression_encoder: Optional[CodeExpressionEncoderParams] = conf_field(
-        default_factory=lambda: CodeExpressionEncoderParams(encoder_type='FlatTokensSeq'),
+        default_factory=lambda: CodeExpressionEncoderParams(
+            encoder_type=CodeExpressionEncoderParams.EncoderType.FlatTokensSeq),
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='whole_method_expression_encoder')

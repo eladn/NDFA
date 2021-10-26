@@ -214,11 +214,8 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         elif self.model_hps.method_code_encoder.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
             encoder_output_dim = self.model_hps.method_code_encoder.hierarchic_micro_macro_encoder.macro_encoding_dim
         elif self.model_hps.method_code_encoder.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
-            # TODO: put in HPs
             encoder_output_dim = \
-                self.model_hps.method_code_encoder.whole_method_expression_encoder.tokens_seq_encoder.token_encoding_dim \
-                if self.model_hps.method_code_encoder.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq' else \
-                self.model_hps.method_code_encoder.whole_method_expression_encoder.ast_encoder.ast_node_embedding_dim
+                self.model_hps.method_code_encoder.whole_method_expression_encoder.expression_encoding_dim
         else:
             assert False
 

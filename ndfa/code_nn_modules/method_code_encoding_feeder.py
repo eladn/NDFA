@@ -8,6 +8,7 @@ from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
     HierarchicMicroMacroMethodCodeEncoderParams
 from ndfa.code_nn_modules.method_code_encoder import EncodedMethodCode
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 
 
 __all__ = ['MethodCodeEncodingsFeeder']
@@ -53,10 +54,12 @@ class MethodCodeEncodingsFeeder(nn.Module):
             encoder_outputs_mask = unflattanable_encodings.get_unflattener_mask()
             # assert torch.allclose(encoder_outputs[~encoder_outputs_mask], torch.tensor(.0))
         elif self.method_code_encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
-            if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'FlatTokensSeq':
+            if self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
                 encoder_outputs = encoded_method_code.whole_method_token_seqs_encoding
                 encoder_outputs_mask = code_task_input.method_tokenized_code.token_type.sequences_mask
-            elif self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == 'ast':
+            elif self.method_code_encoder_params.whole_method_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.AST:
                 if self.method_code_encoder_params.whole_method_expression_encoder.ast_encoder.encoder_type == \
                         ASTEncoderParams.EncoderType.SetOfPaths:
                     # TODO: for 'leaves_sequence' we might want to have the whole sequence rather than the combined path

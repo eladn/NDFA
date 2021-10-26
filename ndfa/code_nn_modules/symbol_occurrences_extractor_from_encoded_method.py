@@ -60,7 +60,7 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
             tokenized_expressions_input: CodeExpressionTokensSequenceInputTensors,
             sub_ast_expressions_input: SubASTInputTensors,
             method_ast_input: MethodASTInputTensors) -> Tuple[torch.Tensor, torch.LongTensor]:
-        if self.code_expression_encoder_params.encoder_type == 'ast':
+        if self.code_expression_encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             if self.code_expression_encoder_params.ast_encoder.encoder_type == ASTEncoderParams.EncoderType.SetOfPaths:
                 assert code_expression_encodings.ast_paths_by_type is not None
                 all_symbols_occurrences = []
@@ -120,7 +120,7 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                 assert ast_nodes_with_symbol_leaf_nodes_indices.shape == ast_nodes_with_symbol_leaf_symbol_idx.shape
                 encodings_of_symbols_occurrences = encoded_ast_nodes[ast_nodes_with_symbol_leaf_nodes_indices, :]
                 symbols_indices_of_symbols_occurrences = ast_nodes_with_symbol_leaf_symbol_idx
-        elif self.code_expression_encoder_params.encoder_type == 'FlatTokensSeq':
+        elif self.code_expression_encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             assert code_expression_encodings.token_seqs is not None
             assert tokenized_expressions_input.is_symbol_mask.sequences.shape == \
                    code_expression_encodings.token_seqs.shape[:-1]

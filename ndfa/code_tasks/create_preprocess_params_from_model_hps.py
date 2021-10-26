@@ -4,6 +4,7 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessPar
     ASTPathsPreprocessParams, NGramsPreprocessParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 
 
 __all__ = ['create_preprocess_params_from_model_hps']
@@ -40,22 +41,28 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
                     min_n=cfg_paths_encoder.ngrams.min_n, max_n=cfg_paths_encoder.ngrams.max_n)
                 if cfg_paths_encoder.is_ngrams else None)
         pp_params.method_code.hierarchic = HierarchicMethodEncoderPreprocessParams(
-            micro_ast=None if not hierarchic_params.local_expression_encoder.encoder_type == 'ast' else
+            micro_ast=
+            None if not hierarchic_params.local_expression_encoder.encoder_type ==
+            CodeExpressionEncoderParams.EncoderType.AST else
             create_preprocess_params_from_ast_encoder_params(hierarchic_params.local_expression_encoder.ast_encoder),
-            micro_tokens_seq=hierarchic_params.local_expression_encoder.encoder_type == 'FlatTokensSeq',
-            macro_ast=None if hierarchic_params.global_context_encoder.encoder_type !=
-                      hierarchic_params.global_context_encoder.EncoderType.UpperASTPaths else
-                      create_preprocess_params_from_ast_encoder_params(
-                          hierarchic_params.global_context_encoder.macro_trimmed_ast_encoder),
+            micro_tokens_seq=
+            hierarchic_params.local_expression_encoder.encoder_type ==
+            CodeExpressionEncoderParams.EncoderType.FlatTokensSeq,
+            macro_ast=
+            None if hierarchic_params.global_context_encoder.encoder_type !=
+            hierarchic_params.global_context_encoder.EncoderType.UpperASTPaths else
+            create_preprocess_params_from_ast_encoder_params(
+                hierarchic_params.global_context_encoder.macro_trimmed_ast_encoder),
             control_flow_paths=control_flow_paths_params,
-            control_flow_graph=hierarchic_params.global_context_encoder.encoder_type ==
-                               hierarchic_params.global_context_encoder.EncoderType.CFGGNN)
+            control_flow_graph=
+            hierarchic_params.global_context_encoder.encoder_type ==
+            hierarchic_params.global_context_encoder.EncoderType.CFGGNN)
 
     elif model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.WholeMethod:
         code_encoder = model_hps.method_code_encoder.whole_method_expression_encoder
-        if code_encoder.encoder_type == 'FlatTokensSeq':
+        if code_encoder.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             pp_params.method_code.whole_method_tokens_seq = True
-        elif code_encoder.encoder_type == 'ast':
+        elif code_encoder.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             pp_params.method_code.whole_method_ast = create_preprocess_params_from_ast_encoder_params(
                 code_encoder.ast_encoder)
         else:

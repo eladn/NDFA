@@ -14,10 +14,10 @@ def micro_code_expression_encodings_as_unflattenable(
         micro_encoder_params: CodeExpressionEncoderParams,
         code_task_input: MethodCodeInputTensors,
         code_expression_encodings: CodeExpressionEncodingsTensors) -> FlattenedTensor:
-    if micro_encoder_params.encoder_type == 'FlatTokensSeq':
+    if micro_encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
         return code_task_input.pdg.cfg_nodes_tokenized_expressions.batch_flattened_tokens_seqs_as_unflattenable(
             code_expression_encodings.token_seqs)
-    elif micro_encoder_params.encoder_type == 'ast':
+    elif micro_encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
         if micro_encoder_params.ast_encoder.encoder_type in \
                 {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}:
             return code_task_input.ast.batch_flattened_ast_nodes_as_unflattenable(

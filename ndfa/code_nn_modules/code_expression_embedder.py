@@ -22,7 +22,7 @@ class CodeExpressionEmbedder(nn.Module):
         super(CodeExpressionEmbedder, self).__init__()
         self.encoder_params = encoder_params
         self.identifier_embedding_dim = identifier_embedding_dim
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             self.code_tokens_embedder = CodeTokensEmbedder(
                 kos_tokens_vocab=code_task_vocabs.kos_tokens,
                 tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
@@ -32,7 +32,7 @@ class CodeExpressionEmbedder(nn.Module):
                 identifier_embedding_dim=self.identifier_embedding_dim,
                 nr_out_linear_layers=nr_final_embeddings_linear_layers,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             # TODO: put in HPs
             self.primitive_type_embedding_dim = self.encoder_params.ast_encoder.ast_node_embedding_dim
             self.modifier_embedding_dim = self.encoder_params.ast_encoder.ast_node_embedding_dim
@@ -58,13 +58,13 @@ class CodeExpressionEmbedder(nn.Module):
             encoded_identifiers: torch.Tensor,
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             method_ast_input: Optional[MethodASTInputTensors] = None) -> CodeExpressionEncodingsTensors:
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             return CodeExpressionEncodingsTensors(token_seqs=self.code_tokens_embedder(
                 token_type=tokenized_expressions_input.token_type.sequences,
                 kos_token_index=tokenized_expressions_input.kos_token_index.tensor,
                 identifier_index=tokenized_expressions_input.identifier_index.indices,
                 encoded_identifiers=encoded_identifiers))
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             return CodeExpressionEncodingsTensors(ast_nodes=self.ast_nodes_embedder(
                 method_ast_input=method_ast_input,
                 identifiers_encodings=encoded_identifiers))

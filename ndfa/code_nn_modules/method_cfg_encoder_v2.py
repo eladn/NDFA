@@ -31,6 +31,7 @@ from ndfa.code_nn_modules.trimmed_ast_macro_encoder import TrimmedASTMacroEncode
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method import \
     SymbolOccurrencesExtractorFromEncodedMethod
+from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 
 
 __all__ = ['MethodCFGEncoderV2', 'EncodedMethodCFGV2']
@@ -115,12 +116,14 @@ class MethodCFGEncoderV2(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(3)])
 
-        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             self.tokenized_expression_context_adder = SeqContextAdder(
                 main_dim=self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim,
                 ctx_dim=self.encoder_params.cfg_node_encoding_dim,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                CodeExpressionEncoderParams.EncoderType.AST:
             self.macro_context_adder_to_sub_ast = MacroContextAdderToSubAST(
                 ast_node_encoding_dim=self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim,
                 cfg_node_encoding_dim=self.encoder_params.cfg_node_encoding_dim,
@@ -205,12 +208,7 @@ class MethodCFGEncoderV2(nn.Module):
                 post_macro_encoder_state_updater_params=self.encoder_params.post_macro_encoder_state_updater,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-        # TODO: put in HPs
-        expression_encoding_dim = \
-            self.encoder_params.cfg_node_expression_encoder.tokens_seq_encoder.token_encoding_dim \
-                if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq' else \
-                self.encoder_params.cfg_node_expression_encoder.ast_encoder.ast_node_embedding_dim
-
+        expression_encoding_dim = self.encoder_params.cfg_node_expression_encoder.expression_encoding_dim
         self.symbols_encoder = SymbolsEncoder(
             identifier_embedding_dim=self.identifier_embedding_dim,
             symbol_embedding_dim=self.symbol_embedding_dim,
@@ -297,10 +295,12 @@ class MethodCFGEncoderV2(nn.Module):
             tokenized_expressions_input=code_task_input.pdg.cfg_nodes_tokenized_expressions,
             method_ast_input=code_task_input.ast)
         if self.use_norm:
-            if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
+            if self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
                 embedded_code_expressions.token_seqs = self.expressions_norm(
                     embedded_code_expressions.token_seqs, usage_point=0)
-            elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+            elif self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.AST:
                 embedded_code_expressions.ast_nodes = self.expressions_norm(
                     embedded_code_expressions.ast_nodes, usage_point=0)
             else:
@@ -399,7 +399,8 @@ class MethodCFGEncoderV2(nn.Module):
             raise ValueError(f'Unsupported method-CFG encoding type `{self.encoder_params.encoder_type}`.')
 
         # Add CFG-node macro context to its own expression (tokens-seq / sub-AST).
-        if self.encoder_params.cfg_node_expression_encoder.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             # TODO: maybe we do not need this for `self.encoder_params.encoder_type == 'set-of-nodes'`
             # FIXME: notice there is a skip-connection built-in here that is not conditioned
             #  by the flag `self.use_skip_connections`.
@@ -410,7 +411,8 @@ class MethodCFGEncoderV2(nn.Module):
             if self.use_norm:
                 encoded_code_expressions.token_seqs = self.expressions_norm(
                     encoded_code_expressions.token_seqs, usage_point=2)
-        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == 'ast':
+        elif self.encoder_params.cfg_node_expression_encoder.encoder_type == \
+                CodeExpressionEncoderParams.EncoderType.AST:
             encoded_code_expressions.ast_nodes = self.macro_context_adder_to_sub_ast(
                 previous_ast_nodes_encodings=encoded_code_expressions.ast_nodes,
                 new_cfg_nodes_encodings=encoded_cfg_nodes,

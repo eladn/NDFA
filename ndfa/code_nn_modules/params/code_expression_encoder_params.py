@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Optional
 from dataclasses import dataclass
 
@@ -13,20 +14,23 @@ __all__ = ['CodeExpressionEncoderParams']
 
 @dataclass
 class CodeExpressionEncoderParams(HasDispatchableField):
+    class EncoderType(Enum):
+        FlatTokensSeq = 'FlatTokensSeq'
+        AST = 'AST'
+
     @classmethod
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                'ast': ['ast_encoder', 'cfg_sub_ast_expression_combiner_params'],
-                'FlatTokensSeq': ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
+                cls.EncoderType.AST: ['ast_encoder', 'cfg_sub_ast_expression_combiner_params'],
+                cls.EncoderType.FlatTokensSeq: ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
 
-    encoder_type: str = conf_field(
-        default='ast',
-        choices=('FlatTokensSeq', 'ast'),
+    encoder_type: EncoderType = conf_field(
+        default=EncoderType.AST,
         description="Representation type of the expression "
                     "(part of the architecture of the code-encoder).")
 
-    # relevant only if `encoder_type == 'ast'`
+    # relevant only if `encoder_type == 'AST'`
     ast_encoder: Optional[ASTEncoderParams] = conf_field(
         default_factory=ASTEncoderParams,
         description="Representation type of the AST of the expression "
@@ -52,5 +56,5 @@ class CodeExpressionEncoderParams(HasDispatchableField):
     @property
     def expression_encoding_dim(self) -> int:
         return self.tokens_seq_encoder.token_encoding_dim \
-            if self.encoder_type == 'FlatTokensSeq' else \
+            if self.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq else \
             self.ast_encoder.ast_node_embedding_dim

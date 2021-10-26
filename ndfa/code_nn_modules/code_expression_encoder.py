@@ -28,13 +28,13 @@ class CodeExpressionEncoder(nn.Module):
         self.encoder_params = encoder_params
         self.is_first_encoder_layer = is_first_encoder_layer
         self.identifier_embedding_dim = identifier_embedding_dim
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             self.code_expression_linear_seq_encoder = CodeExpressionTokensSequenceEncoder(
                 encoder_params=self.encoder_params.tokens_seq_encoder,
                 norm_params=norm_params,
                 dropout_rate=dropout_rate,
                 activation_fn=activation_fn)
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             self.ast_encoder = ASTEncoder(
                 encoder_params=self.encoder_params.ast_encoder,
                 code_task_vocabs=code_task_vocabs,
@@ -51,11 +51,11 @@ class CodeExpressionEncoder(nn.Module):
             previous_code_expression_encodings: CodeExpressionEncodingsTensors,
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             sub_ast_input: Optional[SubASTInputTensors] = None) -> CodeExpressionEncodingsTensors:
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             return self.code_expression_linear_seq_encoder(
                 token_seqs_embeddings=previous_code_expression_encodings.token_seqs,
                 expressions_input=tokenized_expressions_input)
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             return self.ast_encoder(
                 previous_code_expression_encodings=previous_code_expression_encodings,
                 sub_ast_input=sub_ast_input)

@@ -20,13 +20,13 @@ class CodeExpressionCombiner(nn.Module):
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionCombiner, self).__init__()
         self.encoder_params = encoder_params
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             self.tokenized_sequence_combiner = SequenceCombiner(
                 encoding_dim=self.encoder_params.tokens_seq_encoder.token_encoding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,
                 combiner_params=self.encoder_params.tokenized_expression_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             self.sub_ast_expression_combiner = CFGSubASTExpressionCombiner(
                 ast_node_encoding_dim=self.encoder_params.ast_encoder.ast_node_embedding_dim,
                 combined_dim=self.encoder_params.combined_expression_encoding_dim,  # TODO!
@@ -41,11 +41,11 @@ class CodeExpressionCombiner(nn.Module):
             tokenized_expressions_input: Optional[CodeExpressionTokensSequenceInputTensors] = None,
             cfg_nodes_expressions_ast: Optional[PDGExpressionsSubASTInputTensors] = None,
             cfg_nodes_has_expression_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        if self.encoder_params.encoder_type == 'FlatTokensSeq':
+        if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             return self.tokenized_sequence_combiner(
                 sequence_encodings=encoded_code_expressions.token_seqs,
                 sequence_lengths=tokenized_expressions_input.token_type.sequences_lengths)
-        elif self.encoder_params.encoder_type == 'ast':
+        elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             combined_expressions = self.sub_ast_expression_combiner(
                 encoded_code_expressions=encoded_code_expressions,
                 cfg_nodes_expressions_ast_input=cfg_nodes_expressions_ast,
