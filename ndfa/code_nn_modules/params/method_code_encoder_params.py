@@ -86,7 +86,7 @@ class MethodCodeEncoderParams(HasDispatchableField):
         default=150,
         description="The number of .")
     nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading: Optional[int] = conf_field(
-        default=200,
+        default=400,
         description="The number of .")
     nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading: Optional[int] = conf_field(
         default=200,
