@@ -60,6 +60,11 @@ class ModelExecutionParams:
         default=False,
         description="Get the hash of the required preprocessed data params matching the given model hyper params.")
 
+    dbg_validate_batch_separation: bool = conf_field(
+        default=False,
+        description="Check whether the model produces the same outputs of a given batch when running twice on the "
+                    "exact same batching and third time on the same batch but when ordered in reversed.")
+
     pp_nr_processes: Optional[int] = conf_field(
         default=4,
         description="Number of processes to use for preprocessing.",

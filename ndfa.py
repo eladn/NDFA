@@ -464,6 +464,81 @@ def main():
         else:
             assert False
 
+    if exec_params.dbg_validate_batch_separation:
+        """
+        Check whether the model produces the same outputs of a given batch when running twice on the 
+          exact same batching and third time on the same batch but when ordered in reversed.
+        """
+        train_dataset = task.create_dataset(
+            model_hps=exec_params.experiment_setting.model_hyper_params,
+            dataset_props=exec_params.experiment_setting.dataset,
+            datafold=DataFold.Train,
+            pp_data_path=exec_params.pp_data_dir_path,
+            pp_storage_method=exec_params.pp_storage_method,
+            pp_compression_method=exec_params.pp_compression_method)
+        from torch.utils.data.dataloader import Sampler
+
+        class MockSampler(Sampler):
+            def __init__(self, data_source):
+                super(MockSampler, self).__init__(data_source=data_source)
+                self.data_source = data_source
+                self.nr_calls = 0
+
+            def __iter__(self):
+                if self.nr_calls % 3 < 2:
+                    yield from self.data_source
+                else:
+                    yield from list(reversed(list(self.data_source)))
+                self.nr_calls += 1
+
+        from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
+
+        batch_size = exec_params.batch_size
+        # batch_size = 8
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=None,
+            sampler=BatchSampler(
+                MockSampler(range(batch_size)),
+                batch_size=batch_size, drop_last=False),
+            collate_fn=functools.partial(
+                task.collate_examples,
+                model_hps=exec_params.experiment_setting.model_hyper_params),
+            shuffle=False,
+            **dataloader_cuda_kwargs)
+        results = []
+        model.to(device)
+        model.eval()  # to cancel dropouts (as we expect same results from different forward() calls)
+        for epoch_nr in range(3):
+            print(f'forward() call #{epoch_nr}')
+            for x_batch, y_batch in iter(train_loader):
+                assert isinstance(x_batch, MethodCodeInputTensors)
+                print('#AST nodes per example',
+                      x_batch.ast.ast_node_types.nr_items_per_example)
+                print('#CFG/AST l2l paths per example',
+                      x_batch.pdg.cfg_nodes_expressions_ast.ast_leaf_to_leaf_paths_node_indices.nr_items_per_example)
+                print('#expressions per example',
+                      x_batch.pdg.cfg_nodes_expressions_ast.pdg_node_idx_to_sub_ast_root_idx_mapping_key.nr_items_per_example)
+                print('#CFG nodes per example',
+                      x_batch.pdg.cfg_nodes_control_kind.nr_items_per_example)
+                x_batch = x_batch.to(device)
+                y_batch = y_batch.to(device)
+                y_pred = model(x_batch)  # PredictLoggingCallVarsModelOutput
+                y_pred = y_pred.decoder_outputs
+                results.append(y_pred.cpu().detach().numpy())
+        first_inf_mask = np.isinf(results[0])
+        assert np.all(first_inf_mask == np.isinf(results[1]))
+        assert np.allclose(results[0][~first_inf_mask] - results[1][~first_inf_mask], .0)
+
+        reversed_res_2 = results[2][::-1]
+        assert np.all(first_inf_mask == np.isinf(reversed_res_2))
+        nonclose_places = ~np.isclose(results[0][~first_inf_mask], reversed_res_2[~first_inf_mask], atol=1.e-7)
+        abs_err = np.abs(results[0][~first_inf_mask] - reversed_res_2[~first_inf_mask])
+        print(f'abs_err: mean(nonclose): {np.mean(abs_err[nonclose_places]) if len(nonclose_places) else np.nan}, '
+              f'mean(all): {np.mean(abs_err)}, max: {np.max(abs_err)}')
+        print(f'#nonclose {np.sum(nonclose_places)} / {results[0][~first_inf_mask].size}')
+        assert not np.any(nonclose_places)
+
 
 if __name__ == '__main__':
     main()
