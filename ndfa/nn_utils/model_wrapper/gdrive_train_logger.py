@@ -89,9 +89,10 @@ def _gdrive_background_worker(
 
 class GDriveTrainLoggerBackgroundWorker:
     def __init__(self, gdrive_base_folder_id: int, train_folder_name: str):
+        self._gdrive_credentials = None
+        self._gdrive_service = None
         self.gdrive_base_folder_id = gdrive_base_folder_id
         self.train_folder_name = train_folder_name
-        self.gdrive_service = self._create_gdrive_service()
         self.train_folder_id = self._create_gdrive_folder(folder_name=self.train_folder_name)
         print(f'Logging to google drive folder '
               f'@ `https://drive.google.com/drive/u/folders/{self.train_folder_id}` '
@@ -154,7 +155,7 @@ class GDriveTrainLoggerBackgroundWorker:
                     # file = self.gdrive_service.files().get(fileId=file_id).execute()
                     media = MediaFileUpload(
                         local_file_path, mimetype=mimetype)  # , resumable=True
-                    updated_file = self.gdrive_service.files().update(
+                    updated_file = self._get_gdrive_service().files().update(
                         fileId=file_id,
                         # body=file,  # no need to update metadata fields
                         # newRevision=False,  # only valid param for API v2
@@ -162,7 +163,7 @@ class GDriveTrainLoggerBackgroundWorker:
                     return file_id
                 else:
                     media = MediaFileUpload(local_file_path, mimetype=mimetype)  # , resumable=True
-                    file = self.gdrive_service.files().create(
+                    file = self._get_gdrive_service().files().create(
                         body=file_metadata, media_body=media, fields='id').execute()
                     file_id = file.get('id')
                     self.filename_to_file_id_mapping[target_file_name] = file_id
@@ -170,21 +171,26 @@ class GDriveTrainLoggerBackgroundWorker:
             except errors.HttpError:
                 if attempt_nr < NR_ATTEMPTS:
                     time.sleep(5 * attempt_nr)
+            except ConnectionError:
+                self._gdrive_service = None
         return None
 
-    @classmethod
-    def _get_gdrive_credentials(cls):
+    def _get_gdrive_credentials(self):
         credentials_file_path = 'credentials/gdrive_credentials.json'
         creds = None
-        # The file token.pickle stores the user's access and refresh tokens, and is
-        # created automatically when the authorization flow completes for the first
-        # time.
-        if os.path.exists('credentials/gdrive_token.pickle'):
-            with open('credentials/gdrive_token.pickle', 'rb') as token:
-                try:
-                    creds = pickle.load(token)
-                except:
-                    pass
+
+        if self._gdrive_credentials:
+            creds = self._gdrive_credentials
+        else:
+            # The file token.pickle stores the user's access and refresh tokens, and is
+            # created automatically when the authorization flow completes for the first
+            # time.
+            if os.path.exists('credentials/gdrive_token.pickle'):
+                with open('credentials/gdrive_token.pickle', 'rb') as token:
+                    try:
+                        creds = pickle.load(token)
+                    except:
+                        pass
         # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -199,18 +205,22 @@ class GDriveTrainLoggerBackgroundWorker:
             except:
                 if os.path.isfile('credentials/gdrive_token.pickle'):
                     os.remove('credentials/gdrive_token.pickle')
+        self._gdrive_credentials = creds
         return creds
 
-    @classmethod
-    def _create_gdrive_service(cls):
-        return build('drive', 'v3', credentials=cls._get_gdrive_credentials())
+    def _get_gdrive_service(self):
+        if self._gdrive_service:
+            return self._gdrive_service
+        service = build('drive', 'v3', credentials=self._get_gdrive_credentials())
+        self._gdrive_service = service
+        return service
 
     def _create_gdrive_folder(self, folder_name: str) -> str:
         file_metadata = {
             'parents': [self.gdrive_base_folder_id],
             'name': folder_name,
             'mimeType': 'application/vnd.google-apps.folder'}
-        file = self.gdrive_service.files().create(
+        file = self._get_gdrive_service().files().create(
             body=file_metadata, fields='id').execute()
         folder_id = file.get('id')
         return folder_id
