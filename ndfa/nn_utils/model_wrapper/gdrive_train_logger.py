@@ -93,6 +93,9 @@ class GDriveTrainLoggerBackgroundWorker:
         self.train_folder_name = train_folder_name
         self.gdrive_service = self._create_gdrive_service()
         self.train_folder_id = self._create_gdrive_folder(folder_name=self.train_folder_name)
+        print(f'Logging to google drive folder '
+              f'@ `https://drive.google.com/drive/u/folders/{self.train_folder_id}` '
+              f'named `{self.train_folder_name}`.')
         self.filename_to_file_id_mapping = {}
 
     def run_subprocess_and_upload_stdout_as_text_file(
