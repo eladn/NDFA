@@ -21,7 +21,7 @@ class DatasetProperties:
         default=omegaconf.MISSING)
     folding: str = conf_field(
         default='orig',
-        choices=('orig', 'kfold_by_proj_1oo3', 'kfold_by_proj_p2oo3', 'kfold_by_proj_3oo3',
+        choices=('orig', 'kfold_by_proj_1oo3', 'kfold_by_proj_2oo3', 'kfold_by_proj_3oo3',
                  'kfold_by_proj_1oo4', 'kfold_by_proj_2oo4', 'kfold_by_proj_3oo4', 'kfold_by_proj_4oo4'))
 
     # TODO: add filters properties ...
