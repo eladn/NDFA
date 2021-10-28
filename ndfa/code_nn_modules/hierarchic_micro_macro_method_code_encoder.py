@@ -94,13 +94,13 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                     encoder_params=self.params.local_expression_encoder_after_macro,
                     code_task_vocabs=code_task_vocabs,
                     identifier_embedding_dim=self.identifier_embedding_dim,
-                    # TODO: It should be `False` as this is the second layer. When it `False`, for AST paths encoder,
-                    #  it keeps the previous encodings (output of the previous encoder layer) of the paths (node
-                    #  occurrences and edges), and just update them (linear project) using the new AST nodes encodings
-                    #  after they mixed with the global ctx, while keeping the edges encodings as they were before.
-                    #  We would like to try setting it to `True` to check whether the update of the occurrences
-                    #  (in the path) of AST node encodings is actually necessary.
-                    is_first_encoder_layer=True,
+                    # Note: When it `False`, for AST paths encoder, it keeps the previous encodings (output of the
+                    #  previous encoder layer) of the paths (node occurrences and edges), and just update them
+                    #  (linear project) using the new AST nodes encodings after they mixed with the global ctx, while
+                    #  keeping the edges encodings as they were before.
+                    # TODO: We might consider trying setting it to `True` to check whether the update of the
+                    #  occurrences (in the path) of AST node encodings is actually necessary.
+                    is_first_encoder_layer=False,
                     norm_params=norm_params,
                     dropout_rate=dropout_rate,
                     activation_fn=activation_fn)
