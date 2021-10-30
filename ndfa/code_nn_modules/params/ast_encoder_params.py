@@ -33,7 +33,7 @@ class ASTEncoderParams(HasDispatchableField):
     ast_node_embedding_dim: int = conf_field(
         default=256)
 
-    paths_sequence_encoder_params: SequenceEncoderParams = conf_field(
+    paths_sequence_encoder_params: Optional[SequenceEncoderParams] = conf_field(
         default_factory=SequenceEncoderParams,
         arg_prefix='paths_sequence_encoder')
 
@@ -46,7 +46,7 @@ class ASTEncoderParams(HasDispatchableField):
     nodes_folding_params: Optional[ScatterCombinerParams] = conf_field(
         default_factory=ScatterCombinerParams)
 
-    ast_paths_types: Tuple[str, ...] = conf_field(
+    ast_paths_types: Optional[Tuple[str, ...]] = conf_field(
         default=('leaf_to_leaf', 'leaf_to_root'),
         elements_choices=['leaf_to_leaf', 'leaf_to_root', 'siblings_sequences',
                           'siblings_w_parent_sequences', 'leaves_sequence'])
