@@ -1385,12 +1385,15 @@ def preprocess_pdg(
         cfg_nodes_tokenized_expressions=cfg_nodes_tokenized_expressions,
         cfg_nodes_expressions_ast=cfg_nodes_expressions_sub_ast_input_tensors,
         cfg_macro_trimmed_ast=cfg_macro_trimmed_ast,
-        cfg_nodes_random_permutation=None if not preprocess_params.control_flow_paths.cfg_nodes_random_permutation else
+        cfg_nodes_random_permutation=
+        None if not preprocess_params.control_flow_paths or
+                not preprocess_params.control_flow_paths.cfg_nodes_random_permutation else
         BatchedFlattenedIndicesPseudoRandomPermutation(
             # tgt_indexing_group='cfg_nodes',
             # batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='cfgn'),
         ),
-        cfg_control_flow_paths=None if not preprocess_params.control_flow_paths.full_paths else
+        cfg_control_flow_paths=
+        None if not preprocess_params.control_flow_paths or not preprocess_params.control_flow_paths.full_paths else
         CFGPathsInputTensors(
             nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[torch.LongTensor([node_idx for node_idx, _ in path])
@@ -1412,7 +1415,8 @@ def preprocess_pdg(
                         '<PAD>' if edge_type is None else edge_type)
                         for _, edge_type in path])
                     for path in cfg_paths.pdg_paths])),
-        cfg_control_flow_paths_exact_ngrams=None if not preprocess_params.control_flow_paths.ngrams else
+        cfg_control_flow_paths_exact_ngrams=
+        None if not preprocess_params.control_flow_paths or not preprocess_params.control_flow_paths.ngrams else
         TensorsDataDict[int, CFGPathsNGramsInputTensors]({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
@@ -1425,7 +1429,8 @@ def preprocess_pdg(
                             for _, edge_type in ngram])
                         for ngram in ngrams]))
             for key, ngrams in cfg_paths.control_flow_paths_ngrams.exact_ngrams.items()}),
-        cfg_control_flow_paths_partial_ngrams=None if not preprocess_params.control_flow_paths.ngrams else
+        cfg_control_flow_paths_partial_ngrams=
+        None if not preprocess_params.control_flow_paths or not preprocess_params.control_flow_paths.ngrams else
         TensorsDataDict[int, CFGPathsNGramsInputTensors]({
             key: CFGPathsNGramsInputTensors(
                 nodes_indices=BatchedFlattenedIndicesFlattenedSeq(
