@@ -34,9 +34,14 @@ class SymbolsEncoder(nn.Module):
             self.symbols_token_occurrences_and_identifiers_embeddings_combiner = nn.Linear(
                 in_features=self.scatter_combiner_output_dim + identifier_embedding_dim,
                 out_features=self.symbol_embedding_dim, bias=False)
-        else:
+        elif self.encoder_params.use_symbols_occurrences:
             assert self.scatter_combiner_output_dim == self.symbol_embedding_dim
             # TODO: impl linear projection if it's not the case
+        elif self.encoder_params.use_identifier_encoding:
+            assert identifier_embedding_dim == self.symbol_embedding_dim
+            # TODO: impl linear projection if it's not the case
+        else:
+            assert False
         self.dropout_layer = nn.Dropout(p=dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
 
