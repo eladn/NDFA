@@ -27,7 +27,7 @@ class CFGSinglePathMacroEncoder(nn.Module):
             input_dim=self.cfg_node_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         self.norm = None if norm_params is None else NormWrapper(
-            nr_features=self.ast_node_embedding_dim, params=norm_params)
+            nr_features=self.cfg_node_dim, params=norm_params)
 
     def forward(
             self,
