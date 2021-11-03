@@ -1346,22 +1346,26 @@ def preprocess_pdg(
         method_pdg=method_pdg, method_ast=method_ast,
         pdg_nodes_to_mask=pdg_nodes_to_mask, cfg_sub_asts_info=cfg_sub_asts_info)
 
-    cfg_control_flow_graph = None
-    if preprocess_params and preprocess_params.control_flow_graph:
-        cfg_control_flow_graph = TGData(
-            edge_index=torch.LongTensor(
-                [[pdg_node.idx, cf_edge.pgd_node_idx]
-                 for pdg_node in method_pdg.pdg_nodes
-                 for cf_edge in pdg_node.control_flow_out_edges]).transpose(0, 1),
-            edge_attr=torch.LongTensor(
-                [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(cf_edge.type.value)
-                 for pdg_node in method_pdg.pdg_nodes
-                 for cf_edge in pdg_node.control_flow_out_edges]),
-            num_nodes=len(method_pdg.pdg_nodes))
-        # assert not cfg_control_flow_graph.contains_isolated_nodes()  # TODO: check why!
-        assert cfg_control_flow_graph.is_directed()
-        assert (set(cfg_control_flow_graph.edge_index[0].tolist()) |
-                set(cfg_control_flow_graph.edge_index[1].tolist())) == set(range(len(method_pdg.pdg_nodes)))
+    cfg_control_flow_graph = TGData(
+        edge_index=torch.LongTensor(
+            [[pdg_node.idx, cf_edge.pgd_node_idx]
+             for pdg_node in method_pdg.pdg_nodes
+             for cf_edge in pdg_node.control_flow_out_edges]).transpose(0, 1),
+        edge_attr=torch.LongTensor(
+            [code_task_vocabs.pdg_control_flow_edge_types.get_word_idx(cf_edge.type.value)
+             for pdg_node in method_pdg.pdg_nodes
+             for cf_edge in pdg_node.control_flow_out_edges]),
+        num_nodes=len(method_pdg.pdg_nodes))
+    PreprocessLimitation.enforce_limitations(limitations=[
+        PreprocessLimitation(
+            object_name='cfg_has_isolated_nodes',
+            value=int(cfg_control_flow_graph.has_isolated_nodes()),
+            max_val=0, warn=True)])
+    assert cfg_control_flow_graph.is_directed()
+    assert (set(cfg_control_flow_graph.edge_index[0].tolist()) |
+            set(cfg_control_flow_graph.edge_index[1].tolist())) == set(range(len(method_pdg.pdg_nodes)))
+    if not preprocess_params or not preprocess_params.control_flow_graph:
+        cfg_control_flow_graph = None
 
     cfg_nodes_tokenized_expressions = None
     if preprocess_params and preprocess_params.micro_tokens_seq:
