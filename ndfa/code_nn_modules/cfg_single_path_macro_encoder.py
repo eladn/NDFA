@@ -41,6 +41,9 @@ class CFGSinglePathMacroEncoder(nn.Module):
             unflattened_nodes_encodings = unflattened_nodes_encodings.masked_fill(
                 ~pdg_input.cfg_nodes_control_kind.unflattener_mask.unsqueeze(-1)
                     .expand(unflattened_nodes_encodings.shape), 0)
+        assert unflattened_nodes_encodings.ndim == 3
+        assert unflattened_nodes_encodings.shape == \
+               (pdg_input.nr_examples, pdg_input.cfg_nodes_control_kind.max_nr_items, cfg_nodes_encodings.size(1))
         path_encodings = self.sequence_encoder_layer(
             sequence_input=unflattened_nodes_encodings,
             lengths=pdg_input.cfg_nodes_control_kind.nr_items_per_example,
