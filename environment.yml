@@ -4,12 +4,16 @@ channels:
   - conda-forge
   - defaults
   - anaconda
+  - pyg
 dependencies:
-  - python=3.8
+  - python=3.9
   - numpy
   - scipy
-  - cudatoolkit=10.2
-  - pytorch=1.8.0
+  - cudatoolkit=11.0
+  - pytorch=1.10.0
+  - pyg
+  - torch-scatter
+  - torch-sparse
   - torchvision
   - torchaudio
   - python-rocksdb

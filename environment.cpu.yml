@@ -1,4 +1,4 @@
-name: ndfa-test
+name: NDFA
 channels:
   - pytorch
   - conda-forge
@@ -6,11 +6,10 @@ channels:
   - anaconda
   - pyg
 dependencies:
-  - python=%PYTHON_VERSION%
+  - python=3.9
   - numpy
   - scipy
-  - cudatoolkit=%CUDA_VERSION%
-  - pytorch=%PYTORCH_VERSION%
+  - pytorch=1.10.0
   - pyg
   - torch-scatter
   - torch-sparse
@@ -19,4 +18,4 @@ dependencies:
   - python-rocksdb
   - pip
   - pip:
-      - -r file:requirements.txt
+      - -r file:requirements.cpu.txt
