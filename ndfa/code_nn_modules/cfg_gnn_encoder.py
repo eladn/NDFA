@@ -27,23 +27,31 @@ class CFGGNNEncoder(nn.Module):
         super(CFGGNNEncoder, self).__init__()
         self.cfg_node_encoding_dim = cfg_node_encoding_dim
         self.encoder_params = encoder_params
-        if self.encoder_params.gnn_type == 'gcn':
+        if self.encoder_params.gnn_type == CFGGNNEncoderParams.GNNType.GCN:
             gnn_layer_ctor = lambda: tgnn.GCNConv(
                 in_channels=self.cfg_node_encoding_dim,
                 out_channels=self.cfg_node_encoding_dim,
                 improved=True, cached=False,
                 normalize=True, add_self_loops=True)
-        elif encoder_params.gnn_type == 'ggnn':
+        elif encoder_params.gnn_type == CFGGNNEncoderParams.GNNType.GGNN:
             gnn_layer_ctor = lambda: tgnn.GatedGraphConv(
                 out_channels=self.cfg_node_encoding_dim,
                 num_layers=self.encoder_params.nr_layers)
-        elif encoder_params.gnn_type == 'transformer_conv':
+        elif encoder_params.gnn_type == CFGGNNEncoderParams.GNNType.TransformerConv:
             gnn_layer_ctor = lambda: tgnn.TransformerConv(
                 in_channels=self.cfg_node_encoding_dim,
                 out_channels=self.cfg_node_encoding_dim,)
+        elif encoder_params.gnn_type == CFGGNNEncoderParams.GNNType.GAT:
+            gnn_layer_ctor = lambda: tgnn.GATConv(
+                in_channels=self.cfg_node_encoding_dim,
+                out_channels=self.cfg_node_encoding_dim, )
+        elif encoder_params.gnn_type == CFGGNNEncoderParams.GNNType.GATv2:
+            gnn_layer_ctor = lambda: tgnn.GATConv(
+                in_channels=self.cfg_node_encoding_dim,
+                out_channels=self.cfg_node_encoding_dim, )
         else:
             raise ValueError(f'Unsupported GNN type {self.encoder_params.gnn_type}')
-        self_unrolling_gnn_types = {'ggnn'}
+        self_unrolling_gnn_types = {CFGGNNEncoderParams.GNNType.GGNN}
         self.nr_layers_to_apply = 1 \
             if encoder_params.gnn_type in self_unrolling_gnn_types \
             else self.encoder_params.nr_layers
