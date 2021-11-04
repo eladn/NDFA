@@ -10,14 +10,14 @@ omegaconf
 typing_extensions
 notify_run
 
-# --find-links https://pytorch-geometric.com/whl/torch-%TORCH_GEOMETRIC_PYTORCH_VERSION%+%CUDA_SHORTCUT%.html
-# torch-scatter
-# torch-sparse
-# torch-cluster
-# torch-spline-conv
-# torch-geometric
+--find-links https://pytorch-geometric.com/whl/torch-%TORCH_GEOMETRIC_PYTORCH_VERSION%+%CUDA_SHORTCUT%.html
+torch-scatter
+torch-sparse
+torch-cluster
+torch-spline-conv
+torch-geometric
 
-dgl
+# dgl
 
 oauth2client
 google-api-python-client

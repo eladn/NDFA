@@ -4,19 +4,17 @@ channels:
   - conda-forge
   - defaults
   - anaconda
-  - pyg
+  - dglteam
 dependencies:
   - python=3.9
   - numpy
   - scipy
-  - cudatoolkit=11.0
+  - cudatoolkit=11.3
   - pytorch=1.10.0
-  - pyg
-  - torch-scatter
-  - torch-sparse
   - torchvision
   - torchaudio
+  - dgl-cuda11.1
   - python-rocksdb
   - pip
   - pip:
-      - -r file:requirements.txt
+      - -r requirements.cuda.txt

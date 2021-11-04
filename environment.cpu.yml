@@ -4,18 +4,16 @@ channels:
   - conda-forge
   - defaults
   - anaconda
-  - pyg
+  - dglteam
 dependencies:
   - python=3.9
   - numpy
   - scipy
   - pytorch=1.10.0
-  - pyg
-  - torch-scatter
-  - torch-sparse
   - torchvision
   - torchaudio
+  - dgl
   - python-rocksdb
   - pip
   - pip:
-      - -r file:requirements.cpu.txt
+      - -r requirements.cpu.txt

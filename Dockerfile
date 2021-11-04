@@ -1,8 +1,8 @@
 FROM ubuntu:18.04
 
 ARG python_version=3.9
-ARG conda_cuda_version=11.0
-ARG conda_cuda_shortcut=cu110
+ARG conda_cuda_version=11.1
+ARG conda_cuda_shortcut=cu111
 ARG pytorch_version=1.10.0
 ARG torch_geometric_pytorch_version=1.10.0
 
