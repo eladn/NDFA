@@ -57,7 +57,9 @@ class ScatterAttention(nn.Module):
                 self.key_projection_layer(scattered_values)
             assert scattered_keys.size() == (scattered_values.size(0), self.qk_proj_dim)
             probs_scale_factor = self.qk_proj_dim ** (-0.5)
-            scattered_probs = torch.sum(scattered_keys * scattered_attn_queries_projected, dim=1) * probs_scale_factor
+            # scattered_probs = torch.sum(scattered_keys * scattered_attn_queries_projected, dim=1) * probs_scale_factor
+            scattered_probs = \
+                torch.einsum('ij,ij->i', scattered_keys, scattered_attn_queries_projected) * probs_scale_factor
             assert scattered_probs.ndim == 1 and scattered_probs.size() == (scattered_values.size(0),)
             # TODO: Is it ok calling `scatter_softmax()` when not all of the range
             #       [0, 1, 2, ..., attn_queries.size(0) - 1] occurs in `indices`?

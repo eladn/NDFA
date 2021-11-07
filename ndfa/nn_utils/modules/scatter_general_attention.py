@@ -22,7 +22,7 @@ class ScatterGeneralAttention(nn.Module):
         assert self.key_proj_dim == self.in_embed_dim or project_keys
 
         self.general_attention_weight = \
-            nn.Parameter(torch.empty(size=(self.key_proj_dim,), dtype=torch.float))
+            nn.Parameter(torch.empty(size=(self.key_proj_dim,), dtype=torch.float), requires_grad=True)
         self.key_projection_layer = nn.Linear(
             in_features=self.in_embed_dim, out_features=self.key_proj_dim, bias=True) \
             if project_keys else None
@@ -54,7 +54,8 @@ class ScatterGeneralAttention(nn.Module):
             self.key_projection_layer(scattered_values)
         assert scattered_keys.size() == (scattered_values.size(0), self.key_proj_dim)
         probs_scale_factor = self.key_proj_dim ** (-0.5)
-        scattered_probs = torch.sum(scattered_keys * self.general_attention_weight, dim=1) * probs_scale_factor
+        # scattered_probs = torch.sum(scattered_keys * self.general_attention_weight, dim=1) * probs_scale_factor
+        scattered_probs = torch.einsum('ij,j->i', scattered_keys, self.general_attention_weight) * probs_scale_factor
         assert scattered_probs.ndim == 1 and scattered_probs.size() == (scattered_values.size(0),)
         # TODO: Is it ok calling `scatter_softmax()` when not all of the range
         #       [0, 1, 2, ..., attn_queries.size(0) - 1] occurs in `indices`?
