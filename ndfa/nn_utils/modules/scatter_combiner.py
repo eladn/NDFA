@@ -4,6 +4,7 @@ from torch_scatter import scatter_sum, scatter_mean
 from typing import Optional
 
 from ndfa.nn_utils.modules.scatter_attention import ScatterAttention
+from ndfa.nn_utils.modules.scatter_general_attention import ScatterGeneralAttention
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 
 
@@ -17,9 +18,15 @@ class ScatterCombiner(nn.Module):
         super(ScatterCombiner, self).__init__()
         self.encoding_dim = encoding_dim
         self.combiner_params = combiner_params
-        if self.combiner_params.method not in {'mean', 'sum', 'attn'}:
+        if self.combiner_params.method not in {'mean', 'sum', 'attn', 'general_attn'}:
             raise ValueError(f'Unsupported combining method `{self.combiner_params.method}`.')
-        if self.combiner_params.method == 'attn':
+        if self.combiner_params.method == 'general_attn':
+            assert self.combiner_params.nr_attn_heads is None
+            self.scatter_general_attn = ScatterGeneralAttention(
+                in_embed_dim=encoding_dim,
+                project_keys=True,
+                project_values=self.combiner_params.project_attn_values)
+        elif self.combiner_params.method == 'attn':
             head_embed_dim = encoding_dim // self.combiner_params.nr_attn_heads
             assert head_embed_dim * self.combiner_params.nr_attn_heads == encoding_dim
             if applied_attn_output_dim is None:
@@ -29,7 +36,9 @@ class ScatterCombiner(nn.Module):
                 assert head_out_values_dim * self.combiner_params.nr_attn_heads == applied_attn_output_dim
             self.scatter_attn_layers = nn.ModuleList([
                 ScatterAttention(
-                    in_embed_dim=encoding_dim, qk_proj_dim=head_embed_dim,
+                    in_embed_dim=encoding_dim,
+                    qk_proj_dim=head_embed_dim,
+                    project_keys=True,
                     project_values=self.combiner_params.project_attn_values,
                     out_values_dim=head_out_values_dim)
                 for _ in range(self.combiner_params.nr_attn_heads)])
@@ -50,6 +59,13 @@ class ScatterCombiner(nn.Module):
             combined = scatter_sum(
                 src=scattered_input, index=indices,
                 dim=0, dim_size=dim_size)
+        elif self.combiner_params.method == 'general_attn':
+            assert dim_size is not None
+            combined = self.scatter_general_attn(
+                scattered_values=scattered_input,
+                indices=indices,
+                nr_elements=dim_size
+            )[1]
         elif self.combiner_params.method == 'attn':
             assert attn_queries is not None
             assert dim_size is None or attn_queries.size(0) == dim_size

@@ -11,7 +11,7 @@ __all__ = ['ScatterCombinerParams']
 class ScatterCombinerParams(HasDispatchableField):
     method: str = conf_field(
         default='mean',
-        choices=('attn', 'sum', 'mean'))
+        choices=('attn', 'sum', 'mean', 'general_attn'))
     nr_attn_heads: Optional[int] = conf_field(
         default=8)
     project_attn_values: Optional[bool] = conf_field(
@@ -22,4 +22,5 @@ class ScatterCombinerParams(HasDispatchableField):
         cls.register_dispatch_field(DispatchField(
             'method', {
                 'attn': ['nr_attn_heads', 'project_attn_values'],
+                'general_attn': ['project_attn_values'],
                 'sum': [], 'mean': []}))
