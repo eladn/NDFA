@@ -44,7 +44,8 @@ class ScatterAttention(nn.Module):
         assert attn_queries_projected.size() == (queries.size(0), self.qk_proj_dim)
 
         if queries_indices is None:
-            # means attn_queries_indices is [0, 1, 2, ..., max(indices)]
+            # means that queries[i] consists the query vector of the i-th element.
+            #   or in other words: attn_queries_indices is [0, 1, 2, ..., max(indices)]
             # scores(i) = softmax(<scattered_values[j] * W_attn * attn_queries[i] | j's s.t. indices[j]=i>)
             # out[i] = scores(i) ELEM_MUL <scattered_values[j] | j's s.t. indices[j]=i>
             nr_elements = queries.size(0)
@@ -76,6 +77,7 @@ class ScatterAttention(nn.Module):
                 scattered_values_weighed_by_scores, index=indices, dim=0, dim_size=nr_elements)
             return scattered_scores, attn_applied
         else:
+            # means that queries[i] consists the query vector of the j-th element, where j = attn_queries_indices[i].
             # scores(i) = softmax(<scattered_values[j] * W_attn * attn_queries[i] | j's s.t. indices[j]=attn_queries_indices[i]>)
             # out[i] = scores(i) ELEM_MUL <scattered_values[j] | j's s.t. indices[j]=attn_queries_indices[i]>
             # Note: This case is much more complex, as there might be multiple different queries for a certain index.
