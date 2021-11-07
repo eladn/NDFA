@@ -24,7 +24,7 @@ class ScatterCombiner(nn.Module):
             assert self.combiner_params.nr_attn_heads is None
             self.scatter_general_attn = ScatterGeneralAttention(
                 in_embed_dim=encoding_dim,
-                project_keys=True,
+                project_keys=False,
                 project_values=self.combiner_params.project_attn_values)
         elif self.combiner_params.method == 'attn':
             head_embed_dim = encoding_dim // self.combiner_params.nr_attn_heads

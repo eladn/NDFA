@@ -13,7 +13,7 @@ class ScatterGeneralAttention(nn.Module):
             self,
             in_embed_dim: int,
             key_proj_dim: Optional[int] = None,
-            project_keys: bool = True,
+            project_keys: bool = False,
             project_values: bool = False,
             out_values_dim: Optional[int] = None):
         super(ScatterGeneralAttention, self).__init__()
