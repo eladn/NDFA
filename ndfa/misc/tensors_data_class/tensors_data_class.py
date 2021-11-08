@@ -320,6 +320,8 @@ class TensorsDataClass:
                         # case is to replace it).
                         if callable(v):
                             v = v(collate_data)
+                        if isinstance(v, classmethod):
+                            v = v.__get__(None, self.__class__)(collate_data)
                         setattr(field_val, k, v)
             field_val.set_class_defaults(collate_data=collate_data)
 
