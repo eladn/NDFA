@@ -268,6 +268,37 @@ class SubASTInputTensors(TensorsDataClass):
         else:
             raise ValueError(f'Unsupported path type `{path_type}`.')
 
+    def get_ast_paths_unflattener_mask(self, paths_types: List[str]) -> torch.Tensor:
+        def _get_unflatterer_mask_by_type(paths_type: str):
+            aaaa = {
+                'leaf_to_leaf': self.ast_leaf_to_leaf_paths_node_indices.unflattener_mask,
+                'leaf_to_root': self.ast_leaf_to_root_paths_node_indices.unflattener_mask}
+            return aaaa[paths_type]
+
+        return torch.cat([_get_unflatterer_mask_by_type(paths_type) for paths_type in paths_types], dim=1)
+
+    def get_ast_paths_unflattener(self, paths_types: List[str]) -> Callable[[torch.Tensor], torch.Tensor]:
+        def _get_unflatterer_by_type(paths_type: str):
+            aaaa = {
+                'leaf_to_leaf': self.ast_leaf_to_leaf_paths_node_indices.unflatten,
+                'leaf_to_root': self.ast_leaf_to_root_paths_node_indices.unflatten}
+            return aaaa[paths_type]
+
+        def unflatten(all_combined_paths_encodings: Dict[str, torch.Tensor]):
+            return torch.cat([_get_unflatterer_by_type(paths_type)(all_combined_paths_encodings[paths_type]) for paths_type in paths_types], dim=1)
+
+        return unflatten
+
+    def batch_flattened_combined_ast_paths_as_unflattenable(
+            self, combined_ast_paths_encodings_by_type: Dict[str, torch.Tensor]) -> FlattenedTensor:
+        return FlattenedTensor(
+            # flattened=torch.cat(list(combined_ast_paths_encodings_by_type.values()), dim=0),
+            flattened=combined_ast_paths_encodings_by_type,
+            unflattener_mask_getter=lambda: self.get_ast_paths_unflattener_mask(
+                paths_types=list(combined_ast_paths_encodings_by_type.keys())),
+            unflattener_fn=self.get_ast_paths_unflattener(
+                paths_types=list(combined_ast_paths_encodings_by_type.keys())))
+
 
 @dataclasses.dataclass
 class MethodASTInputTensors(SubASTInputTensors):
@@ -317,24 +348,6 @@ class MethodASTInputTensors(SubASTInputTensors):
             flattened=ast_nodes_encodings,
             unflattener_mask_getter=self.get_ast_nodes_unflattener_mask,
             unflattener_fn=self.get_ast_nodes_unflattener())
-
-    def get_ast_paths_unflattener_mask(self, paths_types: List[str]) -> torch.Tensor:
-        raise NotImplementedError  # TODO: impl
-
-    def get_ast_paths_unflattener(self, paths_types: List[str]) -> Callable[[torch.Tensor], torch.Tensor]:
-        def unflatten(all_combined_paths_encodings: torch.Tensor):
-            raise NotImplementedError  # TODO: impl
-
-        return unflatten
-
-    def batch_flattened_combined_ast_paths_as_unflattenable(
-            self, combined_ast_paths_encodings_by_type: Dict[str, torch.Tensor]) -> FlattenedTensor:
-        return FlattenedTensor(
-            flattened=torch.cat(list(combined_ast_paths_encodings_by_type.values()), dim=0),
-            unflattener_mask_getter=lambda: self.get_ast_paths_unflattener_mask(
-                paths_types=list(combined_ast_paths_encodings_by_type.keys())),
-            unflattener_fn=self.get_ast_paths_unflattener(
-                paths_types=list(combined_ast_paths_encodings_by_type.keys())))
 
 
 @dataclasses.dataclass
