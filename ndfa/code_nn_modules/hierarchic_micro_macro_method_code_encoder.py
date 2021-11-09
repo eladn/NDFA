@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
     HierarchicMicroMacroMethodCodeEncoderParams as EncoderParams
 from ndfa.code_nn_modules.code_expression_encoder_with_combiner import CodeExpressionEncoderWithCombiner
+from ndfa.code_nn_modules.code_expression_multistage_encoder import CodeExpressionMultistageEncoder
+from ndfa.code_nn_modules.code_expression_multistage_encoder_with_combiner import \
+    CodeExpressionMultistageEncoderWithCombiner
 from ndfa.code_nn_modules.code_expression_encoder import CodeExpressionEncoder
 from ndfa.code_nn_modules.code_expression_embedder import CodeExpressionEmbedder
 from ndfa.code_nn_modules.code_expression_context_mixer import CodeExpressionContextMixer
@@ -21,7 +24,8 @@ from ndfa.code_nn_modules.symbol_occurrences_extractor_from_encoded_method impor
 from ndfa.code_nn_modules.params.method_cfg_macro_encoder_params import MethodCFGMacroEncoderParams
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
-from ndfa.code_nn_modules.micro_code_expression_encodings_unflattener import micro_code_expression_encodings_as_unflattenable
+from ndfa.code_nn_modules.micro_code_expression_encodings_unflattener import \
+    micro_code_expression_encodings_as_unflattenable
 
 
 __all__ = ['HierarchicMicroMacroMethodCodeEncoder', 'HierarchicMicroMacroMethodCodeEncodings']
@@ -57,11 +61,14 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
             identifier_embedding_dim=self.identifier_embedding_dim,
             nr_final_embeddings_linear_layers=1,  # TODO: plug HP here
             dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.code_expression_encoder_before_macro = CodeExpressionEncoderWithCombiner(
+        self.code_expression_encoder_before_macro = CodeExpressionMultistageEncoderWithCombiner(
             encoder_params=self.params.local_expression_encoder,
             code_task_vocabs=code_task_vocabs,
             identifier_embedding_dim=self.identifier_embedding_dim,
-            is_first_encoder_layer=True,
+            # is_first_encoder_layer=True,  # (for `CodeExpressionEncoderWithCombiner`)
+            nr_layers=self.params.nr_micro_encoding_layers_before_macro,
+            reuse_inner_encodings_from_previous_input_layer=False,
+            reuse_inner_encodings_between_layers=self.params.reuse_inner_encodings_between_micro_layers,
             norm_params=norm_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
@@ -90,17 +97,20 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
 
             if self.params.after_macro.requires_micro:
-                self.code_expression_encoder_after_macro = CodeExpressionEncoder(
+                self.code_expression_encoder_after_macro = CodeExpressionMultistageEncoder(
                     encoder_params=self.params.local_expression_encoder_after_macro,
                     code_task_vocabs=code_task_vocabs,
                     identifier_embedding_dim=self.identifier_embedding_dim,
+                    nr_layers=self.params.nr_micro_encoding_layers_after_macro,
                     # Note: When it `False`, for AST paths encoder, it keeps the previous encodings (output of the
                     #  previous encoder layer) of the paths (node occurrences and edges), and just update them
                     #  (linear project) using the new AST nodes encodings after they mixed with the global ctx, while
                     #  keeping the edges encodings as they were before.
                     # TODO: We might consider trying setting it to `True` to check whether the update of the
                     #  occurrences (in the path) of AST node encodings is actually necessary.
-                    is_first_encoder_layer=not self.params.reuse_inner_encodings_between_micro_layers,
+                    reuse_inner_encodings_from_previous_input_layer=
+                    not self.params.reuse_inner_encodings_between_micro_layers,
+                    reuse_inner_encodings_between_layers=not self.params.reuse_inner_encodings_between_micro_layers,
                     norm_params=norm_params,
                     dropout_rate=dropout_rate,
                     activation_fn=activation_fn)

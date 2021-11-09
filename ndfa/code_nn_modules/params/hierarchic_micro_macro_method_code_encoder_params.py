@@ -30,8 +30,9 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         cls.register_dispatch_field(DispatchField(
             'after_macro', {
                 HierarchicMicroMacroMethodCodeEncoderParams.AfterMacro.DifferentMicro:
-                    ['different_local_expression_encoder_after_macro'],
-                HierarchicMicroMacroMethodCodeEncoderParams.AfterMacro.SimilarMicro: [],
+                    ['different_local_expression_encoder_after_macro', 'nr_micro_encoding_layers_after_macro'],
+                HierarchicMicroMacroMethodCodeEncoderParams.AfterMacro.SimilarMicro:
+                    ['nr_micro_encoding_layers_after_macro'],
                 HierarchicMicroMacroMethodCodeEncoderParams.AfterMacro.Pass: []}))
 
     local_expression_encoder: CodeExpressionEncoderParams = conf_field(
@@ -45,6 +46,10 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default=DecoderFeedingPolicy.MicroItems)
     reuse_inner_encodings_between_micro_layers: bool = conf_field(
         default=True)  # TODO: remove this param; just temporary experimental..
+    nr_micro_encoding_layers_before_macro: int = conf_field(
+        default=1)
+    nr_micro_encoding_layers_after_macro: int = conf_field(
+        default=1)
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:

@@ -33,8 +33,10 @@ class CodeExpressionMultistageEncoder(nn.Module):
                 encoder_params=encoder_params,
                 code_task_vocabs=code_task_vocabs,
                 identifier_embedding_dim=identifier_embedding_dim,
-                is_first_encoder_layer=reuse_inner_encodings_from_previous_input_layer
-                if layer_idx == 0 else reuse_inner_encodings_between_layers,
+                is_first_encoder_layer=
+                not reuse_inner_encodings_from_previous_input_layer
+                if layer_idx == 0 else
+                not reuse_inner_encodings_between_layers,
                 norm_params=norm_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for layer_idx in range(nr_layers)])
