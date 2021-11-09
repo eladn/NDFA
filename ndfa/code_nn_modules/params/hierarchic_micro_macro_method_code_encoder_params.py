@@ -48,7 +48,7 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default=True)  # TODO: remove this param; just temporary experimental..
     nr_micro_encoding_layers_before_macro: int = conf_field(
         default=1)
-    nr_micro_encoding_layers_after_macro: int = conf_field(
+    nr_micro_encoding_layers_after_macro: Optional[int] = conf_field(
         default=1)
 
     @property
