@@ -100,7 +100,7 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                     #  keeping the edges encodings as they were before.
                     # TODO: We might consider trying setting it to `True` to check whether the update of the
                     #  occurrences (in the path) of AST node encodings is actually necessary.
-                    is_first_encoder_layer=False,
+                    is_first_encoder_layer=not self.params.reuse_inner_encodings_between_micro_layers,
                     norm_params=norm_params,
                     dropout_rate=dropout_rate,
                     activation_fn=activation_fn)

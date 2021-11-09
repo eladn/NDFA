@@ -43,6 +43,8 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default_factory=MethodCFGMacroEncoderParams)
     decoder_feeding_policy: DecoderFeedingPolicy = conf_field(
         default=DecoderFeedingPolicy.MicroItems)
+    reuse_inner_encodings_between_micro_layers: bool = conf_field(
+        default=True)  # TODO: remove this param; just temporary experimental..
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:
