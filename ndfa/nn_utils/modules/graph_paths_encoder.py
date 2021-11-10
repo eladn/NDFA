@@ -99,7 +99,11 @@ class PathsEncoder(nn.Module):
                 encoding_dim=self.node_encoding_dim,
                 combiner_params=paths_combining_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.norm = None if norm_params is None else NormWrapper(
+        self.paths_norm = None if norm_params is None else NormWrapper(
+            nr_features=self.node_encoding_dim, params=norm_params)
+        self.combined_paths_norm = None if norm_params is None else NormWrapper(
+            nr_features=self.node_encoding_dim, params=norm_params)
+        self.folded_nodes_norm = None if norm_params is None else NormWrapper(
             nr_features=self.node_encoding_dim, params=norm_params)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
@@ -169,8 +173,8 @@ class PathsEncoder(nn.Module):
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=paths_effective_embeddings, lengths=paths_effective_lengths, batch_first=True).sequence
-        if self.norm:
-            paths_encodings = self.norm(paths_encodings)
+        if self.paths_norm:
+            paths_encodings = self.paths_norm(paths_encodings)
 
         if self.edge_type_insertion_mode == EdgeTypeInsertionMode.AsStandAloneToken:
             # separate nodes encodings and edge types embeddings from paths
@@ -196,6 +200,8 @@ class PathsEncoder(nn.Module):
                 paths_node_indices=paths_nodes_indices,
                 previous_nodes_encodings=nodes_encodings,
                 nr_nodes=nodes_encodings.size(0))
+            if self.folded_nodes_norm:
+                new_folded_nodes_encodings = self.folded_nodes_norm(new_folded_nodes_encodings)
 
         combined_paths = None
         if self.combine_paths:
@@ -204,6 +210,8 @@ class PathsEncoder(nn.Module):
                 sequence_mask=paths_mask,
                 sequence_lengths=paths_lengths,
                 batch_first=True)
+            if self.combined_paths_norm:
+                combined_paths = self.combined_paths_norm(combined_paths)
 
         return EncodedPaths(
             nodes_occurrences=nodes_occurrences_encodings,
