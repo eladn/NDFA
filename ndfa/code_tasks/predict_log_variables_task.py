@@ -200,6 +200,7 @@ class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
         self.code_task_encoder = MethodCodeEncoder(
             encoder_params=self.model_hps.method_code_encoder,
             code_task_vocabs=code_task_vocabs,
+            norm_params=self.model_hps.normalization,
             dropout_rate=dropout_rate, activation_fn=self.model_hps.activation_fn)
 
         # FIXME: might be problematic because 2 different modules hold this (both PredictLogVarsModel and SymbolsDecoder).

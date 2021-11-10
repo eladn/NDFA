@@ -41,7 +41,7 @@ class EncodedMethodCode(NamedTuple):
 
 class MethodCodeEncoder(nn.Module):
     def __init__(self, code_task_vocabs: CodeTaskVocabs, encoder_params: MethodCodeEncoderParams,
-                 nr_encoder_decoder_bridge_layers: int = 0,
+                 norm_params: NormWrapperParams, nr_encoder_decoder_bridge_layers: int = 0,
                  dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(MethodCodeEncoder, self).__init__()
         self.encoder_params = encoder_params
@@ -67,7 +67,7 @@ class MethodCodeEncoder(nn.Module):
                 encoder_params=self.encoder_params.method_cfg_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                norm_params=NormWrapperParams(norm_type=NormWrapperParams.NormType.Layer),  # TODO: put in HP!
+                norm_params=norm_params,
                 symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
@@ -76,7 +76,7 @@ class MethodCodeEncoder(nn.Module):
                 params=self.encoder_params.hierarchic_micro_macro_encoder,
                 identifier_embedding_dim=self.encoder_params.identifier_encoder.identifier_embedding_dim,
                 symbol_embedding_dim=self.encoder_params.symbol_embedding_dim,
-                norm_params=NormWrapperParams(norm_type=NormWrapperParams.NormType.Layer),  # TODO: put in HP!
+                norm_params=norm_params,
                 symbols_encoder_params=self.encoder_params.symbols_encoder_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:

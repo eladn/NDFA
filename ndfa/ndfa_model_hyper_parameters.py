@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
+from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.misc.configurations_utils import conf_field, DeterministicallyHashable
 
 
@@ -30,6 +31,8 @@ class NDFAModelHyperParams(DeterministicallyHashable):
         default='leaky_relu',
         choices=('relu', 'prelu', 'leaky_relu', 'sigmoid', 'tanh', 'none'),
         description='Activation function type to use for non-linearities all over the model.')
+    normalization: NormWrapperParams = conf_field(
+        default_factory=lambda: NormWrapperParams(norm_type=NormWrapperParams.NormType.Layer))
     method_code_encoder: MethodCodeEncoderParams = conf_field(
         default_factory=MethodCodeEncoderParams,
         arg_prefix='code-encoder')
