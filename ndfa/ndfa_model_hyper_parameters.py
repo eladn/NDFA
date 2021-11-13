@@ -73,3 +73,9 @@ class NDFAModelTrainingHyperParams:
 
     learning_rate: Optional[float] = conf_field(
         default=0.0003)
+
+    learning_rate_decay: Optional[float] = conf_field(
+        default=0.01)
+
+    reduce_lr_on_plateau: bool = conf_field(
+        default=True)
