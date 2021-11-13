@@ -29,7 +29,10 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessedD
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
     # TODO: fully implement (choose optimizer and lr)!
-    return torch.optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0)
+    return torch.optim.AdamW(
+        params=model.parameters(),
+        lr=train_hps.learning_rate,
+        weight_decay=train_hps.weight_decay)
     # return torch.optim.Adam(model.parameters(), lr=0.0005)
 
 
@@ -38,7 +41,7 @@ def create_lr_schedulers(model: nn.Module, train_hps: NDFAModelTrainingHyperPara
     # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
     return (
         torch.optim.lr_scheduler.LambdaLR(
-            optimizer=optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1),
+            optimizer=optimizer, lr_lambda=lambda epoch_nr: 0.99 ** epoch_nr, last_epoch=-1),
         torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer=optimizer, mode='min', factor=0.8, patience=4, verbose=True,
             threshold=0.1, threshold_mode='rel'))

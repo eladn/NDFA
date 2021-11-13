@@ -67,3 +67,9 @@ class NDFAModelTrainingHyperParams:
 
     gradient_clip: Optional[float] = conf_field(
         default=0.5)
+
+    weight_decay: Optional[float] = conf_field(
+        default=1e-2)
+
+    learning_rate: Optional[float] = conf_field(
+        default=0.0003)
