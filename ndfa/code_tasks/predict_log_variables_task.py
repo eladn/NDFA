@@ -282,7 +282,7 @@ class PredictLogVarsModelLoss(nn.Module):
     def __init__(self, model_hps: NDFAModelHyperParams):
         super(PredictLogVarsModelLoss, self).__init__()
         self.model_hps = model_hps
-        self.criterion = nn.NLLLoss()  # TODO: decide what criterion to use based on model-hps.
+        self.criterion = nn.NLLLoss(reduction='mean')  # TODO: decide what criterion to use based on model-hps.
         self.dbg__example_idx_to_test_grads = 3
 
     def dbg_forward_test_grads(
