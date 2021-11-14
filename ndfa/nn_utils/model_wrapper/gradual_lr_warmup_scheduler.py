@@ -33,3 +33,8 @@ class GradualLRWarmupScheduler(lr_scheduler._LRScheduler):
             if abs(new_lr - target_lr) < lr_step_increase_delta / 2:
                 new_lr = target_lr
             param_group['lr'] = new_lr
+
+    def is_finished(self):
+        return all(
+            target_lr - param_group['lr'] < sys.float_info.epsilon
+            for param_group, target_lr in zip(self.optimizer.param_groups, self.target_lr_by_group))

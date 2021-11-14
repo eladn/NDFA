@@ -26,6 +26,7 @@ from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_
     reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessedDataParams
+from ndfa.nn_utils.model_wrapper.gradual_lr_warmup_scheduler import GradualLRWarmupScheduler
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -374,6 +375,15 @@ def main():
                 subprocess_args=['nvidia-smi'], filename='nvidia-smi.txt', ignore_fault=True)
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
+        perform_gradient_accumulation_every_steps = \
+            exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size
+        nr_steps_with_optimizer_step = len(train_loader) // perform_gradient_accumulation_every_steps
+        # TODO: put in train HPs
+        # TODO: save & load statedict of the lr warmup scheduler
+        nr_lr_warmup_steps = min(2500, 3 * nr_steps_with_optimizer_step)
+        lr_warmup_scheduler = GradualLRWarmupScheduler(
+            optimizer=optimizer, nr_steps=nr_lr_warmup_steps, initial_lr=1e-10)
+
         print('Starting training.')
         try:
             fit(
@@ -384,9 +394,9 @@ def main():
                 valid_loader=eval_loader,
                 optimizer=optimizer,
                 lr_schedulers=lr_schedulers,
+                lr_warmup_scheduler=lr_warmup_scheduler,
                 criterion=criterion,
-                nr_gradient_accumulation_steps=
-                exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size,
+                nr_gradient_accumulation_steps=perform_gradient_accumulation_every_steps,
                 save_checkpoint_fn=save_checkpoint if exec_params.should_save_model else None,
                 evaluation_metrics_types=task.evaluation_metrics(
                     model_hps=exec_params.experiment_setting.model_hyper_params),

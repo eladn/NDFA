@@ -10,6 +10,7 @@ from typing import Optional, Callable, List, Type, Tuple, Dict, Collection
 
 from ndfa.nn_utils.model_wrapper.window_average import WindowAverage
 from ndfa.nn_utils.model_wrapper.train_callback import TrainCallback
+from ndfa.nn_utils.model_wrapper.gradual_lr_warmup_scheduler import GradualLRWarmupScheduler
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 
 
@@ -41,6 +42,7 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
     # Note: The criterion loss is assumed to already be scaled by the mini-batch size. That is, different mini-batch
     #       sizes would produce the same loss. Indeed `torch.nn.NLLLoss` is by default set to `reduction='mean'`.
     loss = criterion(y_pred, y_batch) / nr_gradient_accumulation_steps
+    optimizer_step_performed = False
     if optimizer is not None:
         if dbg_test_grads:
             model.dbg_retain_grads()
@@ -54,7 +56,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
                 nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_param)
             optimizer.step()
             optimizer.zero_grad()
-    return y_pred, loss.item() * nr_gradient_accumulation_steps, x_batch.batch_size
+            optimizer_step_performed = True
+    return y_pred, loss.item() * nr_gradient_accumulation_steps, x_batch.batch_size, optimizer_step_performed
 
 
 class AuxTaskSchedulerDuringTrainEpoch:
@@ -110,6 +113,7 @@ class AuxTaskSchedulerDuringTrainEpoch:
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer,
         lr_schedulers: Tuple[torch.optim.lr_scheduler._LRScheduler, ...] = (),
+        lr_warmup_scheduler: Optional[GradualLRWarmupScheduler] = None,
         criterion: nn.Module = F.nll_loss,
         nr_gradient_accumulation_steps: int = 1,
         save_checkpoint_fn: Optional[Callable[[nn.Module, Optimizer, int, Optional[int]], None]] = None,
@@ -165,12 +169,15 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     nr_steps=nr_steps, avg_throughput=avg_throughput)
             cur_step_start_time = time.time()
             # Note: `batch_loss` is the mean reduction over the examples in the batch.
-            _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
+            _, batch_loss, batch_nr_examples, optimizer_step_performed = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
                 nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
                 lazy_move_to_device_history=train_lazy_move_to_device_history,
                 gradient_clip_param=gradient_clip_param)
+            if optimizer_step_performed:
+                lr_warmup_scheduler.step()
+
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
                 train_step_avg_time * 0.8 + cur_step_duration * 0.2
@@ -279,11 +286,12 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 epoch_moving_win_loss=train_epoch_window_loss,
                 avg_throughput=avg_throughput)
 
-        for lr_scheduler in lr_schedulers:
-            if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                lr_scheduler.step(train_epoch_avg_loss)
-            else:
-                lr_scheduler.step()
+        if lr_warmup_scheduler is None or lr_warmup_scheduler.is_finished():
+            for lr_scheduler in lr_schedulers:
+                if isinstance(lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    lr_scheduler.step(train_epoch_avg_loss)
+                else:
+                    lr_scheduler.step()
 
 
 def evaluate(
