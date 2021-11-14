@@ -6,7 +6,7 @@ from warnings import warn
 import torch.nn as nn
 from torch.utils.data.dataset import Dataset
 
-from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
+from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams, NDFAModelTrainingHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties, DataFold
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties
@@ -118,21 +118,30 @@ class PredictLogVarsTask(CodeTaskBase):
         return CodeTaskVocabs.load_or_create(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
 
-    def create_optimizer(self, model: nn.Module, train_hps: NDFAModelHyperParams) -> torch.optim.Optimizer:
+    def create_optimizer(self, model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> torch.optim.Optimizer:
         # TODO: fully implement (choose optimizer and lr)!
-        return torch.optim.AdamW(model.parameters(), lr=0.0003, weight_decay=0)
+        return torch.optim.AdamW(
+            params=model.parameters(),
+            lr=train_hps.learning_rate,
+            weight_decay=train_hps.weight_decay)
         # return torch.optim.Adam(model.parameters(), lr=0.0005)
 
     def create_lr_schedulers(
-            self, model: nn.Module, train_hps: NDFAModelHyperParams, optimizer: torch.optim.Optimizer) \
+            self, model: nn.Module, train_hps: NDFAModelTrainingHyperParams, optimizer: torch.optim.Optimizer) \
             -> typing.Tuple[torch.optim.lr_scheduler._LRScheduler, ...]:
         # FIXME: should we load `last_epoch` from `loaded_checkpoint` or is it loaded on `load_state_dict()`?
-        return (
-            torch.optim.lr_scheduler.LambdaLR(
-                optimizer=optimizer, lr_lambda=lambda epoch: 0.99 ** epoch, last_epoch=-1),
-            torch.optim.lr_scheduler.ReduceLROnPlateau(
+        schedulers = []
+        if train_hps.learning_rate_decay:
+            schedulers.append(torch.optim.lr_scheduler.LambdaLR(
+                optimizer=optimizer,
+                lr_lambda=lambda epoch_nr: (1 - train_hps.learning_rate_decay) ** epoch_nr,
+                last_epoch=-1))
+        if train_hps.reduce_lr_on_plateau:
+            # TODO: load these params from `train_hps`
+            schedulers.append(torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer=optimizer, mode='min', factor=0.8, patience=4, verbose=True,
                 threshold=0.1, threshold_mode='rel'))
+        return tuple(schedulers)
 
 
 class LoggingCallTaskEvaluationMetric(SymbolsSetEvaluationMetric):
