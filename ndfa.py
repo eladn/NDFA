@@ -11,6 +11,7 @@ import numpy as np
 from omegaconf import OmegaConf
 import torch
 import torch.nn as nn
+from torch.utils.data.dataset import Dataset
 from torch.optim.optimizer import Optimizer
 from torch.utils.data.dataloader import DataLoader, RandomSampler, BatchSampler
 
@@ -74,6 +75,16 @@ def load_experiment_setting_from_yaml(yaml: str) -> ExperimentSetting:
     exec_params = reinstantiate_omegaconf_container(conf, ExperimentSetting)
     HasDispatchableField.fix_dispatch_fields(exec_params)
     return exec_params
+
+
+def create_task_dataset(task: CodeTaskBase, exec_params: ModelExecutionParams, datafold: DataFold) -> Dataset:
+    return task.create_dataset(
+        model_hps=exec_params.experiment_setting.model_hyper_params,
+        dataset_props=exec_params.experiment_setting.dataset,
+        datafold=datafold,
+        pp_data_path=exec_params.pp_data_dir_path,
+        pp_storage_method=exec_params.pp_storage_method,
+        pp_compression_method=exec_params.pp_compression_method)
 
 
 def main():
@@ -279,13 +290,7 @@ def main():
                              f'(because `max_latest_checkpoints_to_keep` '
                              f'[{exec_params.max_latest_checkpoints_to_keep}] is reached): {err}')
 
-        train_dataset = task.create_dataset(
-            model_hps=exec_params.experiment_setting.model_hyper_params,
-            dataset_props=exec_params.experiment_setting.dataset,
-            datafold=DataFold.Train,
-            pp_data_path=exec_params.pp_data_dir_path,
-            pp_storage_method=exec_params.pp_storage_method,
-            pp_compression_method=exec_params.pp_compression_method)
+        train_dataset = create_task_dataset(task=task, exec_params=exec_params, datafold=DataFold.Train)
         # train_loader = DataLoader(
         #     train_dataset,
         #     batch_size=exec_params.batch_size,
@@ -306,13 +311,7 @@ def main():
             **dataloader_cuda_kwargs)
         eval_loader = None
         if exec_params.perform_evaluation:
-            eval_dataset = task.create_dataset(
-                model_hps=exec_params.experiment_setting.model_hyper_params,
-                dataset_props=exec_params.experiment_setting.dataset,
-                datafold=DataFold.Validation,
-                pp_data_path=exec_params.pp_data_dir_path,
-                pp_storage_method=exec_params.pp_storage_method,
-                pp_compression_method=exec_params.pp_compression_method)
+            eval_dataset = create_task_dataset(task=task, exec_params=exec_params, datafold=DataFold.Validation)
             # eval_loader = DataLoader(
             #     eval_dataset, batch_size=exec_params.batch_size,
             #     collate_fn=functools.partial(
@@ -400,13 +399,7 @@ def main():
 
     if exec_params.perform_evaluation:  # TODO: consider adding `and not exec_params.perform_training`
         print('Performing evaluation (over the validation set) ..')
-        eval_dataset = task.create_dataset(
-            model_hps=exec_params.experiment_setting.model_hyper_params,
-            dataset_props=exec_params.experiment_setting.dataset,
-            datafold=DataFold.Validation,
-            pp_data_path=exec_params.pp_data_dir_path,
-            pp_storage_method=exec_params.pp_storage_method,
-            pp_compression_method=exec_params.pp_compression_method)
+        eval_dataset = create_task_dataset(task=task, exec_params=exec_params, datafold=DataFold.Validation)
         eval_loader = DataLoader(
             eval_dataset, batch_size=exec_params.batch_size,
             collate_fn=functools.partial(
@@ -454,13 +447,9 @@ def main():
         elif exec_params.predict_pp_data_path:
             print(f'Performing prediction (over preprocessed data in `{exec_params.predict_pp_data_path}`) ..')
             raise NotImplementedError
-            # pp_data = task.create_dataset(
-            #     model_hps=exec_params.experiment_setting.model_hyper_params,
-            #     dataset_props=exec_params.experiment_setting.dataset,
-            #     datafold=None,
-            #     pp_data_path=exec_params.pp_data_dir_path)
+            dataset = create_task_dataset(task=task, exec_params=exec_params, datafold=DataFold.Test)
             # data_loader = DataLoader(
-            #     pp_data, batch_size=exec_params.batch_size,
+            #     dataset, batch_size=exec_params.batch_size,
             #     collate_fn=functools.partial(
             #         task.collate_examples,
             #         model_hps=exec_params.experiment_setting.model_hyper_params),
@@ -478,13 +467,7 @@ def main():
         Check whether the model produces the same outputs of a given batch when running twice on the 
           exact same batching and third time on the same batch but when ordered in reversed.
         """
-        train_dataset = task.create_dataset(
-            model_hps=exec_params.experiment_setting.model_hyper_params,
-            dataset_props=exec_params.experiment_setting.dataset,
-            datafold=DataFold.Train,
-            pp_data_path=exec_params.pp_data_dir_path,
-            pp_storage_method=exec_params.pp_storage_method,
-            pp_compression_method=exec_params.pp_compression_method)
+        train_dataset = create_task_dataset(task=task, exec_params=exec_params, datafold=DataFold.Train)
         from torch.utils.data.dataloader import Sampler
 
         class MockSampler(Sampler):
