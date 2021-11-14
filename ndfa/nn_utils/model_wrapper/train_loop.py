@@ -38,6 +38,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
         if hasattr(y_batch, 'lazy_to') else y_batch.to(device)
 
     y_pred = model(x_batch, y_batch)
+    # Note: The criterion loss is assumed to already be scaled by the mini-batch size. That is, different mini-batch
+    #       sizes would produce the same loss. Indeed `torch.nn.NLLLoss` is by default set to `reduction='mean'`.
     loss = criterion(y_pred, y_batch) / nr_gradient_accumulation_steps
     if optimizer is not None:
         if dbg_test_grads:
@@ -45,7 +47,8 @@ def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Te
         loss.backward()
         if dbg_test_grads:
             model.dbg_test_grads()
-        if nr_gradient_accumulation_steps is None or (batch_idx % nr_gradient_accumulation_steps) == nr_gradient_accumulation_steps - 1 or \
+        if nr_gradient_accumulation_steps is None or \
+                (batch_idx % nr_gradient_accumulation_steps) == nr_gradient_accumulation_steps - 1 or \
                 (nr_batches is not None and batch_idx == nr_batches - 1):
             if gradient_clip_param is not None:
                 nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_param)
@@ -145,7 +148,6 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             callback.epoch_start(epoch_nr=epoch_nr)
         model.train()
         criterion.train()
-        train_epoch_loss_sum = 0
         train_epoch_nr_examples = 0
         train_epoch_avg_loss = 0.0
         evaluation_scheduler = None if valid_loader is None else AuxTaskSchedulerDuringTrainEpoch(
@@ -162,6 +164,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     epoch_nr=epoch_nr, step_nr=batch_idx + 1,
                     nr_steps=nr_steps, avg_throughput=avg_throughput)
             cur_step_start_time = time.time()
+            # Note: `batch_loss` is the mean reduction over the examples in the batch.
             _, batch_loss, batch_nr_examples = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
@@ -174,10 +177,14 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             cur_step_throughput = batch_nr_examples / cur_step_duration
             avg_throughput = cur_step_throughput if avg_throughput is None else \
                 avg_throughput * 0.8 + cur_step_throughput * 0.2
-            train_epoch_loss_sum += batch_loss * batch_nr_examples
             train_epoch_nr_examples += batch_nr_examples
+            # Online mean accumulation update rule:
+            #   mu_(n+1) := mu_n + (X_(n+1) - mu_n) / (n+1)
+            #   mu_(n+k) := mu_n + (X_(n+1) + ... + X_(n+k) - k * mu_n) / (n+k)
+            #   mu_(n+k) := mu_n + (mean(X_(n+1), ..., X_(n+k)) - mu_n) / ((n+k) / k)
+            # It should also work if `batch_nr_examples` variates from batch to batch.
+            train_epoch_avg_loss += (batch_loss - train_epoch_avg_loss) / (train_epoch_nr_examples / batch_nr_examples)
             train_epoch_window_loss.update(batch_loss)
-            train_epoch_avg_loss = train_epoch_loss_sum/train_epoch_nr_examples
             train_data_loader_with_progress.set_postfix(
                 {'throughput (#ex/s)': f'{avg_throughput:.2f}',
                  'ep': f'{epoch_nr}',
