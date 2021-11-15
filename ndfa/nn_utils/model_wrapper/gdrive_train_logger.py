@@ -171,7 +171,7 @@ class GDriveTrainLoggerBackgroundWorker:
             except errors.HttpError:
                 if attempt_nr < NR_ATTEMPTS:
                     time.sleep(5 * attempt_nr)
-            except ConnectionError:
+            except (ConnectionError, TimeoutError):
                 self._gdrive_service = None
         return None
 
