@@ -50,6 +50,8 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default=1)
     nr_micro_encoding_layers_after_macro: Optional[int] = conf_field(
         default=1)
+    nr_layers: int = conf_field(
+        default=1)
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:
