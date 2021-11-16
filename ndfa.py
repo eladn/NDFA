@@ -378,11 +378,13 @@ def main():
         perform_gradient_accumulation_every_steps = \
             exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size
         nr_steps_with_optimizer_step = len(train_loader) // perform_gradient_accumulation_every_steps
-        # TODO: put in train HPs
         # TODO: save & load statedict of the lr warmup scheduler
-        nr_lr_warmup_steps = min(2500, 3 * nr_steps_with_optimizer_step)
-        lr_warmup_scheduler = GradualLRWarmupScheduler(
-            optimizer=optimizer, nr_steps=nr_lr_warmup_steps, initial_lr=1e-10)
+        lr_warmup_scheduler = None
+        if exec_params.experiment_setting.train_hyper_params.learning_rate_warmup:
+            # TODO: put in train HPs
+            nr_lr_warmup_steps = min(2500, 3 * nr_steps_with_optimizer_step)
+            lr_warmup_scheduler = GradualLRWarmupScheduler(
+                optimizer=optimizer, nr_steps=nr_lr_warmup_steps, initial_lr=1e-10)
 
         print('Starting training.')
         try:

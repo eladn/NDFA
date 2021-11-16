@@ -175,7 +175,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
                 lazy_move_to_device_history=train_lazy_move_to_device_history,
                 gradient_clip_param=gradient_clip_param)
-            if optimizer_step_performed:
+            if optimizer_step_performed and lr_warmup_scheduler:
                 lr_warmup_scheduler.step()
 
             cur_step_duration = time.time() - cur_step_start_time
