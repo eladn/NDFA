@@ -106,6 +106,7 @@ def collate_tensors_with_variable_shapes(
 class CollateData:
     example_hashes: Optional[List[str]] = None
     model_hps: Optional[Any] = None
+    is_training: bool = False
 
 
 CollatableValuesTuple = Union[

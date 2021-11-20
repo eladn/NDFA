@@ -297,7 +297,8 @@ def main():
         #     batch_size=exec_params.batch_size,
         #     collate_fn=functools.partial(
         #         task.collate_examples,
-        #         model_hps=exec_params.experiment_setting.model_hyper_params),
+        #         model_hps=exec_params.experiment_setting.model_hyper_params,
+        #         is_training=True),
         #     shuffle=True, **dataloader_cuda_kwargs)
         train_loader = DataLoader(
             train_dataset,
@@ -307,7 +308,8 @@ def main():
                 batch_size=exec_params.batch_size, drop_last=False),
             collate_fn=functools.partial(
                 task.collate_examples,
-                model_hps=exec_params.experiment_setting.model_hyper_params),
+                model_hps=exec_params.experiment_setting.model_hyper_params,
+                is_training=True),
             shuffle=False,
             **dataloader_cuda_kwargs)
         eval_loader = None
@@ -317,7 +319,8 @@ def main():
             #     eval_dataset, batch_size=exec_params.batch_size,
             #     collate_fn=functools.partial(
             #         task.collate_examples,
-            #         model_hps=exec_params.experiment_setting.model_hyper_params),
+            #         model_hps=exec_params.experiment_setting.model_hyper_params,
+            #         is_training=False),
             #     shuffle=True, **dataloader_cuda_kwargs)
             eval_loader = DataLoader(
                 eval_dataset,
@@ -327,7 +330,8 @@ def main():
                     batch_size=exec_params.batch_size, drop_last=False),
                 collate_fn=functools.partial(
                     task.collate_examples,
-                    model_hps=exec_params.experiment_setting.model_hyper_params),
+                    model_hps=exec_params.experiment_setting.model_hyper_params,
+                    is_training=False),
                 shuffle=False,
                 **dataloader_cuda_kwargs)
 
@@ -416,7 +420,8 @@ def main():
             eval_dataset, batch_size=exec_params.batch_size,
             collate_fn=functools.partial(
                 task.collate_examples,
-                model_hps=exec_params.experiment_setting.model_hyper_params),
+                model_hps=exec_params.experiment_setting.model_hyper_params,
+                is_training=False),
             shuffle=True, **dataloader_cuda_kwargs)
         criterion = task.build_loss_criterion(model_hps=exec_params.experiment_setting.model_hyper_params)
         val_loss, metrics_results = evaluate(
@@ -464,7 +469,8 @@ def main():
             #     dataset, batch_size=exec_params.batch_size,
             #     collate_fn=functools.partial(
             #         task.collate_examples,
-            #         model_hps=exec_params.experiment_setting.model_hyper_params),
+            #         model_hps=exec_params.experiment_setting.model_hyper_params,
+            #         is_training=False),
             #     **dataloader_cuda_kwargs)
             # predictions = task.predict(
             #     model=model,
@@ -507,7 +513,8 @@ def main():
                 batch_size=batch_size, drop_last=False),
             collate_fn=functools.partial(
                 task.collate_examples,
-                model_hps=exec_params.experiment_setting.model_hyper_params),
+                model_hps=exec_params.experiment_setting.model_hyper_params,
+                is_training=False),  # avoid sampling for determinism
             shuffle=False,
             **dataloader_cuda_kwargs)
         results = []

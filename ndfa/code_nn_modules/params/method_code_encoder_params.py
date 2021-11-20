@@ -9,6 +9,7 @@ from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpre
 from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEncoderParams
 from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
+from ndfa.nn_utils.modules.params.sampling_params import SamplingParams, DistributionInfoParams
 
 
 __all__ = ['MethodCodeEncoderParams']
@@ -85,12 +86,38 @@ class MethodCodeEncoderParams(HasDispatchableField):
     nr_method_ast_leaf_to_root_paths_to_sample_during_pp: Optional[int] = conf_field(
         default=150,
         description="The number of .")
-    nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading: Optional[int] = conf_field(
-        default=400,
-        description="The number of .")
-    nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading: Optional[int] = conf_field(
-        default=200,
-        description="The number of .")
+    method_ast_leaf_to_leaf_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=600,
+            distribution_for_rate_to_sample_by=DistributionInfoParams(
+                distribution_type=DistributionInfoParams.DistributionType.Normal,
+                distribution_params=(0.6, 0.15)),
+            min_nr_items_to_sample_by_rate=20,
+            sample_in_eval=False))
+    method_ast_leaf_to_root_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=200,
+            distribution_for_rate_to_sample_by=DistributionInfoParams(
+                distribution_type=DistributionInfoParams.DistributionType.Normal,
+                distribution_params=(0.6, 0.15)),
+            min_nr_items_to_sample_by_rate=5,
+            sample_in_eval=False))
+    sub_asts_leaf_to_leaf_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=600,
+            distribution_for_rate_to_sample_by=DistributionInfoParams(
+                distribution_type=DistributionInfoParams.DistributionType.Normal,
+                distribution_params=(0.6, 0.15)),
+            min_nr_items_to_sample_by_rate=20,
+            sample_in_eval=False))
+    sub_asts_leaf_to_root_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=250,
+            distribution_for_rate_to_sample_by=DistributionInfoParams(
+                distribution_type=DistributionInfoParams.DistributionType.Normal,
+                distribution_params=(0.6, 0.15)),
+            min_nr_items_to_sample_by_rate=5,
+            sample_in_eval=False))
     max_nr_cfg_node_sub_ast_leaf_to_leaf_paths: Optional[int] = conf_field(
         default=None,
         description="The max number of .")

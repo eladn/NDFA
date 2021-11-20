@@ -12,6 +12,7 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     batch_flattened_seq_shuffler_field, TensorsDataDict, batch_flattened_tensor_field, batch_flattened_seq_field, \
     batch_flattened_indices_pseudo_random_permutation_field
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
+from ndfa.nn_utils.modules.params.sampling_params import SamplingParams
 
 
 __all__ = [
@@ -196,41 +197,41 @@ def dataclasses_field_wo_defaults():
 @dataclasses.dataclass
 class SubASTInputTensors(TensorsDataClass):
     @classmethod
-    def _get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading(cls, collate_data) -> int:
-        return cls.get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading(collate_data)
+    def _get_ast_leaf_to_leaf_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return cls.get_ast_leaf_to_leaf_paths_dataloading_sampling_params(collate_data)
 
     @classmethod
-    def _get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading(cls, collate_data) -> int:
-        return cls.get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading(collate_data)
+    def _get_ast_leaf_to_root_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return cls.get_ast_leaf_to_root_paths_dataloading_sampling_params(collate_data)
 
     @classmethod
-    def get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading(cls, collate_data) -> Optional[int]:
-        raise NotImplementedError
+    def get_ast_leaf_to_root_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        raise NotImplementedError  # sub-class should implement this method
 
     @classmethod
-    def get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading(cls, collate_data) -> Optional[int]:
-        raise NotImplementedError
+    def get_ast_leaf_to_leaf_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        raise NotImplementedError  # sub-class should implement this method
 
     ast_leaf_to_leaf_paths_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(
             tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
-            nr_sequences_to_sample_per_example=_get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
+            sequences_per_example_sampling=_get_ast_leaf_to_leaf_paths_dataloading_sampling_params)
     ast_leaf_to_leaf_paths_child_place: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
-            nr_sequences_to_sample_per_example=_get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
+            sequences_per_example_sampling=_get_ast_leaf_to_leaf_paths_dataloading_sampling_params)
     ast_leaf_to_leaf_paths_vertical_direction: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
-            nr_sequences_to_sample_per_example=_get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading)
+            sequences_per_example_sampling=_get_ast_leaf_to_leaf_paths_dataloading_sampling_params)
     ast_leaf_to_root_paths_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(
             tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
-            nr_sequences_to_sample_per_example=_get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading)
+            sequences_per_example_sampling=_get_ast_leaf_to_root_paths_dataloading_sampling_params)
     ast_leaf_to_root_paths_child_place: Optional[BatchFlattenedSeq] = \
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
-            nr_sequences_to_sample_per_example=_get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading)
+            sequences_per_example_sampling=_get_ast_leaf_to_root_paths_dataloading_sampling_params)
     ast_leaves_sequence_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
     siblings_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
@@ -361,12 +362,12 @@ class MethodASTInputTensors(SubASTInputTensors):
             unflattener_fn=self.get_ast_nodes_unflattener())
 
     @classmethod
-    def get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading(cls, collate_data) -> int:
-        return collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading
+    def get_ast_leaf_to_root_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.method_ast_leaf_to_root_paths_dataloading_sampling_params
 
     @classmethod
-    def get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading(cls, collate_data) -> int:
-        return collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading
+    def get_ast_leaf_to_leaf_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.method_ast_leaf_to_leaf_paths_dataloading_sampling_params
 
 
 @dataclasses.dataclass
@@ -400,16 +401,12 @@ class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
             raise ValueError(f'Unsupported path type `{path_type}`.')
 
     @classmethod
-    def get_nr_ast_leaf_to_root_paths_to_sample_during_dataloading(cls, collate_data) -> Optional[int]:
-        # TODO: fix
-        # return collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_root_paths_to_sample_during_dataloading
-        return None  # no sampling
+    def get_ast_leaf_to_root_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.sub_asts_leaf_to_root_paths_dataloading_sampling_params
 
     @classmethod
-    def get_nr_ast_leaf_to_leaf_paths_to_sample_during_dataloading(cls, collate_data) -> Optional[int]:
-        # TODO: fix
-        # return collate_data.model_hps.method_code_encoder.nr_method_ast_leaf_to_leaf_paths_to_sample_during_dataloading
-        return None  # no sampling
+    def get_ast_leaf_to_leaf_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.sub_asts_leaf_to_leaf_paths_dataloading_sampling_params
 
 
 @dataclasses.dataclass

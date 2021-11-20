@@ -69,7 +69,8 @@ class PredictLogVarsTask(CodeTaskBase):
         model.eval()
         example_hashes = [pp_example.example_hash]
         code_task_input = MethodCodeInputTensors.collate(
-            [code_task_input], collate_data=CollateData(example_hashes=example_hashes, model_hps=model.model_hps))
+            [code_task_input], collate_data=CollateData(
+                example_hashes=example_hashes, model_hps=model.model_hps, is_training=False))
         code_task_input = code_task_input.to(device)
         output: PredictLoggingCallVarsModelOutput = model(code_task_input=code_task_input)
         decoder_outputs = output.decoder_outputs.squeeze(dim=0)
@@ -97,12 +98,14 @@ class PredictLogVarsTask(CodeTaskBase):
 
     def collate_examples(
             self, examples: List['PredictLogVarsTaggedExample'],
-            model_hps: NDFAModelHyperParams) \
+            model_hps: NDFAModelHyperParams,
+            is_training: bool) \
             -> 'PredictLogVarsTaggedExample':
         assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
         example_hashes = [example.example_hash for example in examples]
         return PredictLogVarsTaggedExample.collate(
-            examples, collate_data=CollateData(example_hashes=example_hashes, model_hps=model_hps))
+            examples, collate_data=CollateData(
+                example_hashes=example_hashes, model_hps=model_hps, is_training=is_training))
 
     def evaluation_metrics(self, model_hps: NDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):

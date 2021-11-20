@@ -2,6 +2,8 @@ import torch
 import dataclasses
 from typing import List, Union, Optional, Tuple, Callable, Dict, Set, Any, final
 
+from ndfa.nn_utils.modules.params.sampling_params import SamplingParams  # TODO: put this in TensorsDataClass module
+
 
 __all__ = [
     'HasSelfIndexingGroupMixin',
@@ -61,7 +63,7 @@ class TensorDataClassWithSingleSequenceFieldMixin:
 @dataclasses.dataclass
 class TensorDataClassWithSequencesMixin:
     batch_first: bool = True
-    nr_sequences_to_sample_per_example: Optional[Union[int, Callable[[Any], int]]] = dataclasses.field(default=None)
+    sequences_per_example_sampling: Optional[Union[SamplingParams, Callable[[Any], SamplingParams]]] = dataclasses.field(default=None)
     sequences_sampling_initial_seed_salt: str = dataclasses.field(default='0')
     sequences_lengths: Optional[torch.LongTensor] = dataclasses.field(default=None, init=False)
     sequences_mask: Optional[torch.BoolTensor] = dataclasses.field(default=None, init=False)
@@ -71,5 +73,5 @@ class TensorDataClassWithSequencesMixin:
     def get_management_fields(cls) -> Tuple[str, ...]:
         supers = super(TensorDataClassWithSequencesMixin, cls).get_management_fields() \
             if hasattr(super(TensorDataClassWithSequencesMixin, cls), 'get_management_fields') else ()
-        return supers + ('batch_first', 'nr_sequences_to_sample_per_example', 'sequences_sampling_initial_seed_salt',
+        return supers + ('batch_first', 'sequences_per_example_sampling', 'sequences_sampling_initial_seed_salt',
                          'sequences_lengths', 'sequences_mask', 'max_sequence_length')

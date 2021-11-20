@@ -8,6 +8,7 @@ from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndice
     TensorDataClassWithSingleSequenceFieldMixin, HasSelfIndexingGroupMixin
 from .batch_flattened import BatchFlattenedTensorsDataClassMixin
 from .batch_flattened_seq import BatchFlattenedSequencesDataClassMixin
+from ndfa.nn_utils.modules.params.sampling_params import SamplingParams  # TODO: put this in TensorsDataClass module
 
 
 __all__ = [
@@ -171,12 +172,12 @@ def batched_flattened_indices_flattened_seq_field(
         self_indexing_group: Optional[str] = dataclasses.MISSING,
         tgt_indexing_group: Optional[str] = dataclasses.MISSING,
         sequences_sampling_initial_seed_salt: Optional[str] = dataclasses.MISSING,
-        nr_sequences_to_sample_per_example: Optional[Union[int, Callable[[Any], int]]] = dataclasses.MISSING) \
+        sequences_per_example_sampling: Optional[Union[SamplingParams, Callable[[Any], SamplingParams]]] = dataclasses.MISSING) \
         -> dataclasses.Field:
     management_fields_defaults = {
         'self_indexing_group': self_indexing_group,
         'tgt_indexing_group': tgt_indexing_group,
         'sequences_sampling_initial_seed_salt': sequences_sampling_initial_seed_salt,
-        'nr_sequences_to_sample_per_example': nr_sequences_to_sample_per_example}
+        'sequences_per_example_sampling': sequences_per_example_sampling}
     management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
     return dataclasses.field(default=default, metadata=management_fields_defaults)
