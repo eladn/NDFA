@@ -29,6 +29,7 @@ from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodings
 from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEncoderParams
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, NDFAModelPreprocessedDataParams
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
+from ndfa.nn_utils.model_wrapper.train_loop import TrainProgressInfo
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -99,13 +100,15 @@ class PredictLogVarsTask(CodeTaskBase):
     def collate_examples(
             self, examples: List['PredictLogVarsTaggedExample'],
             model_hps: NDFAModelHyperParams,
-            is_training: bool) \
+            is_training: bool,
+            train_progress_info: Optional[TrainProgressInfo] = None) \
             -> 'PredictLogVarsTaggedExample':
         assert all(isinstance(example, PredictLogVarsTaggedExample) for example in examples)
         example_hashes = [example.example_hash for example in examples]
         return PredictLogVarsTaggedExample.collate(
             examples, collate_data=CollateData(
-                example_hashes=example_hashes, model_hps=model_hps, is_training=is_training))
+                example_hashes=example_hashes, model_hps=model_hps,
+                is_training=is_training, train_progress_info=train_progress_info))
 
     def evaluation_metrics(self, model_hps: NDFAModelHyperParams) -> List[Type[EvaluationMetric]]:
         class LoggingCallTaskEvaluationMetric_(LoggingCallTaskEvaluationMetric):

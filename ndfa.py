@@ -20,7 +20,7 @@ from ndfa.experiment_setting import ExperimentSetting
 from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
-from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate
+from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate, TrainProgressInfo
 from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
 from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
     reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
@@ -300,6 +300,7 @@ def main():
         #         model_hps=exec_params.experiment_setting.model_hyper_params,
         #         is_training=True),
         #     shuffle=True, **dataloader_cuda_kwargs)
+        train_progress_info = TrainProgressInfo()
         train_loader = DataLoader(
             train_dataset,
             batch_size=None,
@@ -309,7 +310,8 @@ def main():
             collate_fn=functools.partial(
                 task.collate_examples,
                 model_hps=exec_params.experiment_setting.model_hyper_params,
-                is_training=True),
+                is_training=True,
+                train_progress_info=train_progress_info),
             shuffle=False,
             **dataloader_cuda_kwargs)
         eval_loader = None
@@ -408,7 +410,8 @@ def main():
                     model_hps=exec_params.experiment_setting.model_hyper_params),
                 callbacks=train_callbacks,
                 gradient_clip_param=exec_params.experiment_setting.train_hyper_params.gradient_clip,
-                progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec)
+                progress_bar_min_interval_sec=exec_params.progress_bar_min_interval_sec,
+                train_progress_info=train_progress_info)
         finally:
             if gdrive_logger is not None:
                 gdrive_logger.close()

@@ -13,6 +13,7 @@ from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.code_task_properties import CodeTaskProperties, task_names
 from ndfa.misc.iter_raw_extracted_data_files import RawExtractedExample
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams
+from ndfa.nn_utils.model_wrapper.train_loop import TrainProgressInfo
 
 
 __all__ = ['CodeTaskBase']
@@ -97,7 +98,9 @@ class CodeTaskBase(abc.ABC):
         return task_class(task_props)
 
     @abc.abstractmethod
-    def collate_examples(self, examples: List[Any], model_hps: NDFAModelHyperParams, is_training: bool):
+    def collate_examples(
+            self, examples: List[Any], model_hps: NDFAModelHyperParams,
+            is_training: bool, train_progress_info: Optional[TrainProgressInfo] = None):
         ...
 
     @abc.abstractmethod

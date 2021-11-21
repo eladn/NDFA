@@ -6,6 +6,7 @@ from torch.optim.optimizer import Optimizer
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
+from dataclasses import dataclass
 from typing import Optional, Callable, List, Type, Tuple, Dict, Collection
 
 from ndfa.nn_utils.model_wrapper.window_average import WindowAverage
@@ -14,7 +15,7 @@ from ndfa.nn_utils.model_wrapper.gradual_lr_warmup_scheduler import GradualLRWar
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 
 
-__all__ = ['fit', 'evaluate']
+__all__ = ['fit', 'evaluate', 'TrainProgressInfo']
 
 
 def perform_loss_step_for_batch(device, x_batch: torch.Tensor, y_batch: torch.Tensor, model: nn.Module,
@@ -110,6 +111,11 @@ class AuxTaskSchedulerDuringTrainEpoch:
             0.8 * self.task_avg_duration + 0.2 * duration
 
 
+@dataclass
+class TrainProgressInfo:
+    epoch_nr: int = 0
+
+
 def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: DataLoader,
         valid_loader: Optional[DataLoader], optimizer: Optimizer,
         lr_schedulers: Tuple[torch.optim.lr_scheduler._LRScheduler, ...] = (),
@@ -123,7 +129,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         min_train_epoch_minutes_to_perform_evaluation_during: float = 40,
         perform_evaluation_before_starting_training: bool = True,
         gradient_clip_param: Optional[float] = None,
-        progress_bar_min_interval_sec: float = 0.1):
+        progress_bar_min_interval_sec: float = 0.1,
+        train_progress_info: Optional[TrainProgressInfo] = None):
     if callbacks is None:
         callbacks = ()
     model.to(device)
@@ -148,6 +155,8 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
     train_lazy_move_to_device_history = {}
     for epoch_nr in range(1, nr_epochs + 1):  # TODO: allow resuming from given epoch number
         print(f'Starting training epoch #{epoch_nr} ..')
+        if train_progress_info is not None:
+            train_progress_info.epoch_nr = epoch_nr
         for callback in callbacks:
             callback.epoch_start(epoch_nr=epoch_nr)
         model.train()

@@ -107,6 +107,7 @@ class CollateData:
     example_hashes: Optional[List[str]] = None
     model_hps: Optional[Any] = None
     is_training: bool = False
+    train_progress_info: Optional[Any] = None
 
 
 CollatableValuesTuple = Union[

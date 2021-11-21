@@ -1,7 +1,7 @@
 import torch
 import dataclasses
 import numpy as np
-from typing import List, Union, Optional, Tuple, Dict, Set, Any, final, Callable
+from typing import List, Union, Optional, Any, final, Callable
 
 from .misc import seq_lengths_to_mask, collate_tensors_with_variable_shapes, CollateData, \
     get_random_seed_per_example
@@ -15,15 +15,58 @@ __all__ = ['BatchFlattenedSequencesDataClassMixin', 'BatchFlattenedSequencesData
            'batch_flattened_seq_field']
 
 
-def _sample_by_distribution_params(params: DistributionInfoParams, rng: np.random.RandomState):
-    if params.distribution_type == DistributionInfoParams.DistributionType.Normal:
-        return rng.normal(*params.distribution_params)
-    elif params.distribution_type == DistributionInfoParams.DistributionType.Gamma:
-        return rng.gamma(*params.distribution_params)
-    elif params.distribution_type == DistributionInfoParams.DistributionType.Uniform:
-        return rng.uniform(*params.distribution_params)
+def _sample_by_distribution_params(distribution: DistributionInfoParams, rng: np.random.RandomState):
+    if distribution.distribution_type == DistributionInfoParams.DistributionType.Constant:
+        return distribution.distribution_params[0]
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Normal:
+        return rng.normal(*distribution.distribution_params)
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Gamma:
+        return rng.gamma(*distribution.distribution_params)
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Exponential:
+        return rng.exponential(*distribution.distribution_params)
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Uniform:
+        return rng.uniform(*distribution.distribution_params)
     else:
-        raise ValueError(f'Unsupported distribution type {params.distribution_type}')
+        raise ValueError(f'Unsupported distribution type `{distribution.distribution_type}`.')
+
+
+def _make_distribution_closer_to_one(
+        distribution: DistributionInfoParams, factor: float) -> DistributionInfoParams:
+    if distribution.distribution_type == DistributionInfoParams.DistributionType.Constant:
+        assert len(distribution.distribution_params) == 1
+        initial_value, = distribution.distribution_params
+        assert distribution.distribution_params[0] < 1. + 2. * np.finfo(float).eps
+        cur_value = min(1., initial_value + (1 - initial_value) * (1. - factor))
+        return dataclasses.replace(distribution, distribution_params=(cur_value,))
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Normal:
+        assert len(distribution.distribution_params) == 2
+        initial_mu, initial_sigma = distribution.distribution_params
+        assert initial_mu < 1. + 2. * np.finfo(float).eps
+        assert initial_sigma > 0
+        cur_mu = min(1., initial_mu + (1 - initial_mu) * (1. - factor))
+        # cur_sigma = max(distribution.distribution_params[1] * factor, np.finfo(float).eps)
+        cur_sigma = max(initial_sigma * ((1 - cur_mu) / (1 - initial_mu)) ** 0.5, np.finfo(float).eps)
+        return dataclasses.replace(distribution, distribution_params=(cur_mu, cur_sigma))
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Gamma:
+        raise NotImplementedError  # TODO: impl!
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Exponential:
+        raise NotImplementedError  # TODO: impl!
+    elif distribution.distribution_type == DistributionInfoParams.DistributionType.Uniform:
+        raise NotImplementedError  # TODO: impl!
+    else:
+        raise ValueError(f'Unsupported distribution type `{distribution.distribution_type}`.')
+
+
+def _sample_sample_size_by_distribution_params_with_decay(
+        total_nr_items: int, sampling_distribution_params: DistributionInfoParams,
+        sample_rate_decay_factor: Optional[float], rng: np.random.RandomState) -> int:
+    if sample_rate_decay_factor is not None:
+        sampling_distribution_params = _make_distribution_closer_to_one(
+            distribution=sampling_distribution_params, factor=sample_rate_decay_factor)
+    sampling_rate = max(1 / total_nr_items, min(1, _sample_by_distribution_params(
+        distribution=sampling_distribution_params, rng=rng)))
+    nr_items_to_sample = max(1, min(total_nr_items, round(sampling_rate * total_nr_items)))
+    return nr_items_to_sample
 
 
 @dataclasses.dataclass
@@ -77,8 +120,18 @@ class BatchFlattenedSequencesDataClassMixin(BatchFlattenedTensorsDataClassMixin,
                     random_state = np.random.RandomState(random_seed_per_example[example_idx])
                     nr_sequences_to_sample_per_example = nr_tensors
                     if sequences_per_example_sampling.distribution_for_rate_to_sample_by is not None:
+                        decay_factor = sequences_per_example_sampling.sample_rate_train_decay_factor
+                        sample_rate_decay_factor = \
+                            None if decay_factor is None or not collate_data.is_training else \
+                            (1 - decay_factor) ** (collate_data.train_progress_info.epoch_nr - 1)
+                        _sample_sample_size_by_distribution_params_with_decay(
+                            total_nr_items=nr_tensors,
+                            sampling_distribution_params=
+                            sequences_per_example_sampling.distribution_for_rate_to_sample_by,
+                            sample_rate_decay_factor=sample_rate_decay_factor,
+                            rng=random_state)
                         sampling_rate = max(1 / nr_tensors, min(1, _sample_by_distribution_params(
-                            params=sequences_per_example_sampling.distribution_for_rate_to_sample_by,
+                            distribution=sequences_per_example_sampling.distribution_for_rate_to_sample_by,
                             rng=random_state)))
                         nr_sequences_to_sample_per_example = max(1, min(nr_tensors, round(sampling_rate * nr_tensors)))
                     if sequences_per_example_sampling.max_nr_items is not None:
