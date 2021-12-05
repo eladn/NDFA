@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-05-17"
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,7 +17,7 @@ class Attention(nn.Module):
     def __init__(self, in_embed_dim: int, out_embed_dim: Optional[int] = None,
                  project_key: bool = True, project_query: bool = True, project_values: bool = False,
                  query_in_embed_dim: Optional[int] = None, qk_embed_dim: Optional[int] = None,
-                 nr_heads: int = 1, activation_fn: str = 'relu'):
+                 nr_heads: int = 1, activation_fn: str = 'relu', attn_scores_dropout_rate: float = 0.1):
         super(Attention, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
         self.in_embed_dim = in_embed_dim
@@ -37,6 +41,7 @@ class Attention(nn.Module):
         self.value_linear_projection_layer = \
             nn.Linear(in_features=self.in_embed_dim, out_features=self.out_embed_dim, bias=False) \
                 if project_values else None
+        self.attn_scores_dropout = nn.Dropout(attn_scores_dropout_rate)
 
     def forward(self, sequences: torch.Tensor,
                 query: Optional[torch.Tensor] = None,
@@ -80,6 +85,7 @@ class Attention(nn.Module):
                 attn_weights.new_zeros(size=(1,)),
                 attn_weights.new_full(size=(1,), fill_value=float('-inf')))
         attn_probs = F.softmax(attn_weights, dim=1)  # (bsz, seq_len, nr_heads)  # TODO: FIXME: is it ok or we should transpose(1,2) before?
+        attn_probs = self.attn_scores_dropout(attn_probs)
         attn_probs = attn_probs.permute(0, 2, 1).view(batch_size, self.nr_heads, seq_len).contiguous()\
             .view(batch_size * self.nr_heads, seq_len).unsqueeze(1)
         values = sequences if self.value_linear_projection_layer is None else \

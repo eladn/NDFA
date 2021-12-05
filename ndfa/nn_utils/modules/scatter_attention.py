@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-09-30"
+
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple
@@ -10,7 +14,7 @@ __all__ = ['ScatterAttention']
 class ScatterAttention(nn.Module):
     def __init__(self, in_embed_dim: int, in_queries_dim: Optional[int] = None, qk_proj_dim: Optional[int] = None,
                  project_queries: bool = True, project_keys: bool = True, project_values: bool = False,
-                 out_values_dim: Optional[int] = None):
+                 out_values_dim: Optional[int] = None, attn_scores_dropout_rate: float = 0.1):
         super(ScatterAttention, self).__init__()
         self.in_embed_dim = in_embed_dim
         self.in_queries_dim = self.in_embed_dim if in_queries_dim is None else in_queries_dim
@@ -29,6 +33,7 @@ class ScatterAttention(nn.Module):
         self.value_projection_layer = nn.Linear(
             in_features=self.in_embed_dim, out_features=self.out_values_dim, bias=False) \
             if project_values else None
+        self.attn_scores_dropout = nn.Dropout(attn_scores_dropout_rate)
 
     def forward(self, scattered_values: torch.Tensor, indices: torch.LongTensor,
                 queries: torch.Tensor, queries_indices: Optional[torch.LongTensor] = None) \
@@ -67,6 +72,7 @@ class ScatterAttention(nn.Module):
             #       Are they zeroed (the good case) or just skipped (bad case because of
             #       incorrect offsetting of the following entries)?
             scattered_scores = scatter_softmax(src=scattered_probs, index=indices, dim=-1)
+            scattered_scores = self.attn_scores_dropout(scattered_scores)
             assert scattered_scores.ndim == 1 and scattered_scores.size() == (scattered_values.size(0),)
             scattered_values_projected = scattered_values if self.value_projection_layer is None else \
                 self.value_projection_layer(scattered_values)
