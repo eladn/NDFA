@@ -6,6 +6,7 @@ import io
 import os
 import sys
 import json
+import tempfile
 import itertools
 import functools
 import dataclasses
@@ -33,6 +34,16 @@ from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessedDataParams
 from ndfa.nn_utils.model_wrapper.gradual_lr_warmup_scheduler import GradualLRWarmupScheduler
+
+
+# TODO: move to misc / utils aux file
+def _create_named_tmpfile_from_text(text: str, filename: str) -> str:
+    tmp_dir_path = tempfile.mkdtemp()
+    tmp_filepath = os.path.join(tmp_dir_path, filename)
+    with open(tmp_filepath, mode='w') as file:
+        file.write(text)
+        file.seek(0)
+    return tmp_filepath
 
 
 # TODO: move to misc / utils aux file
@@ -395,9 +406,9 @@ def main():
                     token = wandb_token_file.readline().strip()
                     wandb.login(key=token)
             wandb.init(
-                project=f'ndfa_{exec_params.experiment_setting.task.name}',
+                project=f'NDFA_{exec_params.experiment_setting.task.name}',
                 tags=(
-                    'ndfa',
+                    'NDFA',
                     f'task={exec_params.experiment_setting.task.name}',
                     f'dataset={exec_params.experiment_setting.dataset.name}',
                     f'dataset={exec_params.experiment_setting.dataset.name}/{exec_params.experiment_setting.dataset.folding}',
@@ -408,6 +419,20 @@ def main():
                     'model_hps_hash': model_hps_hash_base64,
                     'preprocessed_data_params_hash': preprocessed_data_params.get_sha1_base64()}),
                 config=experiment_setting_dotlist)
+            wandb.save(_create_named_tmpfile_from_text(
+                text=experiment_setting_yaml, filename='experiment_settings.yaml'))
+            wandb.save(_create_named_tmpfile_from_text(
+                    text=expr_settings_hash_base64, filename='experiment_settings_hash.txt'))
+            wandb.save(_create_named_tmpfile_from_text(
+                    text=model_hps_yaml, filename='model_hps.yaml'))
+            wandb.save(_create_named_tmpfile_from_text(
+                    text=model_hps_hash_base64, filename='model_hps_hash.txt'))
+            wandb.save(_create_named_tmpfile_from_text(
+                    text=OmegaConf.to_yaml(OmegaConf.structured(preprocessed_data_params)),
+                    filename='preprocessed_data_params.yaml'))
+            wandb.save(_create_named_tmpfile_from_text(
+                    text=preprocessed_data_params.get_sha1_base64(),
+                    filename='preprocessed_data_params_hash.txt'))
             wandb.watch(model, log_freq=100)
             from ndfa.nn_utils.model_wrapper.wandb_callback import WAndBCallback
             train_callbacks.append(WAndBCallback())
