@@ -1,11 +1,17 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-04-04"
+
 import io
 import os
 import sys
+import json
 import itertools
 import functools
+import dataclasses
 import multiprocessing
 from warnings import warn
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any, Iterable
 
 import numpy as np
 from omegaconf import OmegaConf
@@ -27,6 +33,40 @@ from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessedDataParams
 from ndfa.nn_utils.model_wrapper.gradual_lr_warmup_scheduler import GradualLRWarmupScheduler
+
+
+# TODO: move to misc / utils aux file
+def _flatten_structured_object(obj: object, fields_delimiter: str = '.') -> Dict[str, Any]:
+    ret_list = {}
+
+    def _structed_obj_fields_iterator(_obj: object) -> Iterable[Tuple[str, Any]]:
+        if dataclasses.is_dataclass(_obj):
+            return ((field.name, getattr(_obj, field.name)) for field in dataclasses.fields(_obj))
+        elif isinstance(_obj, dict):
+            return _obj.items()
+        else:
+            assert False
+
+    def _is_obj_structed(_obj: object) -> bool:
+        return dataclasses.is_dataclass(_obj) or isinstance(_obj, dict)
+
+    def _aux_object_traversal(_obj: object, prefix: str = ''):
+        for field_name, field_value in _structed_obj_fields_iterator(_obj):
+            nested_prefix = f"{prefix}{fields_delimiter if prefix else ''}{field_name}"
+            if _is_obj_structed(field_value):
+                _aux_object_traversal(_obj=field_value, prefix=nested_prefix)
+            else:
+                assert nested_prefix not in ret_list
+                ret_list[nested_prefix] = field_value
+
+    _aux_object_traversal(_obj=obj)
+    return ret_list
+
+
+# TODO: move to misc / utils aux file
+def _sanitize_params_dict(dct: Dict[str, Any]):
+    from enum import Enum
+    return {key: val.name if isinstance(val, Enum) else val for key, val in dct.items() if val is not None}
 
 
 def create_optimizer(model: nn.Module, train_hps: NDFAModelTrainingHyperParams) -> Optimizer:
@@ -92,6 +132,8 @@ def main():
     exec_params = load_exec_params()
 
     experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
+    experiment_setting_dotlist = \
+        _sanitize_params_dict(_flatten_structured_object(exec_params.experiment_setting, fields_delimiter='.'))
     expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
     model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
     model_hps_hash_base64 = exec_params.experiment_setting.model_hyper_params.get_sha1_base64()
@@ -122,6 +164,8 @@ def main():
             loaded_checkpoint = torch.load(checkpoint_file, map_location=torch.device('cpu'))
         exec_params.experiment_setting = load_experiment_setting_from_yaml(loaded_checkpoint['experiment_setting_yaml'])
         experiment_setting_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting))
+        experiment_setting_dotlist = \
+            _sanitize_params_dict(_flatten_structured_object(exec_params.experiment_setting, fields_delimiter='.'))
         expr_settings_hash_base64 = exec_params.experiment_setting.get_sha1_base64()
         model_hps_yaml = OmegaConf.to_yaml(OmegaConf.structured(exec_params.experiment_setting.model_hyper_params))
         model_hps_hash_base64 = exec_params.experiment_setting.model_hyper_params.get_sha1_base64()
@@ -343,6 +387,30 @@ def main():
         if exec_params.use_notify:
             from ndfa.nn_utils.model_wrapper.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
+
+        if exec_params.use_wandb:
+            import wandb
+            if os.path.isfile('credentials/wandb_token.txt'):
+                with open('credentials/wandb_token.txt', mode='r') as wandb_token_file:
+                    token = wandb_token_file.readline().strip()
+                    wandb.login(key=token)
+            wandb.init(
+                project=f'ndfa_{exec_params.experiment_setting.task.name}',
+                tags=(
+                    'ndfa',
+                    f'task={exec_params.experiment_setting.task.name}',
+                    f'dataset={exec_params.experiment_setting.dataset.name}',
+                    f'dataset={exec_params.experiment_setting.dataset.name}/{exec_params.experiment_setting.dataset.folding}',
+                    f'expr={expr_settings_hash_base64}',
+                    f'model_hps={model_hps_hash_base64}'),
+                notes=json.dumps({
+                    'expr_settings_hash': expr_settings_hash_base64,
+                    'model_hps_hash': model_hps_hash_base64,
+                    'preprocessed_data_params_hash': preprocessed_data_params.get_sha1_base64()}),
+                config=experiment_setting_dotlist)
+            wandb.watch(model, log_freq=100)
+            from ndfa.nn_utils.model_wrapper.wandb_callback import WAndBCallback
+            train_callbacks.append(WAndBCallback())
 
         gdrive_logger = None
         if exec_params.use_gdrive_logger:
