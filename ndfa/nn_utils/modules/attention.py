@@ -17,7 +17,7 @@ class Attention(nn.Module):
     def __init__(self, in_embed_dim: int, out_embed_dim: Optional[int] = None,
                  project_key: bool = True, project_query: bool = True, project_values: bool = False,
                  query_in_embed_dim: Optional[int] = None, qk_embed_dim: Optional[int] = None,
-                 nr_heads: int = 1, activation_fn: str = 'relu', attn_scores_dropout_rate: float = 0.1):
+                 nr_heads: int = 1, activation_fn: str = 'relu', attn_scores_dropout_rate: float = 0.0):
         super(Attention, self).__init__()
         self.activation_layer = get_activation_layer(activation_fn)()
         self.in_embed_dim = in_embed_dim

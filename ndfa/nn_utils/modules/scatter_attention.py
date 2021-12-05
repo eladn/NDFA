@@ -14,7 +14,7 @@ __all__ = ['ScatterAttention']
 class ScatterAttention(nn.Module):
     def __init__(self, in_embed_dim: int, in_queries_dim: Optional[int] = None, qk_proj_dim: Optional[int] = None,
                  project_queries: bool = True, project_keys: bool = True, project_values: bool = False,
-                 out_values_dim: Optional[int] = None, attn_scores_dropout_rate: float = 0.1):
+                 out_values_dim: Optional[int] = None, attn_scores_dropout_rate: float = 0.0):
         super(ScatterAttention, self).__init__()
         self.in_embed_dim = in_embed_dim
         self.in_queries_dim = self.in_embed_dim if in_queries_dim is None else in_queries_dim

@@ -20,7 +20,7 @@ class ScatterGeneralAttention(nn.Module):
             project_keys: bool = False,
             project_values: bool = False,
             out_values_dim: Optional[int] = None,
-            attn_scores_dropout_rate: float = 0.1):
+            attn_scores_dropout_rate: float = 0.0):
         super(ScatterGeneralAttention, self).__init__()
         self.in_embed_dim = in_embed_dim
         self.key_proj_dim = self.in_embed_dim if key_proj_dim is None else key_proj_dim
