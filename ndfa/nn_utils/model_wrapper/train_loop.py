@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-05-07"
+
 import sys
 import time
 import torch
@@ -152,13 +156,15 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
     train_step_avg_time = None
     avg_throughput = None
+    step_nr = 0
+    learning_rates = tuple(param_group['lr'] for param_group in optimizer.param_groups)
     train_lazy_move_to_device_history = {}
     for epoch_nr in range(1, nr_epochs + 1):  # TODO: allow resuming from given epoch number
         print(f'Starting training epoch #{epoch_nr} ..')
         if train_progress_info is not None:
             train_progress_info.epoch_nr = epoch_nr
         for callback in callbacks:
-            callback.epoch_start(epoch_nr=epoch_nr)
+            callback.epoch_start(epoch_nr=epoch_nr, step_nr=step_nr, learning_rates=learning_rates)
         model.train()
         criterion.train()
         train_epoch_nr_examples = 0
@@ -170,22 +176,24 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
         train_epoch_window_loss = WindowAverage(max_window_size=50)
         train_data_loader_with_progress = tqdm(
             train_loader, dynamic_ncols=True, position=0, leave=True, mininterval=progress_bar_min_interval_sec)
-        nr_steps = len(train_data_loader_with_progress)
+        nr_batches_in_epoch = len(train_data_loader_with_progress)
         for batch_idx, (x_batch, y_batch) in enumerate(iter(train_data_loader_with_progress)):
             for callback in callbacks:
                 callback.step_start(
-                    epoch_nr=epoch_nr, step_nr=batch_idx + 1,
-                    nr_steps=nr_steps, avg_throughput=avg_throughput)
+                    epoch_nr=epoch_nr, step_nr=step_nr, batch_nr=batch_idx + 1,
+                    nr_batches_in_epoch=nr_batches_in_epoch, avg_throughput=avg_throughput,
+                    learning_rates=learning_rates)
             cur_step_start_time = time.time()
             # Note: `batch_loss` is the mean reduction over the examples in the batch.
             _, batch_loss, batch_nr_examples, optimizer_step_performed = perform_loss_step_for_batch(
                 device=device, x_batch=x_batch, y_batch=y_batch, model=model,
                 criterion=criterion, optimizer=optimizer, batch_idx=batch_idx,
-                nr_batches=nr_steps, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
+                nr_batches=nr_batches_in_epoch, nr_gradient_accumulation_steps=nr_gradient_accumulation_steps,
                 lazy_move_to_device_history=train_lazy_move_to_device_history,
                 gradient_clip_param=gradient_clip_param)
             if optimizer_step_performed and lr_warmup_scheduler:
                 lr_warmup_scheduler.step()
+            learning_rates = tuple(param_group['lr'] for param_group in optimizer.param_groups)
 
             cur_step_duration = time.time() - cur_step_start_time
             train_step_avg_time = cur_step_duration if train_step_avg_time is None else \
@@ -211,17 +219,18 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
             if valid_loader is not None and evaluation_scheduler.whether_to_call_this_step(
                     cur_step_nr=batch_idx + 1,
-                    total_nr_steps_in_epoch=nr_steps,
+                    total_nr_steps_in_epoch=nr_batches_in_epoch,
                     train_step_avg_time=train_step_avg_time):
                 for callback in callbacks:
                     callback.step_end_before_evaluation(
-                        epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                        epoch_nr=epoch_nr, step_nr=step_nr, batch_nr=batch_idx + 1,
+                        nr_batches_in_epoch=nr_batches_in_epoch,
                         batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
                         epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
-                        avg_throughput=avg_throughput)
+                        avg_throughput=avg_throughput, learning_rates=learning_rates)
 
                 print(f'Performing evaluation (over validation) DURING epoch #{epoch_nr} '
-                      f'(after step {batch_idx + 1}/{nr_steps}):')
+                      f'(after step {batch_idx + 1}/{nr_batches_in_epoch}):')
                 print(file=sys.stderr, flush=True)
                 evaluate_start_time = time.time()
                 val_loss, val_metrics_results = evaluate(
@@ -234,26 +243,30 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                 # TODO: For pretty printing the evaluation metric results:
                 #       https://stackoverflow.com/questions/44356693/pprint-with-custom-float-formats
                 print(f'Completed performing evaluation DURING epoch #{epoch_nr} '
-                      f'(after step {batch_idx + 1}/{nr_steps}).'
+                      f'(after step {batch_idx + 1}/{nr_batches_in_epoch}).'
                       f'\n\t validation loss: {val_loss:.4f}'
                       f'\n\t validation metrics: {val_metrics_results}')
 
                 for callback in callbacks:
                     callback.step_end_after_evaluation(
-                        epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                        epoch_nr=epoch_nr, step_nr=step_nr, batch_nr=batch_idx + 1,
+                        nr_batches_in_epoch=nr_batches_in_epoch,
                         batch_loss=batch_loss, batch_nr_examples=batch_nr_examples,
                         epoch_avg_loss=train_epoch_avg_loss, epoch_moving_win_loss=train_epoch_window_loss,
                         validation_loss=val_loss, validation_metrics_results=val_metrics_results,
-                        avg_throughput=avg_throughput)
+                        avg_throughput=avg_throughput, learning_rates=learning_rates)
 
                 model.train()
                 criterion.train()
 
             for callback in callbacks:
                 callback.step_end(
-                    epoch_nr=epoch_nr, step_nr=batch_idx + 1, nr_steps=nr_steps,
+                    epoch_nr=epoch_nr, step_nr=step_nr, batch_nr=batch_idx + 1, nr_batches_in_epoch=nr_batches_in_epoch,
                     batch_loss=batch_loss, batch_nr_examples=batch_nr_examples, epoch_avg_loss=train_epoch_avg_loss,
-                    epoch_moving_win_loss=train_epoch_window_loss, avg_throughput=avg_throughput)
+                    epoch_moving_win_loss=train_epoch_window_loss, avg_throughput=avg_throughput,
+                    learning_rates=learning_rates)
+
+            step_nr += 1
 
         # TODO: make it a callback of `epoch_end`
         if save_checkpoint_fn is not None:
@@ -263,9 +276,10 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
             evaluation_avg_duration = evaluation_scheduler.task_avg_duration
             for callback in callbacks:
                 callback.epoch_end_before_evaluation(
-                    epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                    epoch_nr=epoch_nr, step_nr=step_nr,
+                    epoch_avg_loss=train_epoch_avg_loss,
                     epoch_moving_win_loss=train_epoch_window_loss,
-                    avg_throughput=avg_throughput)
+                    avg_throughput=avg_throughput, learning_rates=learning_rates)
 
             print(f'Performing evaluation (over validation) after epoch #{epoch_nr}:')
             val_loss, val_metrics_results = evaluate(
@@ -284,16 +298,19 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
 
             for callback in callbacks:
                 callback.epoch_end_after_evaluation(
-                    epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                    epoch_nr=epoch_nr, step_nr=step_nr,
+                    epoch_avg_loss=train_epoch_avg_loss,
                     epoch_moving_win_loss=train_epoch_window_loss,
                     validation_loss=val_loss, validation_metrics_results=val_metrics_results,
-                    avg_throughput=avg_throughput)
+                    avg_throughput=avg_throughput, learning_rates=learning_rates)
 
         for callback in callbacks:
             callback.epoch_end(
-                epoch_nr=epoch_nr, epoch_avg_loss=train_epoch_avg_loss,
+                epoch_nr=epoch_nr, step_nr=step_nr,
+                epoch_avg_loss=train_epoch_avg_loss,
                 epoch_moving_win_loss=train_epoch_window_loss,
-                avg_throughput=avg_throughput)
+                avg_throughput=avg_throughput,
+                learning_rates=learning_rates)
 
         if lr_warmup_scheduler is None or lr_warmup_scheduler.is_finished():
             for lr_scheduler in lr_schedulers:
@@ -301,6 +318,7 @@ def fit(nr_epochs: int, model: nn.Module, device: torch.device, train_loader: Da
                     lr_scheduler.step(train_epoch_avg_loss)
                 else:
                     lr_scheduler.step()
+        learning_rates = tuple(param_group['lr'] for param_group in optimizer.param_groups)
 
 
 def evaluate(

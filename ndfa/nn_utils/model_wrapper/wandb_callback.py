@@ -45,53 +45,63 @@ def _flatten_structured_object(obj: object, fields_delimiter: str = '.') -> Dict
 
 
 class WAndBCallback(TrainCallback):
-    def __init__(self, partial_epoch_results_every_sec: Optional[int] = 15):
+    def __init__(self, min_delay_secs_between_consequent_partial_epoch_logs: Optional[int] = 7):
         self.partial_epoch_results_last_msg_time = None
-        self.partial_epoch_results_every_sec = partial_epoch_results_every_sec
+        self.min_delay_secs_between_consequent_partial_epoch_logs = min_delay_secs_between_consequent_partial_epoch_logs
         self.last_taken_step_start_time_within_epoch = None
         self.eval_start_time = None
         self.cur_epoch_time = None
 
-    def epoch_start(self, epoch_nr: int):
+    def epoch_start(self, epoch_nr: int, step_nr: int, learning_rates: Tuple[float, ...]):
         self.cur_epoch_time = datetime.timedelta()
         self.last_taken_step_start_time_within_epoch = datetime.datetime.now()
 
     def step_start(
-            self, epoch_nr: int, step_nr: int, nr_steps: int, avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, batch_nr: int, nr_batches_in_epoch: int,
+            avg_throughput: float, learning_rates: Tuple[float, ...]):
         if self.last_taken_step_start_time_within_epoch is None:
             self.last_taken_step_start_time_within_epoch = datetime.datetime.now()
 
     def step_end(
-            self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
-            epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
-        if self.partial_epoch_results_every_sec is not None:
+            self, epoch_nr: int, step_nr: int, batch_nr: int, nr_batches_in_epoch: int,
+            batch_loss: float, batch_nr_examples: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
+        if self.min_delay_secs_between_consequent_partial_epoch_logs is not None:
             if self.last_taken_step_start_time_within_epoch is not None:
                 self.cur_epoch_time += (datetime.datetime.now() - self.last_taken_step_start_time_within_epoch)
                 self.last_taken_step_start_time_within_epoch = None
             if self.partial_epoch_results_last_msg_time is None:
                 self.partial_epoch_results_last_msg_time = time.time()
-            if self.partial_epoch_results_last_msg_time + self.partial_epoch_results_every_sec > time.time():
+            if self.partial_epoch_results_last_msg_time + \
+                    self.min_delay_secs_between_consequent_partial_epoch_logs > time.time():
                 return
         partial_epoch_results = {
             'train/epoch': epoch_nr,
-            'train/batch': step_nr,
+            'train/batch': batch_nr,
             'train/epoch_avg_loss': epoch_avg_loss,
             'train/moving_win_loss': epoch_moving_win_loss.get_window_avg(),
             'train/avg_throughput': avg_throughput,
-            'train/epoch_duration': self.cur_epoch_time.total_seconds() / 60}
-        wandb.log(partial_epoch_results)
+            'train/epoch_duration': self.cur_epoch_time.total_seconds() / 60,
+            **{f'train/param_group={param_group_idx}/learning_rate': learning_rate
+               for param_group_idx, learning_rate in enumerate(learning_rates)}}
+        wandb.log(partial_epoch_results, step=step_nr)
         self.partial_epoch_results_last_msg_time = time.time()
 
     def epoch_end_before_evaluation(
-            self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
         if self.last_taken_step_start_time_within_epoch is not None:
             self.cur_epoch_time += (datetime.datetime.now() - self.last_taken_step_start_time_within_epoch)
             self.last_taken_step_start_time_within_epoch = None
         self.eval_start_time = datetime.datetime.now()
 
     def epoch_end_after_evaluation(
-            self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage,
-            validation_loss: float, validation_metrics_results: Dict[str, float], avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, validation_loss: float,
+            validation_metrics_results: Dict[str, float], avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
         eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() / 60
         self.eval_start_time = None
         epoch_results = {
@@ -100,43 +110,53 @@ class WAndBCallback(TrainCallback):
             'train/moving_win_loss': epoch_moving_win_loss.get_window_avg(),
             'train/avg_throughput': avg_throughput,
             'train/epoch_duration': self.cur_epoch_time.total_seconds() / 60,
+            **{f'train/param_group={param_group_idx}/learning_rate': learning_rate
+               for param_group_idx, learning_rate in enumerate(learning_rates)},
             'val/loss': validation_loss,
             'val/duration': eval_time,
             **{f'val/metrics/{k}': v
                for k, v in _flatten_structured_object(validation_metrics_results, fields_delimiter='/').items()}
         }
-        wandb.log(epoch_results)
+        wandb.log(epoch_results, step=step_nr)
 
     def step_end_before_evaluation(
-            self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
-            epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, batch_nr: int, nr_batches_in_epoch: int,
+            batch_loss: float, batch_nr_examples: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
         if self.last_taken_step_start_time_within_epoch is not None:
             self.cur_epoch_time += (datetime.datetime.now() - self.last_taken_step_start_time_within_epoch)
             self.last_taken_step_start_time_within_epoch = None
         self.eval_start_time = datetime.datetime.now()
 
     def step_end_after_evaluation(
-            self, epoch_nr: int, step_nr: int, nr_steps: int, batch_loss: float, batch_nr_examples: int,
-            epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, validation_loss: float,
-            validation_metrics_results: Dict[str, float], avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, batch_nr: int, nr_batches_in_epoch: int,
+            batch_loss: float, batch_nr_examples: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, validation_loss: float,
+            validation_metrics_results: Dict[str, float], avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
         eval_time = (datetime.datetime.now() - self.eval_start_time).total_seconds() / 60
         self.eval_start_time = None
         epoch_results = {
             'train/epoch': epoch_nr,
-            'train/batch': step_nr,
+            'train/batch': batch_nr,
             'train/epoch_avg_loss': epoch_avg_loss,
             'train/moving_win_loss': epoch_moving_win_loss.get_window_avg(),
             'train/avg_throughput': avg_throughput,
             'train/epoch_duration': self.cur_epoch_time.total_seconds() / 60,
+            **{f'train/param_group={param_group_idx}/learning_rate': learning_rate
+               for param_group_idx, learning_rate in enumerate(learning_rates)},
             'val/loss': validation_loss,
             'val/duration': eval_time,
             **{f'val/metrics/{k}': v
                for k, v in _flatten_structured_object(validation_metrics_results, fields_delimiter='/').items()}
         }
-        wandb.log(epoch_results)
+        wandb.log(epoch_results, step=step_nr)
 
     def epoch_end(
-            self, epoch_nr: int, epoch_avg_loss: float, epoch_moving_win_loss: WindowAverage, avg_throughput: float):
+            self, epoch_nr: int, step_nr: int, epoch_avg_loss: float,
+            epoch_moving_win_loss: WindowAverage, avg_throughput: float,
+            learning_rates: Tuple[float, ...]):
         self.cur_epoch_time = None
         self.last_taken_step_start_time_within_epoch = None
         self.eval_start_time = None
