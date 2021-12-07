@@ -1605,7 +1605,8 @@ def preprocess_code_task_dataset(
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
 
-        pp_data_params_yaml_filepath = os.path.join(pp_data_path, f'{pp_data_filename}_params.yaml')
+        pp_data_params_yaml_filepath = os.path.join(
+            pp_data_path, f'pp_data_params_{preprocessed_data_params.get_sha1_base64()}.yaml')
         with open(pp_data_params_yaml_filepath, 'w') as pp_data_params_yaml_file:
             pp_data_params_yaml = OmegaConf.to_yaml(OmegaConf.structured(preprocessed_data_params))
             pp_data_params_yaml_file.write(pp_data_params_yaml)

@@ -342,12 +342,14 @@ def find_existing_compatible_preprocessed_data_hash(
     """
     Looks for the most compatible preprocessed dataset, and returns its params hash.
     """
-    pp_datasets = {
-        filename[len(f'pp_{datafold.value.lower()}_'):].split('.')[0]: filename
-        for filename in os.listdir(pp_data_path)
-        if filename.startswith(f"pp_{datafold.value.lower()}_") and not filename.endswith('_params.yaml')}
+    existing_pp_data_params_hashes = {
+        path.name[len(f'pp_{datafold.value.lower()}_'):].split('.')[0]
+        for path in Path(pp_data_path).glob(f'pp_{datafold.value.lower()}_*')}
+    existing_pp_datasets_paths = {
+        pp_data_params_hash: next(Path(pp_data_path).glob(f'pp_{datafold.value.lower()}_{pp_data_params_hash}*'))
+        for pp_data_params_hash in existing_pp_data_params_hashes}
     orig_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
-    if orig_preprocessed_data_params_hash in pp_datasets.keys():
+    if orig_preprocessed_data_params_hash in existing_pp_data_params_hashes:
         print(f'Found preprocessed dataset with exact params hash `{orig_preprocessed_data_params_hash}` '
               f'in `{pp_data_path}`.')
         return preprocessed_data_params
@@ -356,8 +358,8 @@ def find_existing_compatible_preprocessed_data_hash(
     smallest_compatible_pp_data_size = None
     smallest_compatible_pp_data_params = None
     smallest_compatible_pp_data_params_hash = None
-    for cur_pp_data_params_hash, dataset_file_or_dir in pp_datasets.items():
-        cur_pp_data_params_filename = f'pp_{datafold.value.lower()}_{cur_pp_data_params_hash}_params.yaml'
+    for cur_pp_data_params_hash, dataset_path in existing_pp_datasets_paths.items():
+        cur_pp_data_params_filename = f'pp_data_params_{cur_pp_data_params_hash}.yaml'
         cur_pp_data_params_filepath = os.path.join(pp_data_path, cur_pp_data_params_filename)
         if not os.path.isfile(cur_pp_data_params_filepath):
             continue
@@ -370,7 +372,7 @@ def find_existing_compatible_preprocessed_data_hash(
         if not cur_pp_data_params.preprocess_params.is_containing(preprocessed_data_params.preprocess_params):
             continue
         pass
-        cur_pp_dataset_size = _get_size_of_file_or_dir(os.path.join(pp_data_path, dataset_file_or_dir))
+        cur_pp_dataset_size = _get_size_of_file_or_dir(dataset_path)
         if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:
             smallest_compatible_pp_data_size = cur_pp_dataset_size
             smallest_compatible_pp_data_params = cur_pp_data_params
