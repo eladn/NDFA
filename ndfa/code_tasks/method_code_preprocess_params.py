@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-14"
+
 import dataclasses
 from typing import Optional
 
@@ -31,6 +35,14 @@ class ASTPathsPreprocessParams:
             siblings_sequences=True,
             siblings_w_parent_sequences=True)
 
+    def is_containing(self, other: 'ASTPathsPreprocessParams') -> bool:
+        return (self.traversal or not other.traversal) and \
+               (self.leaf_to_leaf or not other.leaf_to_leaf) and \
+               (self.leaf_to_root or not other.leaf_to_root) and \
+               (self.leaves_sequence or not other.leaves_sequence) and \
+               (self.siblings_sequences or not other.siblings_sequences) and \
+               (self.siblings_w_parent_sequences or not other.siblings_w_parent_sequences)
+
 
 @dataclasses.dataclass
 class ASTPreprocessParams:
@@ -43,6 +55,11 @@ class ASTPreprocessParams:
             paths=ASTPathsPreprocessParams.full(),
             tree=True)
 
+    def is_containing(self, other: 'ASTPreprocessParams') -> bool:
+        return ((self.paths and other.paths and self.paths.is_containing(other.paths)) or
+                (self.paths and not other.paths)) and \
+               (self.tree or not other.tree)
+
 
 @dataclasses.dataclass
 class NGramsPreprocessParams:
@@ -52,6 +69,9 @@ class NGramsPreprocessParams:
     @classmethod
     def full(cls):
         return NGramsPreprocessParams()
+
+    def is_containing(self, other: 'NGramsPreprocessParams') -> bool:
+        return self.min_n <= other.min_n and self.max_n >= other.max_n
 
 
 @dataclasses.dataclass
@@ -68,6 +88,13 @@ class ControlFlowPathsPreprocessParams:
             full_paths=True,
             ngrams=NGramsPreprocessParams.full(),
             cfg_nodes_random_permutation=True)
+
+    def is_containing(self, other: 'ControlFlowPathsPreprocessParams') -> bool:
+        return (self.traversal_edges or not other.traversal_edges) and \
+               (self.full_paths or not other.full_paths) and \
+               ((self.ngrams and other.ngrams and self.ngrams.is_containing(other.ngrams)) or
+                (self.ngrams and not other.ngrams)) and \
+               (self.cfg_nodes_random_permutation or not other.cfg_nodes_random_permutation)
 
 
 @dataclasses.dataclass
@@ -87,6 +114,17 @@ class HierarchicMethodEncoderPreprocessParams:
             control_flow_paths=ControlFlowPathsPreprocessParams.full(),
             control_flow_graph=True)
 
+    def is_containing(self, other: 'HierarchicMethodEncoderPreprocessParams') -> bool:
+        return ((self.micro_ast and other.micro_ast and self.micro_ast.is_containing(other.micro_ast)) or
+                (self.micro_ast and not other.micro_ast)) and \
+               (self.micro_tokens_seq or not other.micro_tokens_seq) and \
+               ((self.macro_ast and other.macro_ast and self.macro_ast.is_containing(other.macro_ast)) or
+                (self.macro_ast and not other.macro_ast)) and \
+               ((self.control_flow_paths and other.control_flow_paths and
+                 self.control_flow_paths.is_containing(other.control_flow_paths)) or
+                (self.control_flow_paths and not other.control_flow_paths)) and \
+               (self.control_flow_graph or not other.control_flow_graph)
+
 
 @dataclasses.dataclass
 class MethodCodePreprocessParams:
@@ -105,6 +143,15 @@ class MethodCodePreprocessParams:
             whole_method_tokens_seq=True,
             hierarchic=HierarchicMethodEncoderPreprocessParams.full())
 
+    def is_containing(self, other: 'MethodCodePreprocessParams') -> bool:
+        return ((self.whole_method_ast and other.whole_method_ast and
+                 self.whole_method_ast.is_containing(other.whole_method_ast)) or
+                (self.whole_method_ast and not other.whole_method_ast)) and \
+               (self.whole_method_tokens_seq or not other.whole_method_tokens_seq) and \
+               ((self.hierarchic and other.hierarchic and
+                 self.hierarchic.is_containing(other.hierarchic)) or
+                (self.hierarchic and not other.hierarchic))
+
 
 @dataclasses.dataclass
 class NDFAModelPreprocessParams(DeterministicallyHashable):
@@ -115,6 +162,9 @@ class NDFAModelPreprocessParams(DeterministicallyHashable):
         """Get an instance with all options present."""
         return NDFAModelPreprocessParams(
             method_code=MethodCodePreprocessParams.full())
+
+    def is_containing(self, other: 'NDFAModelPreprocessParams') -> bool:
+        return self.method_code.is_containing(other.method_code)
 
 
 @dataclasses.dataclass
