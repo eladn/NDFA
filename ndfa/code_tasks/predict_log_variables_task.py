@@ -5,13 +5,11 @@ __date__ = "2020-04-04"
 import os
 import torch
 import dataclasses
-from pathlib import Path
 from warnings import warn
 from typing import Optional, Tuple, Iterable
 
 import torch.nn as nn
 from torch.utils.data.dataset import Dataset
-from omegaconf import OmegaConf
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams, NDFAModelTrainingHyperParams
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties, DataFold
@@ -29,7 +27,7 @@ from ndfa.code_nn_modules.method_code_encoder import MethodCodeEncoder, EncodedM
 from ndfa.code_nn_modules.symbols_decoder import SymbolsDecoder
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_tasks.preprocess_code_task_dataset import preprocess_code_task_example, \
-    PreprocessLimitExceedError, PreprocessLimitation
+    PreprocessLimitExceedError, PreprocessLimitation, find_existing_compatible_preprocessed_data_params
 from ndfa.nn_utils.model_wrapper.dbg_test_grads import ModuleWithDbgTestGradsMixin
 from ndfa.misc.code_data_structure_utils import get_symbol_idxs_used_in_logging_call
 from ndfa.code_nn_modules.method_code_encoding_feeder import MethodCodeEncodingsFeeder
@@ -37,7 +35,6 @@ from ndfa.code_nn_modules.params.method_code_encoder_params import MethodCodeEnc
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, NDFAModelPreprocessedDataParams
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.nn_utils.model_wrapper.train_loop import TrainProgressInfo
-from ndfa.misc.configurations_utils import reinstantiate_omegaconf_container
 
 
 __all__ = ['PredictLogVarsTask', 'PredictLogVarsTaggedExample', 'PredictLogVarsTaskDataset']
@@ -329,62 +326,6 @@ class PredictLogVarsModelLoss(nn.Module):
         return self.criterion(model_output.decoder_outputs.flatten(0, 1), target_symbols_idxs[:, 1:].flatten(0, 1))
 
 
-def _get_size_of_file_or_dir(path: Union[str, Path]) -> int:
-    path = path if isinstance(path, Path) else Path(path)
-    return path.stat().st_size if path.is_file() else \
-        sum(f.stat().st_size for f in Path(path).glob('**/*') if f.is_file())
-
-
-def find_existing_compatible_preprocessed_data_hash(
-        preprocessed_data_params: NDFAModelPreprocessedDataParams,
-        datafold: DataFold,
-        pp_data_path: str) -> Optional[NDFAModelPreprocessedDataParams]:
-    """
-    Looks for the most compatible preprocessed dataset, and returns its params hash.
-    """
-    existing_pp_data_params_hashes = {
-        path.name[len(f'pp_{datafold.value.lower()}_'):].split('.')[0]
-        for path in Path(pp_data_path).glob(f'pp_{datafold.value.lower()}_*')}
-    existing_pp_datasets_paths = {
-        pp_data_params_hash: next(Path(pp_data_path).glob(f'pp_{datafold.value.lower()}_{pp_data_params_hash}*'))
-        for pp_data_params_hash in existing_pp_data_params_hashes}
-    orig_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
-    if orig_preprocessed_data_params_hash in existing_pp_data_params_hashes:
-        print(f'Found preprocessed dataset with exact params hash `{orig_preprocessed_data_params_hash}` '
-              f'in `{pp_data_path}`.')
-        return preprocessed_data_params
-    print(f'Could not find preprocessed dataset of exact params hash `{orig_preprocessed_data_params_hash}` '
-          f'in `{pp_data_path}`. Looking for other compatible preprocessed dataset that contains it..')
-    smallest_compatible_pp_data_size = None
-    smallest_compatible_pp_data_params = None
-    smallest_compatible_pp_data_params_hash = None
-    for cur_pp_data_params_hash, dataset_path in existing_pp_datasets_paths.items():
-        cur_pp_data_params_filename = f'pp_data_params_{cur_pp_data_params_hash}.yaml'
-        cur_pp_data_params_filepath = os.path.join(pp_data_path, cur_pp_data_params_filename)
-        if not os.path.isfile(cur_pp_data_params_filepath):
-            continue
-        with open(cur_pp_data_params_filepath, 'r') as params_yaml_file:
-            cur_pp_data_params = OmegaConf.structured(NDFAModelPreprocessedDataParams)
-            cur_pp_data_params = OmegaConf.merge(cur_pp_data_params, OmegaConf.load(params_yaml_file))
-        cur_pp_data_params = reinstantiate_omegaconf_container(cur_pp_data_params, NDFAModelPreprocessedDataParams)
-        if cur_pp_data_params.dataset_props != preprocessed_data_params.dataset_props:
-            continue
-        if not cur_pp_data_params.preprocess_params.is_containing(preprocessed_data_params.preprocess_params):
-            continue
-        pass
-        cur_pp_dataset_size = _get_size_of_file_or_dir(dataset_path)
-        if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:
-            smallest_compatible_pp_data_size = cur_pp_dataset_size
-            smallest_compatible_pp_data_params = cur_pp_data_params
-            smallest_compatible_pp_data_params_hash = cur_pp_data_params_hash
-    if smallest_compatible_pp_data_params_hash is not None:
-        print(f'Found compatible preprocessed dataset with params hash `{smallest_compatible_pp_data_params_hash}` '
-              f'in `{pp_data_path}`.')
-    else:
-        print(f'Could not find any compatible preprocessed dataset in `{pp_data_path}`.')
-    return smallest_compatible_pp_data_params
-
-
 class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
     def __init__(
             self,
@@ -393,13 +334,21 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
             pp_data_path: str,
             storage_method: str = 'dbm',
             compression_method: str = 'none'):
-        compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_hash(
-            preprocessed_data_params=preprocessed_data_params, datafold=datafold, pp_data_path=pp_data_path)
+        compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
+            exact_preprocessed_data_params=preprocessed_data_params, datafold=datafold, pp_data_path=pp_data_path)
         if compatible_preprocessed_data_params is None:
             raise ValueError(f'Could not find any compatible preprocessed dataset in `{pp_data_path}`.')
+        compatible_preprocessed_data_params_hash = compatible_preprocessed_data_params.get_sha1_base64()
+        exact_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
+        if compatible_preprocessed_data_params_hash == exact_preprocessed_data_params_hash:
+            print(f'Found preprocessed dataset with exact params hash '
+                  f'`{exact_preprocessed_data_params_hash}` in `{pp_data_path}`.')
+        else:
+            print(f'Found compatible preprocessed dataset with params hash '
+                  f'`{compatible_preprocessed_data_params_hash}` in `{pp_data_path}`.')
         super(PredictLogVarsTaskDataset, self).__init__(
             pp_data_path_prefix=os.path.join(
-                pp_data_path, f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params.get_sha1_base64()}'),
+                pp_data_path, f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params_hash}'),
             storage_method=storage_method, compression_method=compression_method)
 
     def __getitem__(self, possibly_batched_index):

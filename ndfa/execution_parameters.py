@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-01-01"
+
 from dataclasses import dataclass
 from typing import Optional
 import argparse
@@ -59,6 +63,10 @@ class ModelExecutionParams:
     get_pp_data_params_hash: bool = conf_field(
         default=False,
         description="Get the hash of the required preprocessed data params matching the given model hyper params.")
+
+    find_compatible_pp_data: bool = conf_field(
+        default=False,
+        description="Get the hash of a compatible preprocessed data params matching the given model hyper params.")
 
     dbg_validate_batch_separation: bool = conf_field(
         default=False,

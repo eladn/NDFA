@@ -1,6 +1,6 @@
 __author__ = "Elad Nachmias"
 __email__ = "eladnah@gmail.com"
-__date__ = "2020-04-04"
+__date__ = "2020-01-01"
 
 import io
 import os
@@ -28,7 +28,8 @@ from ndfa.ndfa_model_hyper_parameters import NDFAModelTrainingHyperParams
 from ndfa.code_tasks.code_task_base import CodeTaskBase
 from ndfa.nn_utils.model_wrapper.dataset_properties import DataFold
 from ndfa.nn_utils.model_wrapper.train_loop import fit, evaluate, TrainProgressInfo
-from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError
+from ndfa.code_tasks.preprocess_code_task_dataset import PreprocessLimitExceedError, \
+    find_existing_compatible_preprocessed_data_params
 from ndfa.misc.configurations_utils import create_argparser_from_dataclass_conf_structure, \
     reinstantiate_omegaconf_container, create_conf_dotlist_from_parsed_args, HasDispatchableField
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
@@ -189,6 +190,14 @@ def main():
         preprocess_params=preprocess_params, dataset_props=exec_params.experiment_setting.dataset)
     if exec_params.get_pp_data_params_hash:
         print(preprocessed_data_params.get_sha1_base64())
+        exit(0)
+
+    if exec_params.find_compatible_pp_data:
+        compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
+            exact_preprocessed_data_params=preprocessed_data_params,
+            datafold=DataFold.Train, pp_data_path=exec_params.pp_data_dir_path)
+        print('' if compatible_preprocessed_data_params is None else
+              compatible_preprocessed_data_params.get_sha1_base64())
         exit(0)
 
     use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()
