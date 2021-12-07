@@ -1,7 +1,9 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-06-09"
+
 import os
 import io
-import dgl
-import torch
 import random
 import itertools
 import functools
@@ -10,11 +12,15 @@ from pprint import pprint
 from warnings import warn
 import multiprocessing as mp
 from typing_extensions import Protocol
-from torch_geometric.data import Data as TGData
 from collections import defaultdict, namedtuple, Counter
-from sklearn.feature_extraction.text import HashingVectorizer
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
     Union, Sequence, TypeVar, NamedTuple, Tuple, Generic
+
+import torch
+import dgl
+from omegaconf import OmegaConf
+from torch_geometric.data import Data as TGData
+from sklearn.feature_extraction.text import HashingVectorizer
 
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
@@ -1598,6 +1604,12 @@ def preprocess_code_task_dataset(
         nr_preprocessed_examples = chunks_examples_writer.total_nr_examples
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
+
+        pp_data_params_yaml_filepath = os.path.join(pp_data_path, f'{pp_data_filename}_params.yaml')
+        with open(pp_data_params_yaml_filepath, 'w') as pp_data_params_yaml_file:
+            pp_data_params_yaml = OmegaConf.to_yaml(OmegaConf.structured(preprocessed_data_params))
+            pp_data_params_yaml_file.write(pp_data_params_yaml)
+
         print(f'Finished pre-processing data-fold: `{datafold.name}` with {nr_preprocessed_examples:,} examples.')
 
         # Print limitations exceedings statistics (to understand why most of the filtered-out items fell)

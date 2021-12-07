@@ -1,7 +1,10 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-04-04"
+
 from dataclasses import dataclass
 import omegaconf
 from enum import Enum
-from typing import Optional
 
 from ndfa.misc.configurations_utils import conf_field
 
@@ -15,7 +18,7 @@ class DataFold(Enum):
     Test = 'Test'
 
 
-@dataclass
+@dataclass(eq=True)
 class DatasetProperties:
     name: str = conf_field(
         default=omegaconf.MISSING)
