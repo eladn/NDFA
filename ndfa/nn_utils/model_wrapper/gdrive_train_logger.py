@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-23"
+
 import os
 import json
 import time
@@ -28,16 +32,21 @@ class GDriveTrainLogger:
             f'expr={experiment_settings_hash}__' \
             f'{datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")}'
         self.to_worker_msgs_queue = mp.Queue()
+        self.from_worker_msgs_queue = mp.Queue()
         self.background_process = mp.Process(
             target=_gdrive_background_worker,
-            args=(self.gdrive_base_folder_id, self.train_folder_name, self.to_worker_msgs_queue,))
+            args=(self.gdrive_base_folder_id, self.train_folder_name,
+                  self.to_worker_msgs_queue, self.from_worker_msgs_queue))
         self.background_process.start()
+        self.train_folder_gdrive_id = self.from_worker_msgs_queue.get()
+        assert isinstance(self.train_folder_gdrive_id, str)
 
     def close(self):
         self.to_worker_msgs_queue.put(Action(action_kind=Action.ActionKind.Close), block=True)
         self.background_process.join()
         self.background_process.close()
         self.to_worker_msgs_queue.close()
+        self.from_worker_msgs_queue.close()
 
     def run_subprocess_and_upload_stdout_as_text_file(
             self, subprocess_args: List[str], filename: str, ignore_fault: bool = False):
@@ -69,11 +78,13 @@ class Action:
 
 
 def _gdrive_background_worker(
-        gdrive_base_folder_id: int, train_folder_name: str, msgs_queue: mp.Queue):
+        gdrive_base_folder_id: int, train_folder_name: str,
+        commands_msgs_queue: mp.Queue, status_msgs_queue: mp.Queue):
     gdrive_logger = GDriveTrainLoggerBackgroundWorker(
         gdrive_base_folder_id=gdrive_base_folder_id, train_folder_name=train_folder_name)
+    status_msgs_queue.put_nowait(str(gdrive_logger.train_folder_id))
     while True:
-        pending_msg = msgs_queue.get(block=True)
+        pending_msg = commands_msgs_queue.get(block=True)
         assert isinstance(pending_msg, Action)
         if pending_msg.action_kind == Action.ActionKind.Close:
             return
