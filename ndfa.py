@@ -399,6 +399,7 @@ def main():
             from ndfa.nn_utils.model_wrapper.notify_train_callback import NotifyCallback
             train_callbacks.append(NotifyCallback())
 
+        wandb_run_id = None
         if exec_params.use_wandb:
             import wandb
             if os.path.isfile('credentials/wandb_token.txt'):
@@ -419,6 +420,7 @@ def main():
                     'model_hps_hash': model_hps_hash_base64,
                     'preprocessed_data_params_hash': preprocessed_data_params.get_sha1_base64()}),
                 config=experiment_setting_dotlist)
+            assert wandb.run is not None
             wandb.save(_create_named_tmpfile_from_text(
                 text=experiment_setting_yaml, filename='experiment_settings.yaml'))
             wandb.save(_create_named_tmpfile_from_text(
@@ -434,6 +436,7 @@ def main():
                     text=preprocessed_data_params.get_sha1_base64(),
                     filename='preprocessed_data_params_hash.txt'))
             wandb.watch(model, log_freq=100)
+            wandb_run_id = wandb.run.id
             from ndfa.nn_utils.model_wrapper.wandb_callback import WAndBCallback
             train_callbacks.append(WAndBCallback())
 
@@ -472,6 +475,14 @@ def main():
                 subprocess_args=['printenv'], filename='environment.txt', ignore_fault=True)
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
                 subprocess_args=['nvidia-smi'], filename='nvidia-smi.txt', ignore_fault=True)
+            if wandb_run_id is not None:
+                gdrive_logger.upload_string_as_text_file(
+                    f'{wandb_run_id}',
+                    filename='wandb_run_id.txt')
+                wandb.save(_create_named_tmpfile_from_text(
+                    text=gdrive_logger.train_folder_name, filename='gdrive_folder_name.txt'))
+                wandb.save(_create_named_tmpfile_from_text(
+                    text=gdrive_logger.train_folder_gdrive_id, filename='gdrive_folder_id.txt'))
             train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
 
         perform_gradient_accumulation_every_steps = \
