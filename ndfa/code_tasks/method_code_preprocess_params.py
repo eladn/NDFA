@@ -59,8 +59,7 @@ class ASTPreprocessParams:
             tree=True)
 
     def is_containing(self, other: 'ASTPreprocessParams') -> bool:
-        return ((self.paths and other.paths and self.paths.is_containing(other.paths)) or
-                (self.paths and not other.paths)) and \
+        return ((self.paths and other.paths and self.paths.is_containing(other.paths)) or not other.paths) and \
                (self.tree or not other.tree)
 
 
@@ -95,8 +94,7 @@ class ControlFlowPathsPreprocessParams:
     def is_containing(self, other: 'ControlFlowPathsPreprocessParams') -> bool:
         return (self.traversal_edges or not other.traversal_edges) and \
                (self.full_paths or not other.full_paths) and \
-               ((self.ngrams and other.ngrams and self.ngrams.is_containing(other.ngrams)) or
-                (self.ngrams and not other.ngrams)) and \
+               ((self.ngrams and other.ngrams and self.ngrams.is_containing(other.ngrams)) or not other.ngrams) and \
                (self.cfg_nodes_random_permutation or not other.cfg_nodes_random_permutation)
 
 
@@ -119,13 +117,13 @@ class HierarchicMethodEncoderPreprocessParams:
 
     def is_containing(self, other: 'HierarchicMethodEncoderPreprocessParams') -> bool:
         return ((self.micro_ast and other.micro_ast and self.micro_ast.is_containing(other.micro_ast)) or
-                (self.micro_ast and not other.micro_ast)) and \
+                not other.micro_ast) and \
                (self.micro_tokens_seq or not other.micro_tokens_seq) and \
                ((self.macro_ast and other.macro_ast and self.macro_ast.is_containing(other.macro_ast)) or
-                (self.macro_ast and not other.macro_ast)) and \
+                not other.macro_ast) and \
                ((self.control_flow_paths and other.control_flow_paths and
                  self.control_flow_paths.is_containing(other.control_flow_paths)) or
-                (self.control_flow_paths and not other.control_flow_paths)) and \
+                not other.control_flow_paths) and \
                (self.control_flow_graph or not other.control_flow_graph)
 
 
@@ -149,11 +147,10 @@ class MethodCodePreprocessParams:
     def is_containing(self, other: 'MethodCodePreprocessParams') -> bool:
         return ((self.whole_method_ast and other.whole_method_ast and
                  self.whole_method_ast.is_containing(other.whole_method_ast)) or
-                (self.whole_method_ast and not other.whole_method_ast)) and \
+                not other.whole_method_ast) and \
                (self.whole_method_tokens_seq or not other.whole_method_tokens_seq) and \
-               ((self.hierarchic and other.hierarchic and
-                 self.hierarchic.is_containing(other.hierarchic)) or
-                (self.hierarchic and not other.hierarchic))
+               ((self.hierarchic and other.hierarchic and self.hierarchic.is_containing(other.hierarchic)) or
+                not other.hierarchic)
 
 
 @dataclasses.dataclass
