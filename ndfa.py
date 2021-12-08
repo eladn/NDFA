@@ -421,7 +421,7 @@ def main():
             train_callbacks.append(NotifyCallback())
 
         wandb_run = None
-        if exec_params.use_wandb:
+        if exec_params.use_wandb_logger:
             import wandb
             if os.path.isfile('credentials/wandb_token.txt'):
                 with open('credentials/wandb_token.txt', mode='r') as wandb_token_file:

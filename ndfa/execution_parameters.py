@@ -185,7 +185,7 @@ class ModelExecutionParams:
         default=False,
         arg_names=['--use-notify'])
 
-    use_wandb: bool = conf_field(
+    use_wandb_logger: bool = conf_field(
         default=False)
 
     dataloader_num_workers: Optional[int] = conf_field(
