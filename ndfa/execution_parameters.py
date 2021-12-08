@@ -66,7 +66,12 @@ class ModelExecutionParams:
 
     find_compatible_pp_data: bool = conf_field(
         default=False,
-        description="Get the hash of a compatible preprocessed data params matching the given model hyper params.")
+        description="Get the hash(/es) of compatible preprocessed data params matching the given model hyper params. "
+                    "If `--pp_data_params_yaml` is given - iterate them and print hashes of all compatibles; "
+                    "otherwise, print the smallest compatible out of all preprocessed datasets available.")
+
+    pp_data_params_yaml: Optional[str] = conf_field(
+        default=None)
 
     dbg_validate_batch_separation: bool = conf_field(
         default=False,

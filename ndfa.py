@@ -11,6 +11,7 @@ import itertools
 import functools
 import dataclasses
 import multiprocessing
+from pathlib import Path
 from warnings import warn
 from typing import Optional, Tuple, Dict, Any, Iterable
 
@@ -193,11 +194,22 @@ def main():
         exit(0)
 
     if exec_params.find_compatible_pp_data:
-        compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
-            exact_preprocessed_data_params=preprocessed_data_params,
-            datafold=DataFold.Train, pp_data_path=exec_params.pp_data_dir_path)
-        print('' if compatible_preprocessed_data_params is None else
-              compatible_preprocessed_data_params.get_sha1_base64())
+        if exec_params.pp_data_params_yaml:
+            yaml_path = Path(exec_params.pp_data_params_yaml)
+            yaml_filepaths = list(yaml_path.glob('pp_data_params_*.yaml')) \
+                if yaml_path.is_dir() else [yaml_path] if yaml_path.is_file() else []
+            compatible_pp_data_hashes = [
+                yaml_filepath.name[len('pp_data_params_'):-len('.yaml')]
+                for yaml_filepath in yaml_filepaths
+                if NDFAModelPreprocessedDataParams.load_from_yaml(yaml_filepath).is_containing(
+                    preprocessed_data_params)]
+            print('\n'.join(compatible_pp_data_hashes))
+        else:
+            compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
+                exact_preprocessed_data_params=preprocessed_data_params,
+                datafold=DataFold.Train, pp_data_path=exec_params.pp_data_dir_path)
+            print('' if compatible_preprocessed_data_params is None else
+                  compatible_preprocessed_data_params.get_sha1_base64())
         exit(0)
 
     use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()

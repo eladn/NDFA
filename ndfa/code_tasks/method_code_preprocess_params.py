@@ -5,8 +5,11 @@ __date__ = "2021-10-14"
 import dataclasses
 from typing import Optional
 
+from omegaconf import OmegaConf
+
 from ndfa.misc.configurations_utils import DeterministicallyHashable
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
+from ndfa.misc.configurations_utils import reinstantiate_omegaconf_container
 
 
 __all__ = [
@@ -171,3 +174,17 @@ class NDFAModelPreprocessParams(DeterministicallyHashable):
 class NDFAModelPreprocessedDataParams(DeterministicallyHashable):
     preprocess_params: NDFAModelPreprocessParams
     dataset_props: DatasetProperties
+
+    @classmethod
+    def load_from_yaml(cls, yaml_filepath) -> 'NDFAModelPreprocessedDataParams':
+        with open(yaml_filepath, 'r') as yaml_file:
+            instance = OmegaConf.structured(NDFAModelPreprocessedDataParams)
+            instance = OmegaConf.merge(instance, OmegaConf.load(yaml_file))
+        return reinstantiate_omegaconf_container(instance, NDFAModelPreprocessedDataParams)
+
+    def to_yaml(self, output_yaml_file):
+        output_yaml_file.write(OmegaConf.to_yaml(OmegaConf.structured(self)))
+
+    def is_containing(self, other: 'NDFAModelPreprocessedDataParams') -> bool:
+        return self.dataset_props == other.dataset_props and \
+               self.preprocess_params.is_containing(other.preprocess_params)

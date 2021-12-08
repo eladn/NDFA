@@ -19,7 +19,6 @@ from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
 
 import torch
 import dgl
-from omegaconf import OmegaConf
 from torch_geometric.data import Data as TGData
 from sklearn.feature_extraction.text import HashingVectorizer
 
@@ -44,7 +43,6 @@ from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessPar
 from ndfa.misc.online_mean_variance_accumulator import OnlineMeanVarianceAccumulators
 from ndfa.code_tasks.create_preprocess_params_from_model_hps import create_preprocess_params_from_model_hps
 from ndfa.nn_utils.model_wrapper.dataset_properties import DatasetProperties
-from ndfa.misc.configurations_utils import reinstantiate_omegaconf_container
 
 
 __all__ = [
@@ -1610,8 +1608,7 @@ def preprocess_code_task_dataset(
         pp_data_params_yaml_filepath = os.path.join(
             pp_data_path, f'pp_data_params_{preprocessed_data_params.get_sha1_base64()}.yaml')
         with open(pp_data_params_yaml_filepath, 'w') as pp_data_params_yaml_file:
-            pp_data_params_yaml = OmegaConf.to_yaml(OmegaConf.structured(preprocessed_data_params))
-            pp_data_params_yaml_file.write(pp_data_params_yaml)
+            preprocessed_data_params.to_yaml(pp_data_params_yaml_file)
 
         print(f'Finished pre-processing data-fold: `{datafold.name}` with {nr_preprocessed_examples:,} examples.')
 
@@ -1663,13 +1660,8 @@ def find_existing_compatible_preprocessed_data_params(
         cur_pp_data_params_filepath = os.path.join(pp_data_path, cur_pp_data_params_filename)
         if not os.path.isfile(cur_pp_data_params_filepath):
             continue
-        with open(cur_pp_data_params_filepath, 'r') as params_yaml_file:
-            cur_pp_data_params = OmegaConf.structured(NDFAModelPreprocessedDataParams)
-            cur_pp_data_params = OmegaConf.merge(cur_pp_data_params, OmegaConf.load(params_yaml_file))
-        cur_pp_data_params = reinstantiate_omegaconf_container(cur_pp_data_params, NDFAModelPreprocessedDataParams)
-        if cur_pp_data_params.dataset_props != exact_preprocessed_data_params.dataset_props:
-            continue
-        if not cur_pp_data_params.preprocess_params.is_containing(exact_preprocessed_data_params.preprocess_params):
+        cur_pp_data_params = NDFAModelPreprocessedDataParams.load_from_yaml(cur_pp_data_params_filepath)
+        if not cur_pp_data_params.is_containing(exact_preprocessed_data_params):
             continue
         cur_pp_dataset_size = _get_size_of_file_or_dir(dataset_path)
         if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:
