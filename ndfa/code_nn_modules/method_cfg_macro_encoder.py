@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 import torch
 import torch.nn as nn
 from typing import Optional
@@ -110,7 +114,6 @@ class MethodCFGMacroEncoder(nn.Module):
                 warn('The un-flattening of the combined paths is not checked!')
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.NoMacro:
             pass  # We actually do not need to do anything in this case.
-            raise NotImplementedError  # what we want to do in this case?
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
             pass  # We actually do not need to do anything in this case.
             raise NotImplementedError  # what we want to do in this case?

@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 import torch
 import torch.nn as nn
 from typing import Optional
@@ -84,8 +88,6 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(self.params.nr_layers)])
 
-        # TODO: maybe the case of `self.params.global_context_encoder.encoder_type == SetOfCFGNodes`
-        #  should also be considered as shouldn't be mixed.
         self.should_mix_code_expression_with_global_context = not (
             self.params.global_context_encoder.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGPaths and
             self.params.global_context_encoder.paths_encoder.output_type ==
@@ -157,8 +159,11 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                 encoded_combined_code_expressions=micro_encoded_code_expressions.combined_expressions)
 
             # Note: For cases like CFG-Paths without node occurrences folding, where the encodings of the CFG nodes are
-            #       NOT being updated with their global context, we should avoid here from the further steps of mixing
-            #       the code expressions with the CFG nodes embedding and so on.
+            #         NOT being updated with their global context, we should avoid here from the further steps of
+            #         mixing the code expressions with the CFG nodes embedding and so on.
+            #       The case of `NoMacro` is considered as should mix, as the CFG embeddings contain the CFG node kind
+            #         (apart from the combined local top-level expression encoding). Thus, it contains information that
+            #         is not available otherwise.
             if self.should_mix_code_expression_with_global_context:
                 micro_encoded_code_expressions = self.code_expression_global_context_mixer[layer_idx](
                     encoded_code_expressions=micro_encoded_code_expressions,
