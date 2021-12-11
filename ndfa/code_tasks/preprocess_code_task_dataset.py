@@ -1104,9 +1104,10 @@ def preprocess_sub_asts(
             ast_leaves_sequence_shuffler=None,
             siblings_sequences_node_indices=None,
             siblings_w_parent_sequences_node_indices=None,
-            dgl_tree=None)
+            dgl_tree=None,
+            pyg_graph=None)
     dgl_ast: Optional[dgl.DGLGraph] = None
-    if preprocess_params.tree:
+    if preprocess_params.dgl_tree:
         dgl_ast_edges = torch.LongTensor(
             [[ast_node_idx, child_node_idx]
              for sub_ast_nodes in nodes_indices_per_sub_ast
@@ -1187,7 +1188,8 @@ def preprocess_sub_asts(
                     for sub_ast_paths in ast_paths_per_sub_ast
                     for parent_ast_node_idx, siblings_sequence in sub_ast_paths.siblings_sequences.items()],
             ),  # tgt_indexing_group='ast_nodes'),
-            dgl_tree=dgl_ast)
+            dgl_tree=dgl_ast,
+            pyg_graph=None)  # TODO
         assert sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices is None or \
                len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
         assert sub_ast_input_tensors.ast_leaf_to_root_paths_node_indices is None or \
@@ -1207,7 +1209,8 @@ def preprocess_sub_asts(
             ast_leaves_sequence_shuffler=None,
             siblings_sequences_node_indices=None,
             siblings_w_parent_sequences_node_indices=None,
-            dgl_tree=dgl_ast)
+            dgl_tree=dgl_ast,
+            pyg_graph=None)  # TODO
     return sub_ast_input_tensors
 
 

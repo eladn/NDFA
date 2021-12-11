@@ -60,17 +60,20 @@ class ASTPathsPreprocessParams:
 @dataclasses.dataclass
 class ASTPreprocessParams:
     paths: Optional[ASTPathsPreprocessParams] = None
-    tree: bool = False
+    dgl_tree: bool = False
+    pyg_graph: bool = False
 
     @classmethod
     def full(cls):
         return ASTPreprocessParams(
             paths=ASTPathsPreprocessParams.full(),
-            tree=True)
+            dgl_tree=True,
+            pyg_graph=True)
 
     def is_containing(self, other: 'ASTPreprocessParams') -> bool:
         return ((self.paths and other.paths and self.paths.is_containing(other.paths)) or not other.paths) and \
-               (self.tree or not other.tree)
+               (self.dgl_tree or not other.dgl_tree) and \
+               (self.pyg_graph or not other.pyg_graph)
 
 
 @dataclasses.dataclass

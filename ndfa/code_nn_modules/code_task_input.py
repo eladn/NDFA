@@ -249,6 +249,7 @@ class SubASTInputTensors(TensorsDataClass):
     siblings_w_parent_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
     dgl_tree: Optional[dgl.DGLGraph] = dataclasses_field_wo_defaults()  # To avoid IDE errors
+    pyg_graph: Optional[TGData] = dataclasses_field_wo_defaults()  # To avoid IDE errors
 
     def get_ast_paths_node_indices(self, path_type: str) -> BatchedFlattenedIndicesFlattenedSeq:
         if path_type == 'leaf_to_leaf':
