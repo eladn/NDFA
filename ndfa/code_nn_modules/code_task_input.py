@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-06-08"
+
 import torch
 import dgl
 import dataclasses
@@ -224,6 +228,8 @@ class SubASTInputTensors(TensorsDataClass):
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
             sequences_per_example_sampling=_get_ast_leaf_to_leaf_paths_dataloading_sampling_params)
+    ast_leaf_to_leaf_paths_shuffler: Optional[BatchFlattenedSeqShuffler] = \
+        batch_flattened_seq_shuffler_field(initial_seed_salt='ast_leaf_to_leaf_paths_shuffler')
     ast_leaf_to_root_paths_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(
             tgt_indexing_group='ast_nodes', sequences_sampling_initial_seed_salt='astpth',
@@ -232,8 +238,12 @@ class SubASTInputTensors(TensorsDataClass):
         batch_flattened_seq_field(
             sequences_sampling_initial_seed_salt='astpth',
             sequences_per_example_sampling=_get_ast_leaf_to_root_paths_dataloading_sampling_params)
+    ast_leaf_to_root_paths_shuffler: Optional[BatchFlattenedSeqShuffler] = \
+        batch_flattened_seq_shuffler_field(initial_seed_salt='ast_leaf_to_root_paths_shuffler')
     ast_leaves_sequence_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
+    ast_leaves_sequence_shuffler: Optional[BatchFlattenedSeqShuffler] = \
+        batch_flattened_seq_shuffler_field(initial_seed_salt='ast_leaves_sequence_shuffler')
     siblings_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
         batched_flattened_indices_flattened_seq_field(tgt_indexing_group='ast_nodes')
     siblings_w_parent_sequences_node_indices: Optional[BatchedFlattenedIndicesFlattenedSeq] = \
@@ -277,6 +287,16 @@ class SubASTInputTensors(TensorsDataClass):
             return self.ast_leaf_to_leaf_paths_vertical_direction
         elif path_type in {'leaf_to_root', 'leaves_sequence', 'siblings_sequences', 'siblings_w_parent_sequences'}:
             return None
+        else:
+            raise ValueError(f'Unsupported path type `{path_type}`.')
+
+    def get_ast_paths_shuffler(self, path_type: str) -> BatchFlattenedSeqShuffler:
+        if path_type == 'leaf_to_leaf':
+            return self.ast_leaf_to_leaf_paths_shuffler
+        elif path_type == 'leaf_to_root':
+            return self.ast_leaf_to_root_paths_shuffler
+        elif path_type == 'leaves_sequence':
+            return self.ast_leaves_sequence_shuffler
         else:
             raise ValueError(f'Unsupported path type `{path_type}`.')
 

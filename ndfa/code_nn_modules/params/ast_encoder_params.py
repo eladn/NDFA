@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-03-17"
+
 from enum import Enum
 from dataclasses import dataclass
 from typing import Tuple, Optional
@@ -23,8 +27,8 @@ class ASTEncoderParams(HasDispatchableField):
     def set_dispatch_fields(cls):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
-                cls.EncoderType.PathsFolded: ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges'],  # TODO: remove 'paths_combiner_params'?
-                cls.EncoderType.SetOfPaths: ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges'],
+                cls.EncoderType.PathsFolded: ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges', 'shuffle_ast_paths'],  # TODO: remove 'paths_combiner_params'?
+                cls.EncoderType.SetOfPaths: ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges', 'shuffle_ast_paths'],
                 cls.EncoderType.Tree: []}))
     encoder_type: EncoderType = conf_field(
         default=EncoderType.PathsFolded,
@@ -50,6 +54,9 @@ class ASTEncoderParams(HasDispatchableField):
         default=('leaf_to_leaf', 'leaf_to_root'),
         elements_choices=['leaf_to_leaf', 'leaf_to_root', 'siblings_sequences',
                           'siblings_w_parent_sequences', 'leaves_sequence'])
+
+    shuffle_ast_paths: Optional[bool] = conf_field(
+        default=False)
 
     state_updater_for_nodes_occurrences_from_previous_layer: StateUpdaterParams = conf_field(
         default_factory=StateUpdaterParams)

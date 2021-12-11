@@ -23,8 +23,14 @@ def create_preprocess_params_from_ast_encoder_params(ast_encoder_params: ASTEnco
     ast_paths_params = ASTPathsPreprocessParams(
         traversal=ast_encoder_params.paths_add_traversal_edges,
         leaf_to_leaf='leaf_to_leaf' in ast_encoder_params.ast_paths_types,
+        leaf_to_leaf_shuffler=
+        'leaf_to_leaf' in ast_encoder_params.ast_paths_types and ast_encoder_params.shuffle_ast_paths,
         leaf_to_root='leaf_to_root' in ast_encoder_params.ast_paths_types,
+        leaf_to_root_shuffler=
+        'leaf_to_root' in ast_encoder_params.ast_paths_types and ast_encoder_params.shuffle_ast_paths,
         leaves_sequence='leaves_sequence' in ast_encoder_params.ast_paths_types,
+        leaves_sequence_shuffler=
+        'leaves_sequence' in ast_encoder_params.ast_paths_types and ast_encoder_params.shuffle_ast_paths,
         siblings_sequences='siblings_sequences' in ast_encoder_params.ast_paths_types,
         siblings_w_parent_sequences='siblings_w_parent_sequences' in ast_encoder_params.ast_paths_types)
     return ASTPreprocessParams(paths=ast_paths_params)

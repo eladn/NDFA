@@ -1096,9 +1096,12 @@ def preprocess_sub_asts(
             ast_leaf_to_leaf_paths_node_indices=None,
             ast_leaf_to_leaf_paths_child_place=None,
             ast_leaf_to_leaf_paths_vertical_direction=None,
+            ast_leaf_to_leaf_paths_shuffler=None,
             ast_leaf_to_root_paths_node_indices=None,
             ast_leaf_to_root_paths_child_place=None,
+            ast_leaf_to_root_paths_shuffler=None,
             ast_leaves_sequence_node_indices=None,
+            ast_leaves_sequence_shuffler=None,
             siblings_sequences_node_indices=None,
             siblings_w_parent_sequences_node_indices=None,
             dgl_tree=None)
@@ -1137,6 +1140,12 @@ def preprocess_sub_asts(
                         for path_node in path])
                     for sub_ast_paths in ast_paths_per_sub_ast
                     for path in sub_ast_paths.leaf_to_leaf_paths.values()]),
+            ast_leaf_to_leaf_paths_shuffler=None if not preprocess_params.paths.leaf_to_leaf or
+                                                    not preprocess_params.paths.leaf_to_leaf_shuffler else
+                BatchFlattenedSeqShuffler(lengths=tuple(
+                    len(path)
+                    for sub_ast_paths in ast_paths_per_sub_ast
+                    for path in sub_ast_paths.leaf_to_leaf_paths.values())),
             ast_leaf_to_root_paths_node_indices=None if not preprocess_params.paths.leaf_to_root else BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[torch.LongTensor([path_node.ast_node_idx for path_node in path])
                            for sub_ast_paths in ast_paths_per_sub_ast
@@ -1151,11 +1160,21 @@ def preprocess_sub_asts(
                         for path_node in path])
                     for sub_ast_paths in ast_paths_per_sub_ast
                     for path in sub_ast_paths.leaf_to_root_paths.values()]),
+            ast_leaf_to_root_paths_shuffler=None if not preprocess_params.paths.leaf_to_root or
+                                                    not preprocess_params.paths.leaf_to_root_shuffler else
+                BatchFlattenedSeqShuffler(lengths=tuple(
+                    len(path)
+                    for sub_ast_paths in ast_paths_per_sub_ast
+                    for path in sub_ast_paths.leaf_to_root_paths.values())),
             ast_leaves_sequence_node_indices=None if not preprocess_params.paths.leaves_sequence else BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[
                     torch.LongTensor(sub_ast_paths.leaves_sequence)
                     for sub_ast_paths in ast_paths_per_sub_ast],
             ),  # tgt_indexing_group='ast_nodes'),
+            ast_leaves_sequence_shuffler=None if not preprocess_params.paths.leaves_sequence or
+                                                 not preprocess_params.paths.leaves_sequence_shuffler else
+                BatchFlattenedSeqShuffler(
+                    lengths=tuple(len(sub_ast_paths.leaves_sequence) for sub_ast_paths in ast_paths_per_sub_ast)),
             siblings_sequences_node_indices=None if not preprocess_params.paths.siblings_sequences else BatchedFlattenedIndicesFlattenedSeq(
                 sequences=[
                     torch.LongTensor(siblings_sequence)
@@ -1180,9 +1199,12 @@ def preprocess_sub_asts(
             ast_leaf_to_leaf_paths_node_indices=None,
             ast_leaf_to_leaf_paths_child_place=None,
             ast_leaf_to_leaf_paths_vertical_direction=None,
+            ast_leaf_to_leaf_paths_shuffler=None,
             ast_leaf_to_root_paths_node_indices=None,
             ast_leaf_to_root_paths_child_place=None,
+            ast_leaf_to_root_paths_shuffler=None,
             ast_leaves_sequence_node_indices=None,
+            ast_leaves_sequence_shuffler=None,
             siblings_sequences_node_indices=None,
             siblings_w_parent_sequences_node_indices=None,
             dgl_tree=dgl_ast)

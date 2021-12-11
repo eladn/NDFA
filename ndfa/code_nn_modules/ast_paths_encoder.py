@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-11-23"
+
 import torch
 import torch.nn as nn
 from typing import Optional, Dict
@@ -96,6 +100,9 @@ class ASTPathsEncoder(nn.Module):
             ast_paths_type: str,
             ast_paths_last_states: Optional[ASTPathsEncodingsTensors] = None) -> ASTPathsEncodingsTensors:
         ast_paths_node_indices = sub_ast_input.get_ast_paths_node_indices(ast_paths_type)
+        paths_shuffler = \
+            sub_ast_input.get_ast_paths_shuffler(ast_paths_type) if self.encoder_params.shuffle_ast_paths else None
+        assert not self.encoder_params.shuffle_ast_paths or not self.encoder_params.paths_add_traversal_edges
 
         ast_paths_traversal_orientation_encodings_input = None
         if self.is_first_encoder_layer:
@@ -125,6 +132,8 @@ class ASTPathsEncoder(nn.Module):
                 state_update=ast_nodes_encodings[ast_paths_node_indices.sequences])
             ast_paths_traversal_orientation_encodings_input = ast_paths_last_states.traversal_orientation
 
+        assert paths_shuffler is None or ast_paths_traversal_orientation_encodings_input is None
+
         if ast_paths_traversal_orientation_encodings_input is None:
             ast_paths_embeddings_input = ast_paths_node_occurrences_encodings_inputs
             ast_paths_lengths = ast_paths_node_indices.sequences_lengths
@@ -139,9 +148,14 @@ class ASTPathsEncoder(nn.Module):
                 ~ast_paths_with_edges_mask.unsqueeze(-1), 0)
             ast_paths_lengths = ast_paths_node_indices.sequences_lengths * 2
 
+        if paths_shuffler is not None:
+            ast_paths_embeddings_input = paths_shuffler.shuffle(ast_paths_embeddings_input)
         ast_paths_encoded = self.path_sequence_encoder[ast_paths_type](
             sequence_input=ast_paths_embeddings_input,
             lengths=ast_paths_lengths, batch_first=True).sequence
+        if paths_shuffler is not None:
+            ast_paths_encoded = paths_shuffler.unshuffle(ast_paths_encoded)
+
         if self.norm:
             ast_paths_encoded = self.norm(ast_paths_encoded)
 

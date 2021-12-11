@@ -24,8 +24,11 @@ __all__ = [
 class ASTPathsPreprocessParams:
     traversal: bool = False
     leaf_to_leaf: bool = False
+    leaf_to_leaf_shuffler: bool = False
     leaf_to_root: bool = False
+    leaf_to_root_shuffler: bool = False
     leaves_sequence: bool = False
+    leaves_sequence_shuffler: bool = False
     siblings_sequences: bool = False
     siblings_w_parent_sequences: bool = False
 
@@ -34,16 +37,22 @@ class ASTPathsPreprocessParams:
         return ASTPathsPreprocessParams(
             traversal=True,
             leaf_to_leaf=True,
+            leaf_to_leaf_shuffler=True,
             leaf_to_root=True,
+            leaf_to_root_shuffler=True,
             leaves_sequence=True,
+            leaves_sequence_shuffler=True,
             siblings_sequences=True,
             siblings_w_parent_sequences=True)
 
     def is_containing(self, other: 'ASTPathsPreprocessParams') -> bool:
         return (self.traversal or not other.traversal) and \
                (self.leaf_to_leaf or not other.leaf_to_leaf) and \
+               (self.leaf_to_leaf_shuffler or not other.leaf_to_leaf_shuffler) and \
                (self.leaf_to_root or not other.leaf_to_root) and \
+               (self.leaf_to_root_shuffler or not other.leaf_to_root_shuffler) and \
                (self.leaves_sequence or not other.leaves_sequence) and \
+               (self.leaves_sequence_shuffler or not other.leaves_sequence_shuffler) and \
                (self.siblings_sequences or not other.siblings_sequences) and \
                (self.siblings_w_parent_sequences or not other.siblings_w_parent_sequences)
 
