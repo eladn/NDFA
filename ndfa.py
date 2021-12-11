@@ -205,11 +205,10 @@ def main():
                     preprocessed_data_params)]
             print('\n'.join(compatible_pp_data_hashes))
         else:
-            compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
+            compatible_preprocessed_data_params_hash, _ = find_existing_compatible_preprocessed_data_params(
                 exact_preprocessed_data_params=preprocessed_data_params,
                 datafold=DataFold.Train, pp_data_path=exec_params.pp_data_dir_path)
-            print('' if compatible_preprocessed_data_params is None else
-                  compatible_preprocessed_data_params.get_sha1_base64())
+            print('' if compatible_preprocessed_data_params_hash is None else compatible_preprocessed_data_params_hash)
         exit(0)
 
     use_gpu = exec_params.use_gpu_if_available and torch.cuda.is_available()

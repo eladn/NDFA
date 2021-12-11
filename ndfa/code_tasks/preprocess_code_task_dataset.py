@@ -1635,9 +1635,11 @@ def _get_size_of_file_or_dir(path: Union[str, Path]) -> int:
 def find_existing_compatible_preprocessed_data_params(
         exact_preprocessed_data_params: NDFAModelPreprocessedDataParams,
         datafold: DataFold,
-        pp_data_path: str) -> Optional[NDFAModelPreprocessedDataParams]:
+        pp_data_path: str) -> Optional[Tuple[str, NDFAModelPreprocessedDataParams]]:
     """
-    Looks for the most compatible preprocessed dataset, and returns its params hash.
+    Looks for the most compatible preprocessed dataset, and returns its params hash and params instance.
+    Note that the returned hash might be different from the newly computed hash of the returned instance, as some
+      params sub-class might have changed, and new fields with default values might have been added.
     """
     existing_pp_data_params_hashes = {
         path.name[len(f'pp_{datafold.value.lower()}_'):].split('.')[0]
@@ -1649,12 +1651,12 @@ def find_existing_compatible_preprocessed_data_params(
     if orig_preprocessed_data_params_hash in existing_pp_data_params_hashes:
         # print(f'Found preprocessed dataset with exact params hash `{orig_preprocessed_data_params_hash}` '
         #       f'in `{pp_data_path}`.')
-        return exact_preprocessed_data_params
+        return orig_preprocessed_data_params_hash, exact_preprocessed_data_params
     # print(f'Could not find preprocessed dataset of exact params hash `{orig_preprocessed_data_params_hash}` '
     #       f'in `{pp_data_path}`. Looking for other compatible preprocessed dataset that contains it..')
     smallest_compatible_pp_data_size = None
     smallest_compatible_pp_data_params = None
-    # smallest_compatible_pp_data_params_hash = None
+    smallest_compatible_pp_data_params_hash = None
     for cur_pp_data_params_hash, dataset_path in existing_pp_datasets_paths.items():
         cur_pp_data_params_filename = f'pp_data_params_{cur_pp_data_params_hash}.yaml'
         cur_pp_data_params_filepath = os.path.join(pp_data_path, cur_pp_data_params_filename)
@@ -1667,10 +1669,10 @@ def find_existing_compatible_preprocessed_data_params(
         if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:
             smallest_compatible_pp_data_size = cur_pp_dataset_size
             smallest_compatible_pp_data_params = cur_pp_data_params
-            # smallest_compatible_pp_data_params_hash = cur_pp_data_params_hash
+            smallest_compatible_pp_data_params_hash = cur_pp_data_params_hash
     # if smallest_compatible_pp_data_params_hash is not None:
     #     print(f'Found compatible preprocessed dataset with params hash `{smallest_compatible_pp_data_params_hash}` '
     #           f'in `{pp_data_path}`.')
     # else:
     #     print(f'Could not find any compatible preprocessed dataset in `{pp_data_path}`.')
-    return smallest_compatible_pp_data_params
+    return smallest_compatible_pp_data_params_hash, smallest_compatible_pp_data_params

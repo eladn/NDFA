@@ -334,13 +334,13 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
             pp_data_path: str,
             storage_method: str = 'dbm',
             compression_method: str = 'none'):
-        compatible_preprocessed_data_params = find_existing_compatible_preprocessed_data_params(
-            exact_preprocessed_data_params=preprocessed_data_params, datafold=datafold, pp_data_path=pp_data_path)
-        if compatible_preprocessed_data_params is None:
+        compatible_preprocessed_data_params_hash, _ = find_existing_compatible_preprocessed_data_params(
+            exact_preprocessed_data_params=preprocessed_data_params,
+            datafold=datafold, pp_data_path=pp_data_path)
+        if compatible_preprocessed_data_params_hash is None:
             raise ValueError(
                 f'Could not find any compatible preprocessed dataset in `{pp_data_path}`. '
                 f'Exact preprocessed data params hash is: `{preprocessed_data_params.get_sha1_base64()}`.')
-        compatible_preprocessed_data_params_hash = compatible_preprocessed_data_params.get_sha1_base64()
         exact_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
         if compatible_preprocessed_data_params_hash == exact_preprocessed_data_params_hash:
             print(f'Found preprocessed dataset with exact params hash '
