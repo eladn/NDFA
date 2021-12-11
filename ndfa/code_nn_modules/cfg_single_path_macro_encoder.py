@@ -62,6 +62,8 @@ class SingleFlatCFGNodesSeqMacroEncoder(nn.Module):
             nr_cfg_nodes = cfg_nodes_encodings.size(0)
             # TODO: fix to use `BatchedFlattenedIndicesPseudoRandomPermutation.inverse_permute()`!
             cfg_nodes_permuted_indices = pdg_input.cfg_nodes_random_permutation.permutations
+            # Note: The padded path suffix shouldn't be counted as node occurrences. Hence, we first map them
+            #       to a new dummy non-exists node (id=nr_cfg_nodes), and then we remove this node.
             cfg_nodes_permuted_indices = cfg_nodes_permuted_indices.masked_fill(
                 ~pdg_input.cfg_nodes_control_kind.unflattener_mask, nr_cfg_nodes)
             new_cfg_nodes_encodings = \
