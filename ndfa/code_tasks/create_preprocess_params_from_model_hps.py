@@ -1,8 +1,13 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-20"
+
 from ndfa.ndfa_model_hyper_parameters import NDFAModelHyperParams
 from ndfa.code_tasks.method_code_preprocess_params import NDFAModelPreprocessParams, MethodCodePreprocessParams, \
     ASTPreprocessParams, HierarchicMethodEncoderPreprocessParams, ControlFlowPathsPreprocessParams, \
-    ASTPathsPreprocessParams, NGramsPreprocessParams
+    ASTPathsPreprocessParams, NGramsPreprocessParams, ControlFlowFlatSeqPreprocessParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
+from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import SingleFlatCFGNodesSeqMacroEncoderParams
 from ndfa.nn_utils.modules.params.graph_paths_encoder_params import EdgeTypeInsertionMode
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
 
@@ -30,8 +35,9 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
     if model_hps.method_code_encoder.method_encoder_type == model_hps.method_code_encoder.EncoderType.Hierarchic:
         hierarchic_params = model_hps.method_code_encoder.hierarchic_micro_macro_encoder
         control_flow_paths_params = None
+        control_flow_single_flat_seq_params = None
         if hierarchic_params.global_context_encoder.encoder_type == \
-            hierarchic_params.global_context_encoder.EncoderType.CFGPaths:
+                hierarchic_params.global_context_encoder.EncoderType.CFGPaths:
             cfg_paths_encoder = hierarchic_params.global_context_encoder.paths_encoder
             control_flow_paths_params = ControlFlowPathsPreprocessParams(
                 traversal_edges=cfg_paths_encoder.edge_types_insertion_mode in
@@ -40,6 +46,12 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
                 ngrams=NGramsPreprocessParams(
                     min_n=cfg_paths_encoder.ngrams.min_n, max_n=cfg_paths_encoder.ngrams.max_n)
                 if cfg_paths_encoder.is_ngrams else None)
+        elif hierarchic_params.global_context_encoder.encoder_type == \
+                hierarchic_params.global_context_encoder.EncoderType.SingleFlatCFGNodesSeq:
+            if hierarchic_params.global_context_encoder.single_flat_seq_encoder.cfg_nodes_order == \
+                    SingleFlatCFGNodesSeqMacroEncoderParams.CFGNodesOrder.Random:
+                control_flow_single_flat_seq_params = ControlFlowFlatSeqPreprocessParams(
+                    cfg_nodes_random_permutation=True)
         pp_params.method_code.hierarchic = HierarchicMethodEncoderPreprocessParams(
             micro_ast=
             None if not hierarchic_params.local_expression_encoder.encoder_type ==
@@ -54,6 +66,7 @@ def create_preprocess_params_from_model_hps(model_hps: NDFAModelHyperParams) -> 
             create_preprocess_params_from_ast_encoder_params(
                 hierarchic_params.global_context_encoder.macro_trimmed_ast_encoder),
             control_flow_paths=control_flow_paths_params,
+            control_flow_single_flat_seq=control_flow_single_flat_seq_params,
             control_flow_graph=
             hierarchic_params.global_context_encoder.encoder_type ==
             hierarchic_params.global_context_encoder.EncoderType.CFGGNN)

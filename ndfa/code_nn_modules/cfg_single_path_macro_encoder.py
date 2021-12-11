@@ -1,25 +1,29 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 import torch
 import torch.nn as nn
 from typing import Optional
 
-from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import CFGSinglePathMacroEncoderParams
+from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import SingleFlatCFGNodesSeqMacroEncoderParams
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.nn_utils.modules.norm_wrapper import NormWrapper
 
 
-__all__ = ['CFGSinglePathMacroEncoder']
+__all__ = ['SingleFlatCFGNodesSeqMacroEncoder']
 
 
-class CFGSinglePathMacroEncoder(nn.Module):
+class SingleFlatCFGNodesSeqMacroEncoder(nn.Module):
     def __init__(
             self,
             cfg_node_dim: int,
-            params: CFGSinglePathMacroEncoderParams,
+            params: SingleFlatCFGNodesSeqMacroEncoderParams,
             norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(CFGSinglePathMacroEncoder, self).__init__()
+        super(SingleFlatCFGNodesSeqMacroEncoder, self).__init__()
         self.cfg_node_dim = cfg_node_dim
         self.params = params
         self.sequence_encoder_layer = SequenceEncoder(
@@ -33,14 +37,16 @@ class CFGSinglePathMacroEncoder(nn.Module):
             self,
             pdg_input: PDGInputTensors,
             cfg_nodes_encodings: torch.Tensor):
-        if not self.params.is_random_order:
+        if self.params.cfg_nodes_order == SingleFlatCFGNodesSeqMacroEncoderParams.CFGNodesOrder.CodeTextualAppearance:
             unflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.unflatten(cfg_nodes_encodings)
-        else:
+        elif self.params.cfg_nodes_order == SingleFlatCFGNodesSeqMacroEncoderParams.CFGNodesOrder.Random:
             # TODO: fix to use `BatchedFlattenedIndicesPseudoRandomPermutation.permute()`!
             unflattened_nodes_encodings = cfg_nodes_encodings[pdg_input.cfg_nodes_random_permutation.permutations]
             unflattened_nodes_encodings = unflattened_nodes_encodings.masked_fill(
                 ~pdg_input.cfg_nodes_control_kind.unflattener_mask.unsqueeze(-1)
                     .expand(unflattened_nodes_encodings.shape), 0)
+        else:
+            raise ValueError(f'Unsupported value `{self.params.cfg_nodes_order}` for `cfg_nodes_order`.')
         assert unflattened_nodes_encodings.ndim == 3
         assert unflattened_nodes_encodings.shape == \
                (pdg_input.nr_examples, pdg_input.cfg_nodes_control_kind.max_nr_items, cfg_nodes_encodings.size(1))
@@ -50,9 +56,9 @@ class CFGSinglePathMacroEncoder(nn.Module):
             batch_first=True).sequence
         assert path_encodings.shape == unflattened_nodes_encodings.shape
 
-        if not self.params.is_random_order:
+        if self.params.cfg_nodes_order == SingleFlatCFGNodesSeqMacroEncoderParams.CFGNodesOrder.CodeTextualAppearance:
             reflattened_nodes_encodings = pdg_input.cfg_nodes_control_kind.flatten(path_encodings)
-        else:
+        elif self.params.cfg_nodes_order == SingleFlatCFGNodesSeqMacroEncoderParams.CFGNodesOrder.Random:
             nr_cfg_nodes = cfg_nodes_encodings.size(0)
             # TODO: fix to use `BatchedFlattenedIndicesPseudoRandomPermutation.inverse_permute()`!
             cfg_nodes_permuted_indices = pdg_input.cfg_nodes_random_permutation.permutations
@@ -67,6 +73,8 @@ class CFGSinglePathMacroEncoder(nn.Module):
                 index=cfg_nodes_permuted_indices_flattened.unsqueeze(-1).expand(path_encodings_flattened.shape),
                 src=path_encodings_flattened)
             reflattened_nodes_encodings = new_cfg_nodes_encodings[:-1]
+        else:
+            assert False
 
         if self.norm:
             reflattened_nodes_encodings = self.norm(reflattened_nodes_encodings)

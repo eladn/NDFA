@@ -1398,8 +1398,8 @@ def preprocess_pdg(
         cfg_nodes_expressions_ast=cfg_nodes_expressions_sub_ast_input_tensors,
         cfg_macro_trimmed_ast=cfg_macro_trimmed_ast,
         cfg_nodes_random_permutation=
-        None if not preprocess_params.control_flow_paths or
-                not preprocess_params.control_flow_paths.cfg_nodes_random_permutation else
+        None if not preprocess_params.control_flow_single_flat_seq or
+                not preprocess_params.control_flow_single_flat_seq.cfg_nodes_random_permutation else
         BatchedFlattenedIndicesPseudoRandomPermutation(
             # tgt_indexing_group='cfg_nodes',
             # batch_dependent_seed=True, example_dependent_seed=True, initial_seed_salt='cfgn'),

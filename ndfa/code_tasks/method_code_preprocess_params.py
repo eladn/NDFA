@@ -14,8 +14,9 @@ from ndfa.misc.configurations_utils import reinstantiate_omegaconf_container
 
 __all__ = [
     'ASTPathsPreprocessParams', 'ASTPreprocessParams', 'NGramsPreprocessParams',
-    'ControlFlowPathsPreprocessParams', 'HierarchicMethodEncoderPreprocessParams',
-    'MethodCodePreprocessParams', 'NDFAModelPreprocessParams', 'NDFAModelPreprocessedDataParams'
+    'ControlFlowPathsPreprocessParams', 'ControlFlowFlatSeqPreprocessParams',
+    'HierarchicMethodEncoderPreprocessParams', 'MethodCodePreprocessParams',
+    'NDFAModelPreprocessParams', 'NDFAModelPreprocessedDataParams'
 ]
 
 
@@ -99,11 +100,25 @@ class ControlFlowPathsPreprocessParams:
 
 
 @dataclasses.dataclass
+class ControlFlowFlatSeqPreprocessParams:
+    cfg_nodes_random_permutation: bool = False
+
+    @classmethod
+    def full(cls):
+        return ControlFlowFlatSeqPreprocessParams(
+            cfg_nodes_random_permutation=True)
+
+    def is_containing(self, other: 'ControlFlowFlatSeqPreprocessParams') -> bool:
+        return self.cfg_nodes_random_permutation or not other.cfg_nodes_random_permutation
+
+
+@dataclasses.dataclass
 class HierarchicMethodEncoderPreprocessParams:
     micro_ast: Optional[ASTPreprocessParams] = None
     micro_tokens_seq: bool = False
     macro_ast: Optional[ASTPreprocessParams] = None
     control_flow_paths: Optional[ControlFlowPathsPreprocessParams] = None
+    control_flow_single_flat_seq: Optional[ControlFlowFlatSeqPreprocessParams] = None
     control_flow_graph: bool = False
 
     @classmethod

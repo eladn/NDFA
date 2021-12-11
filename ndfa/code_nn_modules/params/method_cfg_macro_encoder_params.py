@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 from enum import Enum
 from typing import Optional
 from dataclasses import dataclass
@@ -7,7 +11,7 @@ from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.cfg_gnn_encoder_params import CFGGNNEncoderParams
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
-from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import CFGSinglePathMacroEncoderParams
+from ndfa.code_nn_modules.params.cfg_single_path_macro_encoder_params import SingleFlatCFGNodesSeqMacroEncoderParams
 
 
 __all__ = ['MethodCFGMacroEncoderParams']
@@ -17,8 +21,7 @@ __all__ = ['MethodCFGMacroEncoderParams']
 class MethodCFGMacroEncoderParams(HasDispatchableField):
     class EncoderType(Enum):
         NoMacro = 'NoMacro'
-        SetOfCFGNodes = 'SetOfCFGNodes'
-        FlatCFGNodesAppearanceSeq = 'FlatCFGNodesAppearanceSeq'
+        SingleFlatCFGNodesSeq = 'SingleFlatCFGNodesSeq'
         CFGGNN = 'CFGGNN'
         UpperASTPaths = 'UpperASTPaths'
         CFGPaths = 'CFGPaths'
@@ -32,9 +35,8 @@ class MethodCFGMacroEncoderParams(HasDispatchableField):
         cls.register_dispatch_field(DispatchField(
             'encoder_type', {
                 cls.EncoderType.CFGPaths: ['paths_encoder'],
-                cls.EncoderType.FlatCFGNodesAppearanceSeq: ['single_path_encoder'],
+                cls.EncoderType.SingleFlatCFGNodesSeq: ['single_flat_seq_encoder'],
                 cls.EncoderType.CFGGNN: ['gnn_encoder'],
-                cls.EncoderType.SetOfCFGNodes: [],
                 cls.EncoderType.NoMacro: [],
                 cls.EncoderType.UpperASTPaths: ['macro_trimmed_ast_encoder']
             }))
@@ -61,8 +63,8 @@ class MethodCFGMacroEncoderParams(HasDispatchableField):
         default_factory=CFGPathsMacroEncoderParams,
         arg_prefix='paths')
 
-    single_path_encoder: Optional[CFGSinglePathMacroEncoderParams] = conf_field(
-        default_factory=CFGSinglePathMacroEncoderParams,
+    single_flat_seq_encoder: Optional[SingleFlatCFGNodesSeqMacroEncoderParams] = conf_field(
+        default_factory=SingleFlatCFGNodesSeqMacroEncoderParams,
         arg_prefix='single_path')
 
     macro_trimmed_ast_encoder: Optional[ASTEncoderParams] = conf_field(

@@ -15,8 +15,9 @@ from ndfa.code_nn_modules.cfg_paths_macro_encoder import CFGPathsMacroEncoder, C
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
 from ndfa.code_nn_modules.cfg_gnn_encoder import CFGGNNEncoder
-from ndfa.code_nn_modules.cfg_single_path_macro_encoder import CFGSinglePathMacroEncoder
+from ndfa.code_nn_modules.cfg_single_path_macro_encoder import SingleFlatCFGNodesSeqMacroEncoder
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
+from ndfa.nn_utils.modules.state_updater import StateUpdater
 
 
 __all__ = ['MethodCFGMacroEncoder', 'MethodCFGMacroEncodings']
@@ -57,18 +58,13 @@ class MethodCFGMacroEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.NoMacro:
             pass  # We actually do not need to do anything in this case.
-        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
-            pass  # We actually do not need to do anything in this case.
-            raise NotImplementedError  # what we want to do in this case?
-        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.FlatCFGNodesAppearanceSeq:
-            # TODO: use `self.params.post_macro_cfg_nodes_encodings_state_updater`
-            self.cfg_single_path_encoder = CFGSinglePathMacroEncoder(
+        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SingleFlatCFGNodesSeq:
+            self.single_flat_cfg_nodes_seq_encoder = SingleFlatCFGNodesSeqMacroEncoder(
                 cfg_node_dim=self.params.cfg_node_encoding_dim,
-                params=self.params.single_path_encoder,
+                params=self.params.single_flat_seq_encoder,
                 norm_params=norm_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGGNN:
-            # TODO: use `self.params.post_macro_cfg_nodes_encodings_state_updater`
             self.cfg_gnn_encoder = CFGGNNEncoder(
                 cfg_node_encoding_dim=self.params.cfg_node_encoding_dim,
                 encoder_params=self.params.gnn_encoder,
@@ -86,6 +82,15 @@ class MethodCFGMacroEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported encoder type `{self.params.encoder_type}`.')
+
+        encoding_types_without_inner_state_updater = {
+            MethodCFGMacroEncoderParams.EncoderType.SingleFlatCFGNodesSeq,
+            MethodCFGMacroEncoderParams.EncoderType.CFGGNN}
+        if self.params.encoder_type in encoding_types_without_inner_state_updater:
+            self.cfg_nodes_encodings_state_updater = StateUpdater(
+                state_dim=self.params.cfg_node_encoding_dim,
+                params=self.params.post_macro_cfg_nodes_encodings_state_updater,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
 
     def forward(
             self,
@@ -114,19 +119,20 @@ class MethodCFGMacroEncoder(nn.Module):
                 warn('The un-flattening of the combined paths is not checked!')
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.NoMacro:
             pass  # We actually do not need to do anything in this case.
-        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SetOfCFGNodes:
-            pass  # We actually do not need to do anything in this case.
-            raise NotImplementedError  # what we want to do in this case?
-        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.FlatCFGNodesAppearanceSeq:
+        elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.SingleFlatCFGNodesSeq:
             # note: norm inside `CFGSinglePathMacroEncoder`
-            encoded_cfg_nodes = self.cfg_single_path_encoder(
+            new_encoded_cfg_nodes = self.single_flat_cfg_nodes_seq_encoder(
                 pdg_input=code_task_input.pdg,
                 cfg_nodes_encodings=encoded_cfg_nodes)
+            encoded_cfg_nodes = self.cfg_nodes_encodings_state_updater(
+                previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGGNN:
             # note: norm inside `CFGGNNEncoder`
-            encoded_cfg_nodes = self.cfg_gnn_encoder(
+            new_encoded_cfg_nodes = self.cfg_gnn_encoder(
                 encoded_cfg_nodes=encoded_cfg_nodes,
                 cfg_control_flow_graph=code_task_input.pdg.cfg_control_flow_graph)
+            encoded_cfg_nodes = self.cfg_nodes_encodings_state_updater(
+                previous_state=encoded_cfg_nodes, state_update=new_encoded_cfg_nodes)
         elif self.params.encoder_type == MethodCFGMacroEncoderParams.EncoderType.UpperASTPaths:
             # note: norm inside `TrimmedASTMacroEncoder`
             encoded_cfg_nodes = self.trimmed_ast_macro_encoder(
