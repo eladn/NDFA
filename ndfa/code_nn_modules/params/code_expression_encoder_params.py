@@ -1,6 +1,10 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-03-17"
+
 from enum import Enum
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional, Tuple
 
 from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_nn_modules.params.cfg_sub_ast_expression_combiner_params import CFGSubASTExpressionCombinerParams
@@ -24,6 +28,12 @@ class CodeExpressionEncoderParams(HasDispatchableField):
             'encoder_type', {
                 cls.EncoderType.AST: ['ast_encoder', 'cfg_sub_ast_expression_combiner_params'],
                 cls.EncoderType.FlatTokensSeq: ['tokens_seq_encoder', 'tokenized_expression_combiner']}))
+
+    def get_descriptive_tags(self) -> Tuple[str, ...]:
+        if self.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
+            return self.ast_encoder.get_descriptive_tags()
+        elif self.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
+            return ('FlatTokensSeq',)
 
     encoder_type: EncoderType = conf_field(
         default=EncoderType.AST,

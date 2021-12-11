@@ -1,6 +1,10 @@
-from dataclasses import dataclass
-from typing import Optional
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 from enum import Enum
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 from ndfa.code_nn_modules.params.method_cfg_macro_encoder_params import MethodCFGMacroEncoderParams
 from ndfa.code_nn_modules.params.code_expression_encoder_params import CodeExpressionEncoderParams
@@ -52,6 +56,14 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default=1)
     nr_layers: int = conf_field(
         default=1)
+
+    def get_descriptive_tags(self) -> Tuple[str, ...]:
+        return ('hierarchic', f'nr_micro_after={self.nr_micro_encoding_layers_after_macro}',
+                f'nr_micro_before={self.nr_micro_encoding_layers_before_macro}',
+                f'nr_micro={self.nr_micro_encoding_layers_after_macro + self.nr_micro_encoding_layers_before_macro}') +\
+               tuple(f'micro={tag}' for tag in self.local_expression_encoder.get_descriptive_tags()) +\
+               (f'nr_hierarchic_layers={self.nr_layers}',) if self.nr_layers > 1 else () +\
+               self.global_context_encoder.get_descriptive_tags()
 
     @property
     def local_expression_encoder_after_macro(self) -> Optional[CodeExpressionEncoderParams]:

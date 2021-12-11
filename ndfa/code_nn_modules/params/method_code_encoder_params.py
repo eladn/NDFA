@@ -1,6 +1,10 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-03-17"
+
 from enum import Enum
-from typing import Optional
 from dataclasses import dataclass
+from typing import Optional, Tuple
 
 from ndfa.code_nn_modules.params.method_cfg_encoder_params import MethodCFGEncoderParams
 from ndfa.code_nn_modules.params.hierarchic_micro_macro_method_code_encoder_params import \
@@ -53,6 +57,12 @@ class MethodCodeEncoderParams(HasDispatchableField):
         description="Representation type of the whole method code as linear sequence "
                     "(part of the architecture of the code-encoder).",
         arg_prefix='whole_method_expression_encoder')
+
+    def get_descriptive_tags(self) -> Tuple[str, ...]:
+        if self.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
+            return ('whole-method',) + self.hierarchic_micro_macro_encoder.get_descriptive_tags()
+        elif self.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
+            return ('whole-method',) + self.whole_method_expression_encoder.get_descriptive_tags()
 
     # preprocess params
     # TODO: put the preprocess params in a dedicated nested confclass.
