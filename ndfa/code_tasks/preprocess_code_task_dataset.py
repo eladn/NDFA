@@ -1088,6 +1088,22 @@ def preprocess_allamanis_graph(
     raise NotImplementedError  # TODO: implement!
 
 
+def build_pyg_graph_from_sub_asts(
+        method_ast: SerMethodAST,
+        nodes_indices_per_sub_ast: Sequence[Set[int]]) \
+        -> TGData:
+    # TODO: Do we want to add revered edges (down->up)? Currently we only have up->down edges.
+    return TGData(
+        edge_index=torch.LongTensor(
+            [[ast_node_idx, method_ast.nodes[ast_node_idx].children_idxs]
+             for sub_ast_node_indices in nodes_indices_per_sub_ast
+             for ast_node_idx in sub_ast_node_indices
+             for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
+             if child_node_idx in sub_ast_node_indices]).transpose(0, 1).contiguous(),
+        edge_attr=None,
+        num_nodes=len(method_ast.nodes))
+
+
 def preprocess_sub_asts(
         preprocess_params: Optional[ASTPreprocessParams],
         code_task_vocabs: CodeTaskVocabs,
@@ -1120,6 +1136,10 @@ def preprocess_sub_asts(
              if child_node_idx in sub_ast_nodes]).t().chunk(chunks=2, dim=0)
         dgl_ast_edges = tuple(u.view(-1) for u in dgl_ast_edges)
         dgl_ast = dgl.graph(data=dgl_ast_edges, num_nodes=len(method_ast.nodes))
+    pyg_graph: Optional[TGData] = None
+    if preprocess_params.pyg_graph:
+        pyg_graph = build_pyg_graph_from_sub_asts(
+            method_ast=method_ast, nodes_indices_per_sub_ast=nodes_indices_per_sub_ast)
 
     if ast_paths_per_sub_ast and preprocess_params.paths:
         sub_ast_input_tensors = SubASTInputTensors(
@@ -1193,7 +1213,7 @@ def preprocess_sub_asts(
                     for parent_ast_node_idx, siblings_sequence in sub_ast_paths.siblings_sequences.items()],
             ),  # tgt_indexing_group='ast_nodes'),
             dgl_tree=dgl_ast,
-            pyg_graph=None)  # TODO
+            pyg_graph=pyg_graph)
         assert sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices is None or \
                len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
         assert sub_ast_input_tensors.ast_leaf_to_root_paths_node_indices is None or \
@@ -1214,7 +1234,7 @@ def preprocess_sub_asts(
             siblings_sequences_node_indices=None,
             siblings_w_parent_sequences_node_indices=None,
             dgl_tree=dgl_ast,
-            pyg_graph=None)  # TODO
+            pyg_graph=pyg_graph)
     return sub_ast_input_tensors
 
 
