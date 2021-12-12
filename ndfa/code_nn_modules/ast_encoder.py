@@ -82,8 +82,9 @@ class ASTEncoder(nn.Module):
             #     ast_batch=sub_ast_input.dgl_tree)
             return ast_nodes_encodings_up  # + ast_nodes_encodings_down
         elif self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.GNN:
-            return self.gnn_encoder(
+            new_ast_nodes_encodings = self.gnn_encoder(
                 nodes_encodings=previous_code_expression_encodings.ast_nodes,
                 graph=sub_ast_input.pyg_graph)
+            return CodeExpressionEncodingsTensors(ast_nodes=new_ast_nodes_encodings)
         else:
             assert False
