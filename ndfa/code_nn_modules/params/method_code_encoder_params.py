@@ -106,6 +106,16 @@ class MethodCodeEncoderParams(HasDispatchableField):
             max_nr_items=200,
             distribution_for_rate_to_sample_by=None,
             sample_in_eval=True))
+    upper_pruned_ast_leaf_to_leaf_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=600,
+            distribution_for_rate_to_sample_by=None,
+            sample_in_eval=True))
+    upper_pruned_leaf_to_root_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
+        default_factory=lambda: SamplingParams(
+            max_nr_items=200,
+            distribution_for_rate_to_sample_by=None,
+            sample_in_eval=True))
     sub_asts_leaf_to_leaf_paths_dataloading_sampling_params: Optional[SamplingParams] = conf_field(
         default_factory=lambda: SamplingParams(
             max_nr_items=500,

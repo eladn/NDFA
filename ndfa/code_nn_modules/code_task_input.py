@@ -24,7 +24,7 @@ __all__ = [
    'MethodCodeTokensSequenceInputTensors', 'CFGCodeExpressionTokensSequenceInputTensors',
    'SymbolsInputTensors', 'CFGPathsInputTensors', 'CFGPathsNGramsInputTensors',
    'PDGInputTensors', 'MethodASTInputTensors', 'SubASTInputTensors', 'IdentifiersInputTensors',
-   'PDGExpressionsSubASTInputTensors'
+   'PDGExpressionsSubASTInputTensors', 'PrunedUpperASTInputTensors'
 ]
 
 
@@ -132,7 +132,7 @@ class PDGInputTensors(TensorsDataClass):
     # cfg_nodes_expressions_ref_to_method_tokenized_expressions: Optional[BatchFlattenedTensor] = \
     #     batch_flattened_tensor_field(default=None)
     cfg_nodes_expressions_ast: Optional['PDGExpressionsSubASTInputTensors'] = None
-    cfg_macro_trimmed_ast: Optional['SubASTInputTensors'] = None
+    cfg_macro_trimmed_ast: Optional['PrunedUpperASTInputTensors'] = None
 
     # cfg_edges: Optional[torch.LongTensor] = None
     # cfg_edges_lengths: Optional[torch.BoolTensor] = None
@@ -331,6 +331,17 @@ class SubASTInputTensors(TensorsDataClass):
                 paths_types=list(combined_ast_paths_encodings_by_type.keys())),
             unflattener_fn=self.get_ast_paths_unflattener(
                 paths_types=list(combined_ast_paths_encodings_by_type.keys())))
+
+
+@dataclasses.dataclass
+class PrunedUpperASTInputTensors(SubASTInputTensors):
+    @classmethod
+    def get_ast_leaf_to_root_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.upper_pruned_ast_leaf_to_root_paths_dataloading_sampling_params
+
+    @classmethod
+    def get_ast_leaf_to_leaf_paths_dataloading_sampling_params(cls, collate_data) -> Optional[SamplingParams]:
+        return collate_data.model_hps.method_code_encoder.upper_pruned_ast_leaf_to_leaf_paths_dataloading_sampling_params
 
 
 @dataclasses.dataclass

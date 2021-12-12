@@ -34,7 +34,7 @@ from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_to
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, SymbolsInputTensors, PDGInputTensors, \
     CFGPathsInputTensors, CFGPathsNGramsInputTensors, IdentifiersInputTensors, MethodCodeTokensSequenceInputTensors, \
     SubASTInputTensors, PDGExpressionsSubASTInputTensors, MethodASTInputTensors, \
-    CFGCodeExpressionTokensSequenceInputTensors
+    CFGCodeExpressionTokensSequenceInputTensors, PrunedUpperASTInputTensors
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor, BatchFlattenedSeq, \
     BatchedFlattenedIndicesFlattenedTensor, BatchedFlattenedIndicesFlattenedSeq, BatchFlattenedSeqShuffler, \
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, TensorsDataDict
@@ -873,6 +873,10 @@ def preprocess_cfg_macro_trimmed_ast(
         method_ast=method_ast,
         nodes_indices_per_sub_ast=[trimmed_ast_node_indices],
         ast_paths_per_sub_ast=[trimmed_ast_paths])
+    sub_ast_input_tensors = PrunedUpperASTInputTensors(
+        **{field.name: getattr(sub_ast_input_tensors, field.name)
+           for field in dataclasses.fields(sub_ast_input_tensors)
+           if field.init})
 
     assert sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices is None or \
            len(sub_ast_input_tensors.ast_leaf_to_leaf_paths_node_indices.sequences) > 0
