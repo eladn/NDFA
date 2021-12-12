@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-07-10"
+
 import torch
 import torch.nn as nn
 from typing import Tuple
@@ -81,7 +85,9 @@ class MethodCodeEncodingsFeeder(nn.Module):
                         torch.cat(all_encoder_outputs_mask, dim=1)
                     assert encoder_outputs.shape[:-1] == encoder_outputs_mask.shape
                 elif self.method_code_encoder_params.whole_method_expression_encoder.ast_encoder.encoder_type in \
-                        {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}:
+                        {ASTEncoderParams.EncoderType.Tree,
+                         ASTEncoderParams.EncoderType.PathsFolded,
+                         ASTEncoderParams.EncoderType.GNN}:
                     encoder_outputs = code_task_input.ast.ast_node_major_types.unflatten(
                         encoded_method_code.whole_method_ast_nodes_encoding)
                     encoder_outputs_mask = code_task_input.ast.ast_node_major_types.unflattener_mask

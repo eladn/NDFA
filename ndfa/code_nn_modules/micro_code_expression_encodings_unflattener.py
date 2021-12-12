@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-06"
+
 import torch
 
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
@@ -19,7 +23,9 @@ def micro_code_expression_encodings_as_unflattenable(
             code_expression_encodings.token_seqs)
     elif micro_encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
         if micro_encoder_params.ast_encoder.encoder_type in \
-                {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}:
+                {ASTEncoderParams.EncoderType.Tree,
+                 ASTEncoderParams.EncoderType.PathsFolded,
+                 ASTEncoderParams.EncoderType.GNN}:
             return code_task_input.ast.batch_flattened_ast_nodes_as_unflattenable(
                 code_expression_encodings.ast_nodes)
         elif micro_encoder_params.ast_encoder.encoder_type == ASTEncoderParams.EncoderType.SetOfPaths:

@@ -17,7 +17,9 @@ __all__ = ['create_preprocess_params_from_model_hps']
 
 def create_preprocess_params_from_ast_encoder_params(ast_encoder_params: ASTEncoderParams) -> ASTPreprocessParams:
     if ast_encoder_params.encoder_type == ast_encoder_params.EncoderType.Tree:
-        return ASTPreprocessParams(tree=True)
+        return ASTPreprocessParams(dgl_tree=True)
+    if ast_encoder_params.encoder_type == ast_encoder_params.EncoderType.GNN:
+        return ASTPreprocessParams(pyg_graph=True)
     assert ast_encoder_params.encoder_type in \
            {ast_encoder_params.EncoderType.SetOfPaths, ast_encoder_params.EncoderType.PathsFolded}
     ast_paths_params = ASTPathsPreprocessParams(

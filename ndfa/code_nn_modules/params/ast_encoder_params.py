@@ -10,6 +10,7 @@ from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoder
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 from ndfa.nn_utils.modules.params.scatter_combiner_params import ScatterCombinerParams
 from ndfa.nn_utils.modules.params.state_updater_params import StateUpdaterParams
+from ndfa.nn_utils.modules.params.gnn_encoder_params import GNNEncoderParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
 
 
@@ -22,6 +23,7 @@ class ASTEncoderParams(HasDispatchableField):
         PathsFolded = 'PathsFolded'
         SetOfPaths = 'SetOfPaths'
         Tree = 'Tree'
+        GNN = 'GNN'
 
     @classmethod
     def set_dispatch_fields(cls):
@@ -29,7 +31,8 @@ class ASTEncoderParams(HasDispatchableField):
             'encoder_type', {
                 cls.EncoderType.PathsFolded: ['paths_sequence_encoder_params', 'paths_combiner_params', 'nodes_folding_params', 'ast_paths_types', 'paths_add_traversal_edges', 'shuffle_ast_paths'],  # TODO: remove 'paths_combiner_params'?
                 cls.EncoderType.SetOfPaths: ['paths_sequence_encoder_params', 'paths_combiner_params', 'ast_paths_types', 'paths_add_traversal_edges', 'shuffle_ast_paths'],
-                cls.EncoderType.Tree: []}))
+                cls.EncoderType.Tree: [],
+                cls.EncoderType.GNN: ['gnn_encoder']}))
     encoder_type: EncoderType = conf_field(
         default=EncoderType.PathsFolded,
         description="Representation type of the AST (specific architecture of the AST code encoder).")
@@ -60,3 +63,6 @@ class ASTEncoderParams(HasDispatchableField):
 
     state_updater_for_nodes_occurrences_from_previous_layer: StateUpdaterParams = conf_field(
         default_factory=StateUpdaterParams)
+
+    gnn_encoder: Optional[GNNEncoderParams] = conf_field(
+        default_factory=GNNEncoderParams)

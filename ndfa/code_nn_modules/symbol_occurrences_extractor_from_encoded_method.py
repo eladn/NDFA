@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-07-09"
+
 import torch
 import torch.nn as nn
 from warnings import warn
@@ -112,7 +116,9 @@ class SymbolOccurrencesExtractorFromEncodedMethod(nn.Module):
                 encodings_of_symbols_occurrences, symbols_indices_of_symbols_occurrences = all_symbols_occurrences
             else:
                 assert self.code_expression_encoder_params.ast_encoder.encoder_type in \
-                       {ASTEncoderParams.EncoderType.Tree, ASTEncoderParams.EncoderType.PathsFolded}
+                       {ASTEncoderParams.EncoderType.Tree,
+                        ASTEncoderParams.EncoderType.PathsFolded,
+                        ASTEncoderParams.EncoderType.GNN}
                 assert code_expression_encodings.ast_nodes is not None
                 encoded_ast_nodes = code_expression_encodings.ast_nodes
                 ast_nodes_with_symbol_leaf_nodes_indices = method_ast_input.ast_nodes_with_symbol_leaf_nodes_indices.indices

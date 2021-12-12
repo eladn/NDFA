@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 import torch
 import torch.nn as nn
 import dataclasses
@@ -37,7 +41,9 @@ class CodeExpressionContextMixer(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             if self.encoder_params.ast_encoder.encoder_type in \
-                    {ASTEncoderParams.EncoderType.PathsFolded, ASTEncoderParams.EncoderType.Tree}:
+                    {ASTEncoderParams.EncoderType.PathsFolded,
+                     ASTEncoderParams.EncoderType.Tree,
+                     ASTEncoderParams.EncoderType.GNN}:
                 self.macro_context_adder_to_sub_ast_nodes = MacroContextAdderToSubASTNodes(
                     ast_node_encoding_dim=self.encoder_params.ast_encoder.ast_node_embedding_dim,
                     cfg_node_encoding_dim=cfg_node_encoding_dim,
@@ -75,7 +81,9 @@ class CodeExpressionContextMixer(nn.Module):
             return dataclasses.replace(encoded_code_expressions, token_seqs=new_token_seqs_encodings)
         elif self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.AST:
             if self.encoder_params.ast_encoder.encoder_type in \
-                    {ASTEncoderParams.EncoderType.PathsFolded, ASTEncoderParams.EncoderType.Tree}:
+                    {ASTEncoderParams.EncoderType.PathsFolded,
+                     ASTEncoderParams.EncoderType.Tree,
+                     ASTEncoderParams.EncoderType.GNN}:
                 new_ast_nodes_encodings = self.macro_context_adder_to_sub_ast_nodes(
                     previous_ast_nodes_encodings=encoded_code_expressions.ast_nodes,
                     new_cfg_nodes_encodings=encoded_cfg_nodes,

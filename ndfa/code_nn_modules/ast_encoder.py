@@ -1,6 +1,11 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-04-05"
+
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from typing import Optional
 
 from ndfa.code_nn_modules.ast_paths_encoder import ASTPathsEncoder
 from ndfa.code_nn_modules.ast_tree_lstm_encoder import ASTTreeLSTMEncoder
@@ -8,6 +13,7 @@ from ndfa.code_nn_modules.params.ast_encoder_params import ASTEncoderParams
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.code_task_input import SubASTInputTensors
 from ndfa.code_nn_modules.code_expression_encodings_tensors import CodeExpressionEncodingsTensors
+from ndfa.nn_utils.modules.gnn_encoder import GNNEncoder
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 
 
@@ -46,6 +52,12 @@ class ASTEncoder(nn.Module):
             # self.ast_treelstm_down = ASTTreeLSTMEncoder(
             #     ast_node_embedding_dim=self.encoder_params.ast_node_embedding_dim,
             #     direction='root_to_leaves', dropout_rate=dropout_rate)
+        elif self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.GNN:
+            self.gnn_encoder = GNNEncoder(
+                node_encoding_dim=self.encoder_params.ast_node_embedding_dim,
+                encoder_params=self.encoder_params.gnn_encoder,
+                norm_params=norm_params,
+                dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.encoder_params.encoder_type}`.')
 
@@ -69,5 +81,9 @@ class ASTEncoder(nn.Module):
             #     ast_nodes_embeddings=previous_code_expression_encodings.ast_nodes,
             #     ast_batch=sub_ast_input.dgl_tree)
             return ast_nodes_encodings_up  # + ast_nodes_encodings_down
+        elif self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.GNN:
+            return self.gnn_encoder(
+                nodes_encodings=previous_code_expression_encodings.ast_nodes,
+                graph=sub_ast_input.pyg_graph)
         else:
             assert False
