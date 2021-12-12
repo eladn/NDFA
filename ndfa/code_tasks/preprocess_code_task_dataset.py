@@ -1095,7 +1095,7 @@ def build_pyg_graph_from_sub_asts(
     # TODO: Do we want to add revered edges (down->up)? Currently we only have up->down edges.
     return TGData(
         edge_index=torch.LongTensor(
-            [[ast_node_idx, method_ast.nodes[ast_node_idx].children_idxs]
+            [[ast_node_idx, child_node_idx]
              for sub_ast_node_indices in nodes_indices_per_sub_ast
              for ast_node_idx in sub_ast_node_indices
              for child_node_idx in method_ast.nodes[ast_node_idx].children_idxs
