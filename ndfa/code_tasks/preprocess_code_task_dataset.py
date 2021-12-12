@@ -1688,7 +1688,7 @@ def find_existing_compatible_preprocessed_data_params(
         if not os.path.isfile(cur_pp_data_params_filepath):
             continue
         cur_pp_data_params = NDFAModelPreprocessedDataParams.load_from_yaml(cur_pp_data_params_filepath)
-        if not cur_pp_data_params.is_containing(exact_preprocessed_data_params):
+        if cur_pp_data_params is None or not cur_pp_data_params.is_containing(exact_preprocessed_data_params):
             continue
         cur_pp_dataset_size = _get_size_of_file_or_dir(dataset_path)
         if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:

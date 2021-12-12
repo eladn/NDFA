@@ -201,7 +201,8 @@ def main():
             compatible_pp_data_hashes = [
                 yaml_filepath.name[len('pp_data_params_'):-len('.yaml')]
                 for yaml_filepath in yaml_filepaths
-                if NDFAModelPreprocessedDataParams.load_from_yaml(yaml_filepath).is_containing(
+                if NDFAModelPreprocessedDataParams.load_from_yaml(yaml_filepath) is not None and
+                NDFAModelPreprocessedDataParams.load_from_yaml(yaml_filepath).is_containing(
                     preprocessed_data_params)]
             print('\n'.join(compatible_pp_data_hashes))
         else:

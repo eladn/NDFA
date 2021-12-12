@@ -200,11 +200,14 @@ class NDFAModelPreprocessedDataParams(DeterministicallyHashable):
     dataset_props: DatasetProperties
 
     @classmethod
-    def load_from_yaml(cls, yaml_filepath) -> 'NDFAModelPreprocessedDataParams':
-        with open(yaml_filepath, 'r') as yaml_file:
-            instance = OmegaConf.structured(NDFAModelPreprocessedDataParams)
-            instance = OmegaConf.merge(instance, OmegaConf.load(yaml_file))
-        return reinstantiate_omegaconf_container(instance, NDFAModelPreprocessedDataParams)
+    def load_from_yaml(cls, yaml_filepath) -> Optional['NDFAModelPreprocessedDataParams']:
+        try:
+            with open(yaml_filepath, 'r') as yaml_file:
+                instance = OmegaConf.structured(NDFAModelPreprocessedDataParams)
+                instance = OmegaConf.merge(instance, OmegaConf.load(yaml_file))
+            return reinstantiate_omegaconf_container(instance, NDFAModelPreprocessedDataParams)
+        except:
+            return None
 
     def to_yaml(self, output_yaml_file):
         output_yaml_file.write(OmegaConf.to_yaml(OmegaConf.structured(self)))
