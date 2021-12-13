@@ -1,7 +1,13 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-09-10"
+
+from typing import Optional
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from typing import Optional
 
 
 __all__ = ['RNNEncoder']
@@ -52,6 +58,19 @@ class RNNEncoder(nn.Module):
 
         if lengths is not None:
             rnn_outputs, _ = pad_packed_sequence(sequence=rnn_outputs)
+        assert rnn_outputs.shape[1:] == (batch_size, self.nr_rnn_directions * self.hidden_dim)
+        new_seq_len = rnn_outputs.size(0)
+        assert new_seq_len <= seq_len
+        if new_seq_len < seq_len:
+            # `new_seq_len` is max(lengths). In some cases, it can be < seq_len.
+            # We should pad the right end of the 1st dimension by x(seq_len - new_seq_len) new zero rows.
+            # Manner #1 to perform the padding (it works, but less elegant):
+            # padded_rnn_outputs = rnn_outputs.new_zeros(
+            #     size=(seq_len, batch_size, self.nr_rnn_directions * self.hidden_dim))
+            # padded_rnn_outputs[:new_seq_len, :, :] = rnn_outputs
+            # Manner #2 to perform the padding is via `F.pad()`:
+            padded_rnn_outputs = F.pad(rnn_outputs, (0, 0, 0, 0, 0, seq_len - new_seq_len))
+            rnn_outputs = padded_rnn_outputs
         assert rnn_outputs.size() == (seq_len, batch_size, self.nr_rnn_directions * self.hidden_dim)
         if self.nr_rnn_directions > 1:
             rnn_outputs = rnn_outputs \
