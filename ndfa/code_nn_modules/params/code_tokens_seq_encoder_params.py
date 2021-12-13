@@ -1,4 +1,9 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-04-05"
+
 from dataclasses import dataclass
+from typing import Optional, List
 
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
 from ndfa.misc.configurations_utils import conf_field
@@ -30,3 +35,6 @@ class CodeTokensSeqEncoderParams:
 
     shuffle_expressions: bool = conf_field(
         default=False)
+
+    ignore_token_kinds: Optional[List[str]] = conf_field(
+        default=None)

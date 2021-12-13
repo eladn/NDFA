@@ -1,6 +1,11 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-11-29"
+
+from typing import Optional
+
 import torch
 import torch.nn as nn
-from typing import Optional
 
 from .code_expression_tokens_sequence_encoder import CodeExpressionTokensSequenceEncoder
 from ndfa.code_nn_modules.ast_encoder import ASTEncoder
@@ -31,6 +36,7 @@ class CodeExpressionEncoder(nn.Module):
         if self.encoder_params.encoder_type == CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
             self.code_expression_linear_seq_encoder = CodeExpressionTokensSequenceEncoder(
                 encoder_params=self.encoder_params.tokens_seq_encoder,
+                tokens_kinds_vocab=code_task_vocabs.tokens_kinds,
                 norm_params=norm_params,
                 dropout_rate=dropout_rate,
                 activation_fn=activation_fn)
