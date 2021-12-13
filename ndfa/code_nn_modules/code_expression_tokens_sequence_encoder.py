@@ -118,7 +118,8 @@ class CodeExpressionTokensSequenceEncoder(nn.Module):
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionTokensSequenceEncoder, self).__init__()
         self.encoder_params = encoder_params
-        assert not (self.encoder_params.shuffle_expressions and self.encoder_params.ignore_token_kinds)
+        if self.encoder_params.shuffle_expressions and self.encoder_params.ignore_token_kinds:
+            raise ValueError('Cannot use both `shuffle_expressions` together with `ignore_token_kinds`.')
         self.sequence_encoder = SequenceEncoder(
             encoder_params=self.encoder_params.sequence_encoder,
             input_dim=self.encoder_params.token_encoding_dim,
