@@ -15,7 +15,8 @@ from .batched_flattened_indices_flattened import BatchedFlattenedIndicesFlattene
     batched_flattened_indices_flattened_seq_field
 from .batched_flattened_indices_pseudo_random_permutation import BatchedFlattenedIndicesPseudoRandomPermutation, \
     batch_flattened_indices_pseudo_random_permutation_field
-from .batch_flattened_seq_shuffler import BatchFlattenedSeqShuffler, batch_flattened_seq_shuffler_field
+from .batch_flattened_seq_shuffler import BatchFlattenedSeqShuffler, batch_flattened_seq_shuffler_field, \
+    FragmentSizeDistribution
 from .misc import CollateData
 from .tensor_with_collate_mask import TensorWithCollateMask
 from .tensors_data_dict import TensorsDataDict
@@ -34,7 +35,7 @@ __all__ = [
     'BatchedFlattenedIndicesFlattenedSequencesDataClass', 'BatchedFlattenedIndicesFlattenedSeq',
     'batched_flattened_indices_flattened_seq_field', 'batched_flattened_indices_flattened_tensor_field',
     'BatchedFlattenedIndicesPseudoRandomPermutation', 'batch_flattened_indices_pseudo_random_permutation_field',
-    'BatchFlattenedSeqShuffler', 'batch_flattened_seq_shuffler_field',
+    'BatchFlattenedSeqShuffler', 'batch_flattened_seq_shuffler_field', 'FragmentSizeDistribution',
     'CollateData',
     'TensorWithCollateMask',
     'TensorsDataDict', 'TensorsDataClass'

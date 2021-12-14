@@ -14,7 +14,7 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     BatchedFlattenedIndicesPseudoRandomPermutation, BatchFlattenedPseudoRandomSamplerFromRange, \
     batch_flattened_pseudo_random_sampler_from_range_field, BatchFlattenedSeqShuffler, \
     batch_flattened_seq_shuffler_field, TensorsDataDict, batch_flattened_tensor_field, batch_flattened_seq_field, \
-    batch_flattened_indices_pseudo_random_permutation_field
+    batch_flattened_indices_pseudo_random_permutation_field, FragmentSizeDistribution
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 from ndfa.nn_utils.modules.params.sampling_params import SamplingParams
 
@@ -30,6 +30,14 @@ __all__ = [
 
 @dataclasses.dataclass
 class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
+    @classmethod
+    def get_fragmented_shuffling_params(cls, collate_data) -> Optional[FragmentSizeDistribution]:
+        flat_tokens_seq_params = collate_data.model_hps.method_code_encoder.get_flat_tokens_seq_code_encoder_params()
+        if not flat_tokens_seq_params or not flat_tokens_seq_params.shuffle_expressions or \
+                not flat_tokens_seq_params.shuffling_options.fragmented_shuffling:
+            return None
+        return flat_tokens_seq_params.shuffling_options.fragmented_shuffling_distribution_params
+
     # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
     token_type: BatchFlattenedSeq = \
         batch_flattened_seq_field(self_indexing_group='code_expressions')
@@ -45,8 +53,9 @@ class CodeExpressionTokensSequenceInputTensors(TensorsDataClass):
     # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
     is_symbol_mask: BatchFlattenedSeq = batch_flattened_seq_field()
     # (nr_expressions_in_batch, batch_max_nr_tokens_in_expr)
-    sequence_shuffler: BatchFlattenedSeqShuffler = \
-        batch_flattened_seq_shuffler_field(initial_seed_salt='code_expressions_seq_shuffler')
+    sequence_shuffler: BatchFlattenedSeqShuffler = batch_flattened_seq_shuffler_field(
+        initial_seed_salt='code_expressions_seq_shuffler',
+        fragmented_shuffling_fragments_size_distribution=get_fragmented_shuffling_params)
     token_idx_to_ast_leaf_idx_mapping_key: Optional[BatchedFlattenedIndicesFlattenedTensor] = \
         batched_flattened_indices_flattened_tensor_field(default=None)
     token_idx_to_ast_leaf_idx_mapping_value: Optional[BatchedFlattenedIndicesFlattenedTensor] = \

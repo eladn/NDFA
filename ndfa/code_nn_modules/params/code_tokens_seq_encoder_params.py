@@ -5,15 +5,28 @@ __date__ = "2021-04-05"
 from dataclasses import dataclass
 from typing import Optional, List
 
+from ndfa.misc.tensors_data_class import FragmentSizeDistribution
 from ndfa.nn_utils.modules.params.sequence_encoder_params import SequenceEncoderParams
-from ndfa.misc.configurations_utils import conf_field
+from ndfa.misc.configurations_utils import conf_field, HasDispatchableField, DispatchField
 
 
 __all__ = ['CodeTokensSeqEncoderParams']
 
 
 @dataclass
-class CodeTokensSeqEncoderParams:
+class CodeTokensSeqEncoderParams(HasDispatchableField):
+    @dataclass
+    class ShufflingOptions(HasDispatchableField):
+        fragmented_shuffling: bool = conf_field(
+            default=False)
+        fragmented_shuffling_distribution_params: Optional[FragmentSizeDistribution] = conf_field(
+            default_factory=FragmentSizeDistribution)
+
+        @classmethod
+        def set_dispatch_fields(cls):
+            cls.register_dispatch_field(DispatchField(
+                'fragmented_shuffling', {True: ['fragmented_shuffling_distribution_params'], False: []}))
+
     token_type_embedding_dim: int = conf_field(
         default=64,
         description="Embedding size for code token type (operator, identifier, etc).")
@@ -35,6 +48,14 @@ class CodeTokensSeqEncoderParams:
 
     shuffle_expressions: bool = conf_field(
         default=False)
+
+    shuffling_options: Optional[ShufflingOptions] = conf_field(
+        default_factory=ShufflingOptions)
+
+    @classmethod
+    def set_dispatch_fields(cls):
+        cls.register_dispatch_field(DispatchField(
+            'shuffle_expressions', {True: ['shuffling_options'], False: []}))
 
     ignore_token_kinds: Optional[List[str]] = conf_field(
         default=None)

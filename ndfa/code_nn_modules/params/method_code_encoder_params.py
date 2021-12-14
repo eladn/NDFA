@@ -14,6 +14,7 @@ from ndfa.code_nn_modules.params.identifier_encoder_params import IdentifierEnco
 from ndfa.code_nn_modules.params.symbols_encoder_params import SymbolsEncoderParams
 from ndfa.misc.configurations_utils import HasDispatchableField, DispatchField, conf_field
 from ndfa.nn_utils.modules.params.sampling_params import SamplingParams, DistributionInfoParams
+from ndfa.code_nn_modules.params.code_tokens_seq_encoder_params import CodeTokensSeqEncoderParams
 
 
 __all__ = ['MethodCodeEncoderParams']
@@ -63,6 +64,19 @@ class MethodCodeEncoderParams(HasDispatchableField):
             return ('whole-method',) + self.hierarchic_micro_macro_encoder.get_descriptive_tags()
         elif self.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
             return ('whole-method',) + self.whole_method_expression_encoder.get_descriptive_tags()
+
+    def get_flat_tokens_seq_code_encoder_params(self) -> Optional[CodeTokensSeqEncoderParams]:
+        if self.method_encoder_type == MethodCodeEncoderParams.EncoderType.WholeMethod:
+            if self.whole_method_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
+                return self.whole_method_expression_encoder.tokens_seq_encoder
+        elif self.method_encoder_type == MethodCodeEncoderParams.EncoderType.Hierarchic:
+            if self.hierarchic_micro_macro_encoder.local_expression_encoder.encoder_type == \
+                    CodeExpressionEncoderParams.EncoderType.FlatTokensSeq:
+                return self.hierarchic_micro_macro_encoder.local_expression_encoder.tokens_seq_encoder
+        else:
+            assert False
+        return None
 
     # preprocess params
     # TODO: put the preprocess params in a dedicated nested confclass.

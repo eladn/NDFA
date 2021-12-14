@@ -19,7 +19,7 @@ __all__ = ['BatchFlattenedSeqShuffler', 'batch_flattened_seq_shuffler_field', 'F
 @dataclasses.dataclass
 class FragmentSizeDistribution:
     min_fragment_size: int = 2
-    max_fragment_size: int = 25
+    max_fragment_size: int = 20
 
     def fragment(self, seq_len: int, rng: np.random.RandomState) -> Tuple[Tuple[int, int], ...]:
         # Note: it is possible to have a fragment of size < `min_fragment_size`.
@@ -53,7 +53,8 @@ class BatchFlattenedSeqShuffler(TensorDataClassWithSequencesMixin, TensorsDataCl
     @classmethod
     def get_management_fields(cls) -> Tuple[str, ...]:
         return super(BatchFlattenedSeqShuffler, cls).get_management_fields() + \
-               ('lengths', 'batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt')
+               ('lengths', 'batch_dependent_seed', 'example_dependent_seed', 'initial_seed_salt',
+                'fragmented_shuffling_fragments_size_distribution')
 
     @classmethod
     def _collate_first_pass(
