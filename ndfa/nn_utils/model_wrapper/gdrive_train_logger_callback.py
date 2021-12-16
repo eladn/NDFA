@@ -4,7 +4,8 @@ __date__ = "2021-10-23"
 
 import time
 import datetime
-from typing import Dict, Optional, Tuple
+from pathlib import Path
+from typing import Dict, Optional, Tuple, Union, List
 
 from ndfa.nn_utils.model_wrapper.train_callback import TrainCallback
 from ndfa.nn_utils.model_wrapper.window_average import WindowAverage
@@ -25,6 +26,7 @@ class GDriveTrainLoggerCallback(TrainCallback):
         self.epoch_last_taken_start_time = None
         self.eval_start_time = None
         self.cur_epoch_time = None
+        self.directories_to_backup_on_epoch_end: List[Path] = []
 
     def epoch_start(self, epoch_nr: int, step_nr: int, learning_rates: Tuple[float, ...]):
         self.cur_epoch_time = datetime.timedelta()
@@ -134,3 +136,9 @@ class GDriveTrainLoggerCallback(TrainCallback):
         self.epoch_last_taken_start_time = None
         self.eval_start_time = None
         self.partial_epoch_results_last_msg_time = None
+        for dir_path in self.directories_to_backup_on_epoch_end:
+            self.gdrive_train_logger.upload_dir(dir_path)
+
+    def register_dir_backup_on_epoch_end(self, dir_path: Union[str, Path]):
+        dir_path = dir_path if isinstance(dir_path, Path) else Path(dir_path)
+        self.directories_to_backup_on_epoch_end.append(dir_path)

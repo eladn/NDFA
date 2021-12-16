@@ -5,14 +5,16 @@ __date__ = "2021-10-23"
 import os
 import json
 import time
+import shutil
 import pickle
 import datetime
 import tempfile
 import subprocess
 import dataclasses
 from enum import Enum
+from pathlib import Path
 import multiprocessing as mp
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, Union
 
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -64,6 +66,11 @@ class GDriveTrainLogger:
             action_kind=Action.ActionKind.upload_as_json_file,
             args=(json_dict, filename)))
 
+    def upload_dir(self, dir_path: Union[str, Path]):
+        self.to_worker_msgs_queue.put_nowait(Action(
+            action_kind=Action.ActionKind.upload_dir,
+            args=(dir_path,)))
+
 
 @dataclasses.dataclass
 class Action:
@@ -72,6 +79,7 @@ class Action:
         run_subprocess_and_upload_stdout_as_text_file = 'run_subprocess_and_upload_stdout_as_text_file'
         upload_string_as_text_file = 'upload_string_as_text_file'
         upload_as_json_file = 'upload_as_json_file'
+        upload_dir = 'upload_dir'
 
     action_kind: ActionKind
     args: Tuple[Any, ...] = ()
@@ -94,6 +102,8 @@ def _gdrive_background_worker(
             gdrive_logger.upload_string_as_text_file(*pending_msg.args)
         elif pending_msg.action_kind == Action.ActionKind.upload_as_json_file:
             gdrive_logger.upload_as_json_file(*pending_msg.args)
+        elif pending_msg.action_kind == Action.ActionKind.upload_dir:
+            gdrive_logger.upload_dir(*pending_msg.args)
         else:
             assert False
 
@@ -145,6 +155,16 @@ class GDriveTrainLoggerBackgroundWorker:
             return self._update_file_to_train_folder(
                 local_file_path=file.name,
                 target_file_name=filename)
+
+    def upload_dir(self, dir_path: Union[str, Path]):
+        dir_path = dir_path if isinstance(dir_path, Path) else Path(dir_path)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            archive_tmp_path_prefix = os.path.join(tmp_dir, 'wandb_run_logs')
+            archive_tmp_path = shutil.make_archive(
+                base_name=archive_tmp_path_prefix, format='zip', root_dir=dir_path)
+            return self._update_file_to_train_folder(
+                local_file_path=archive_tmp_path,
+                target_file_name=Path(archive_tmp_path).name)
 
     def _update_file_to_train_folder(
             self,

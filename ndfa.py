@@ -496,6 +496,7 @@ def main():
                 subprocess_args=['printenv'], filename='environment.txt', ignore_fault=True)
             gdrive_logger.run_subprocess_and_upload_stdout_as_text_file(
                 subprocess_args=['nvidia-smi'], filename='nvidia-smi.txt', ignore_fault=True)
+            gdrive_callback = GDriveTrainLoggerCallback(gdrive_logger)
             if wandb_run is not None:
                 gdrive_logger.upload_string_as_text_file(
                     f'{wandb_run.id}\n{wandb_run.name}\n{wandb_run.path}\n{wandb_run.url}\n',
@@ -504,7 +505,11 @@ def main():
                     text=gdrive_logger.train_folder_name, filename='gdrive_folder_name.txt'))
                 wandb.save(_create_named_tmpfile_from_text(
                     text=gdrive_logger.train_folder_gdrive_id, filename='gdrive_folder_id.txt'))
-            train_callbacks.append(GDriveTrainLoggerCallback(gdrive_logger))
+                wandb_run_local_dir = Path(wandb.run.dir)
+                wandb_run_local_dir = \
+                    wandb_run_local_dir.parent if wandb_run_local_dir.name == 'files' else wandb_run_local_dir
+                gdrive_callback.register_dir_backup_on_epoch_end(dir_path=wandb_run_local_dir)
+            train_callbacks.append(gdrive_callback)
 
         perform_gradient_accumulation_every_steps = \
             exec_params.experiment_setting.train_hyper_params.eff_batch_size // exec_params.batch_size
