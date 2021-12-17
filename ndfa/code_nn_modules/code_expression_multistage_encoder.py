@@ -27,7 +27,8 @@ class CodeExpressionMultistageEncoder(nn.Module):
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
         super(CodeExpressionMultistageEncoder, self).__init__()
         self.encoder_params = encoder_params
-        assert nr_layers >= 1
+        if nr_layers < 1:
+            raise ValueError(f'`nr_layers` should be >= 1 (given {nr_layers}).')
         self.encoding_layers = nn.ModuleList([
             CodeExpressionEncoder(
                 encoder_params=encoder_params,
