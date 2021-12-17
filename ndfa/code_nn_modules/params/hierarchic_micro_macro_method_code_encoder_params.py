@@ -56,6 +56,8 @@ class HierarchicMicroMacroMethodCodeEncoderParams(HasDispatchableField):
         default=1)
     nr_layers: int = conf_field(
         default=1)
+    force_no_local_global_mix: bool = conf_field(
+        default=False)
 
     def get_descriptive_tags(self) -> Tuple[str, ...]:
         return ('hierarchic', f'nr_micro_after={self.nr_micro_encoding_layers_after_macro}',

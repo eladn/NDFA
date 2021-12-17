@@ -88,7 +88,7 @@ class HierarchicMicroMacroMethodCodeEncoder(nn.Module):
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
             for _ in range(self.params.nr_layers)])
 
-        self.should_mix_code_expression_with_global_context = not (
+        self.should_mix_code_expression_with_global_context = not self.params.force_no_local_global_mix and not (
             self.params.global_context_encoder.encoder_type == MethodCFGMacroEncoderParams.EncoderType.CFGPaths and
             self.params.global_context_encoder.paths_encoder.output_type ==
             CFGPathsMacroEncoderParams.OutputType.SetOfPaths)
