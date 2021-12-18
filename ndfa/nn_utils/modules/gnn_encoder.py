@@ -66,9 +66,12 @@ class GNNEncoder(nn.Module):
             padding_idx=edge_types_vocab.get_word_idx('<PAD>')) if edge_types_vocab else None
         self.nodes_encodings_norms = None
         if norm_params is not None:
-            self.nodes_encodings_norms = nn.ModuleList([
-                NormWrapper(nr_features=node_encoding_dim, params=norm_params)
-                for _ in range(self.nr_layers_to_apply)])
+            if self.encoder_params.apply_norm_after_each_layer:
+                self.nodes_encodings_norms = nn.ModuleList([
+                    NormWrapper(nr_features=node_encoding_dim, params=norm_params)
+                    for _ in range(self.nr_layers_to_apply)])
+            else:
+                self.nodes_encodings_norms = NormWrapper(nr_features=node_encoding_dim, params=norm_params)
 
         self.dropout_layer = nn.Dropout(dropout_rate)
         self.activation_layer = get_activation_layer(activation_fn)()
@@ -81,6 +84,8 @@ class GNNEncoder(nn.Module):
                 edge_index=graph.edge_index,
                 # edge_weight=edge_weight
             )))
-            if self.nodes_encodings_norms:
+            if self.nodes_encodings_norms and self.encoder_params.apply_norm_after_each_layer:
                 nodes_encodings = self.nodes_encodings_norms[gnn_layer_idx](nodes_encodings)
+        if self.nodes_encodings_norms and not self.encoder_params.apply_norm_after_each_layer:
+            nodes_encodings = self.nodes_encodings_norms(nodes_encodings)
         return nodes_encodings

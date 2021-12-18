@@ -24,3 +24,5 @@ class GNNEncoderParams:
         default=GNNType.GGNN)
     nr_layers: int = conf_field(
         default=4)
+    apply_norm_after_each_layer: bool = conf_field(
+        default=False)
