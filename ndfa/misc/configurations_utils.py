@@ -1,14 +1,19 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-03-22"
+
 import abc
 import enum
 import typing
 import base64
 import hashlib
 import argparse
-import omegaconf
+import functools
 import dataclasses
-from omegaconf import OmegaConf
 from typing import TypeVar, Union, Container, Optional, Type, Tuple, List, Dict, Any, Collection, Callable
 
+import omegaconf
+from omegaconf import OmegaConf
 
 __all__ = ['create_argparser_from_dataclass_conf_structure', 'reinstantiate_omegaconf_container',
            'create_conf_dotlist_from_parsed_args', 'DispatchField', 'HasDispatchableField',
@@ -58,7 +63,23 @@ def create_argparser_from_dataclass_conf_structure(
             conf_field_info = ConfFieldInfo()
         assert conf_field_info.description is None or isinstance(conf_field_info.description, str)
 
+        def _nullable_type(_type, val: str):
+            print(val, type(val), _type)
+            if val == 'None' or val == 'null':
+                return NIL_VALUE
+            return _type(val)
+
+        maybe_nullable_type_fn = functools.partial(_nullable_type, original_field_type_info.original_type) \
+            if original_field_type_info.is_optional else \
+            original_field_type_info.original_type
+        maybe_nullable_str_fn = functools.partial(_nullable_type, str) \
+            if original_field_type_info.is_optional else str
+
         if dataclasses.is_dataclass(original_field_type_info.original_type):
+            if original_field_type_info.is_optional:
+                argparser.add_argument(
+                    arg_negate_name, action='store_const', const=NIL_VALUE, dest=arg_dest,
+                    help=conf_field_info.description)
             create_argparser_from_dataclass_conf_structure(
                 _type=field.type, argparser=argparser, prefix=prefix + (field.name,))
         elif issubclass(original_field_type_info.original_type, bool):
@@ -71,20 +92,20 @@ def create_argparser_from_dataclass_conf_structure(
                 help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, (int, float, str)):
             argparser.add_argument(
-                arg_name, type=original_field_type_info.original_type,
+                arg_name, type=maybe_nullable_type_fn,
                 choices=conf_field_info.choices, required=required,
                 dest=arg_dest, help=conf_field_info.description)
         elif original_field_type_info.original_type == typing.Literal:
             choices = typing.get_args(original_field_type_info.unwrapped_type)
             assert conf_field_info.choices is None or set(conf_field_info.choices) == set(choices)
             argparser.add_argument(
-                arg_name, choices=choices,
+                arg_name, choices=choices, type=maybe_nullable_str_fn,
                 required=required, dest=arg_dest, help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, enum.Enum):
             choices = tuple(original_field_type_info.original_type.__members__.keys())
             assert conf_field_info.choices is None or set(conf_field_info.choices) == set(choices)
             argparser.add_argument(
-                arg_name, choices=choices,
+                arg_name, choices=choices, type=maybe_nullable_str_fn,
                 required=required, dest=arg_dest, help=conf_field_info.description)
         elif issubclass(original_field_type_info.original_type, (list, tuple, set, frozenset)):
             item_type = None
@@ -164,11 +185,19 @@ def reinstantiate_omegaconf_container(
     return original_type_info.original_type(cnf)
 
 
+# A sentinel object to detect if a field is set to empty.
+class _NIL_VALUE_TYPE:
+    pass
+NIL_VALUE = _NIL_VALUE_TYPE()
+
+
 def create_conf_dotlist_from_parsed_args(args: argparse.Namespace) -> List[str]:
     dotlist = []
     for key, value in vars(args).items():
         if value is None:
             continue
+        if value is NIL_VALUE:
+            value = 'null'
         dotlist.append(f'{key.replace("___", ".")}={value}')
     return dotlist
 
