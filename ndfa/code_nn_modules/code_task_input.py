@@ -17,6 +17,8 @@ from ndfa.misc.tensors_data_class import TensorsDataClass, BatchFlattenedTensor,
     batch_flattened_indices_pseudo_random_permutation_field, FragmentSizeDistribution
 from ndfa.nn_utils.model_wrapper.flattened_tensor import FlattenedTensor
 from ndfa.nn_utils.modules.params.sampling_params import SamplingParams
+from ndfa.code_tasks.method_code_preprocess_params import HierarchicMethodEncoderPreprocessParams, \
+    MethodCodePreprocessParams, ASTPreprocessParams
 
 
 __all__ = [
@@ -167,6 +169,32 @@ class PDGInputTensors(TensorsDataClass):
 
     def get_cfg_nodes_encodings_unflattener_mask(self):
         return self.cfg_nodes_control_kind.unflattener_mask
+
+    def keep_only_relevant_fields_according_to_preprocess_params(
+            self, preprocess_params: HierarchicMethodEncoderPreprocessParams):
+        return dataclasses.replace(
+            self,
+            cfg_nodes_tokenized_expressions=self.cfg_nodes_tokenized_expressions
+            if preprocess_params.micro_tokens_seq else None,
+            cfg_nodes_expressions_ast=
+            self.cfg_nodes_expressions_ast.keep_only_relevant_fields_according_to_preprocess_params(
+                preprocess_params=preprocess_params.micro_ast)
+            if preprocess_params.micro_ast else None,
+            cfg_macro_trimmed_ast=
+            self.cfg_macro_trimmed_ast.keep_only_relevant_fields_according_to_preprocess_params(
+                preprocess_params=preprocess_params.macro_ast)
+            if preprocess_params.macro_ast else None,
+            cfg_control_flow_paths=self.cfg_control_flow_paths
+            if preprocess_params.control_flow_paths and
+               preprocess_params.control_flow_paths.full_paths else None,
+            cfg_nodes_random_permutation=self.cfg_nodes_random_permutation
+            if preprocess_params.control_flow_single_flat_seq and
+               preprocess_params.control_flow_single_flat_seq.cfg_nodes_random_permutation else None,
+            cfg_control_flow_paths_exact_ngrams=self.cfg_control_flow_paths_exact_ngrams
+            if preprocess_params.control_flow_paths and preprocess_params.control_flow_paths.ngrams else None,
+            cfg_control_flow_paths_partial_ngrams=self.cfg_control_flow_paths_partial_ngrams
+            if preprocess_params.control_flow_paths and preprocess_params.control_flow_paths.ngrams else None,
+            cfg_control_flow_graph=self.cfg_control_flow_graph if preprocess_params.control_flow_graph else None)
 
 
 @dataclasses.dataclass
@@ -341,6 +369,41 @@ class SubASTInputTensors(TensorsDataClass):
             unflattener_fn=self.get_ast_paths_unflattener(
                 paths_types=list(combined_ast_paths_encodings_by_type.keys())))
 
+    def keep_only_relevant_fields_according_to_preprocess_params(
+            self, preprocess_params: ASTPreprocessParams):
+        return dataclasses.replace(
+            self,
+            ast_leaf_to_leaf_paths_node_indices=self.ast_leaf_to_leaf_paths_node_indices
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_leaf else None,
+            ast_leaf_to_leaf_paths_child_place=self.ast_leaf_to_leaf_paths_child_place
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_leaf and
+               preprocess_params.paths.traversal else None,
+            ast_leaf_to_leaf_paths_vertical_direction=self.ast_leaf_to_leaf_paths_vertical_direction
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_leaf and
+               preprocess_params.paths.traversal else None,
+            ast_leaf_to_leaf_paths_shuffler=self.ast_leaf_to_leaf_paths_shuffler
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_leaf and
+               preprocess_params.paths.leaf_to_leaf_shuffler else None,
+            ast_leaf_to_root_paths_node_indices=self.ast_leaf_to_root_paths_node_indices
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_root else None,
+            ast_leaf_to_root_paths_child_place=self.ast_leaf_to_root_paths_child_place
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_root and
+               preprocess_params.paths.traversal else None,
+            ast_leaf_to_root_paths_shuffler=self.ast_leaf_to_root_paths_shuffler
+            if preprocess_params.paths and preprocess_params.paths.leaf_to_root and
+               preprocess_params.paths.leaf_to_root_shuffler else None,
+            ast_leaves_sequence_node_indices=self.ast_leaves_sequence_node_indices
+            if preprocess_params.paths and preprocess_params.paths.leaves_sequence else None,
+            ast_leaves_sequence_shuffler=self.ast_leaves_sequence_shuffler
+            if preprocess_params.paths and preprocess_params.paths.leaves_sequence and
+               preprocess_params.paths.leaves_sequence_shuffler else None,
+            siblings_sequences_node_indices=self.siblings_sequences_node_indices
+            if preprocess_params.paths and preprocess_params.paths.siblings_sequences else None,
+            siblings_w_parent_sequences_node_indices=self.siblings_w_parent_sequences_node_indices
+            if preprocess_params.paths and preprocess_params.paths.siblings_w_parent_sequences else None,
+            dgl_tree=self.dgl_tree if preprocess_params.dgl_tree else None,
+            pyg_graph=self.pyg_graph if preprocess_params.pyg_graph else None)
+
 
 @dataclasses.dataclass
 class PrunedUpperASTInputTensors(SubASTInputTensors):
@@ -460,3 +523,15 @@ class MethodCodeInputTensors(TensorsDataClass):
     method_tokenized_code: Optional[MethodCodeTokensSequenceInputTensors] = None
     pdg: Optional[PDGInputTensors] = None
     ast: Optional[MethodASTInputTensors] = None
+
+    def keep_only_relevant_fields_according_to_preprocess_params(self, preprocess_params: MethodCodePreprocessParams):
+        return dataclasses.replace(
+            self,
+            method_tokenized_code=self.method_tokenized_code
+            if preprocess_params.whole_method_tokens_seq else None,
+            pdg=self.pdg.keep_only_relevant_fields_according_to_preprocess_params(
+                preprocess_params=preprocess_params.hierarchic)
+            if preprocess_params.hierarchic else None,
+            ast=self.ast.keep_only_relevant_fields_according_to_preprocess_params(
+                preprocess_params=preprocess_params.whole_method_ast)
+            if preprocess_params.general_ast else None)
