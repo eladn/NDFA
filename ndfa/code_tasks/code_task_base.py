@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-04-04"
+
 import abc
 import torch
 import functools
@@ -28,7 +32,8 @@ class CodeTaskBase(abc.ABC):
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties, pp_data_path: str,
             raw_train_data_path: str, raw_validation_data_path: Optional[str] = None,
             raw_test_data_path: Optional[str] = None, pp_nr_processes: int = 4, pp_override: bool = False,
-            storage_method: str = 'dbm', compression_method: str = 'none'):
+            storage_method: str = 'dbm', compression_method: str = 'none',
+            keep_entire_preprocessed_dataset: bool = False, use_compatible_pp_data_if_exists: bool = True):
         code_task_vocabs = self.create_or_load_code_task_vocabs(
             model_hps=model_hps, pp_data_path=pp_data_path, raw_train_data_path=raw_train_data_path)
         preprocess_code_task_dataset(
@@ -37,7 +42,9 @@ class CodeTaskBase(abc.ABC):
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
             raw_train_data_path=raw_train_data_path, raw_validation_data_path=raw_validation_data_path,
             raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes, pp_override=pp_override,
-            storage_method=storage_method, compression_method=compression_method)
+            storage_method=storage_method, compression_method=compression_method,
+            keep_entire_preprocessed_dataset=keep_entire_preprocessed_dataset,
+            use_compatible_pp_data_if_exists=use_compatible_pp_data_if_exists)
 
     @abc.abstractmethod
     def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) -> Iterable[Any]:
@@ -81,7 +88,7 @@ class CodeTaskBase(abc.ABC):
     def create_dataset(
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
-            pp_compression_method: str = 'none') -> Dataset:
+            pp_compression_method: str = 'none', use_compatible_pp_data_if_exists: bool = True) -> Dataset:
         ...
 
     @abc.abstractmethod

@@ -19,6 +19,7 @@ from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
 
 import torch
 import dgl
+from tqdm import tqdm
 from torch_geometric.data import Data as TGData
 from sklearn.feature_extraction.text import HashingVectorizer
 
@@ -29,7 +30,8 @@ from ndfa.misc.code_data_structure_api import SerMethod, SerMethodPDG, SerMethod
     SerASTNodeType, SerPDGNodeControlKind, SerPDGControlFlowEdge, SerPDGDataDependencyEdge, SerASTNode
 from ndfa.misc.code_data_structure_utils import get_pdg_node_tokenized_expression, get_all_pdg_simple_paths, \
     get_all_ast_paths, ASTPaths, traverse_ast, find_symbol_occurrence_ast_node_idx
-from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter
+from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDatasetWriter, \
+    ChunkedRandomAccessDataset
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs, kos_token_to_kos_token_vocab_word
 from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, SymbolsInputTensors, PDGInputTensors, \
     CFGPathsInputTensors, CFGPathsNGramsInputTensors, IdentifiersInputTensors, MethodCodeTokensSequenceInputTensors, \
@@ -1597,82 +1599,118 @@ def preprocess_code_task_dataset(
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
         raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
         nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
-        compression_method: str = 'none'):
+        compression_method: str = 'none', keep_entire_preprocessed_dataset: bool = False,
+        use_compatible_pp_data_if_exists: bool = True):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
         (DataFold.Test, raw_test_data_path))
-    preprocess_params = create_preprocess_params_from_model_hps(model_hps=model_hps)
+    if keep_entire_preprocessed_dataset:
+        preprocess_params = NDFAModelPreprocessParams.full()
+    else:
+        preprocess_params = create_preprocess_params_from_model_hps(model_hps=model_hps)
     preprocessed_data_params = NDFAModelPreprocessedDataParams(
         preprocess_params=preprocess_params, dataset_props=dataset_props)
+    preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
+    print(f'Generating preprocessed dataset with params hash = `{preprocessed_data_params_hash}` ..')
+
     for datafold, raw_dataset_path in datafolds:
         if raw_dataset_path is None:
             continue
+
         print(f'Starting pre-processing data-fold: `{datafold.name}` ..')
-        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocessed_data_params.get_sha1_base64()}'
+        pp_data_filename = f'pp_{datafold.value.lower()}_{preprocessed_data_params_hash}'
         chunks_examples_writer = ChunkedRandomAccessDatasetWriter(
             pp_data_path_prefix=os.path.join(pp_data_path, pp_data_filename),
             max_chunk_size_in_bytes=ChunkedRandomAccessDatasetWriter.MB_IN_BYTES * 500,
             override=pp_override, storage_method=storage_method,
             compression_method=compression_method)
-        pp_limitations_exceedings_counter = Counter()
-        pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
-            defaultdict(OnlineMeanVarianceAccumulators)
-        with mp.Pool(processes=nr_processes) as pool:
-            # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
-            # TODO: have two parallel `tqdm` progress bars:
-            #  (1) reading examples from iterator: it means how many examples are being/finished preprocessed;
-            #  (2) over the `imap_unordered` loop: it means how many examples have been exported
-            #  See here: https://github.com/tqdm/tqdm/issues/407#issuecomment-322932800
-            for pp_example_as_bytes_or_errors_list in pool.imap_unordered(
-                    functools.partial(
-                        catch_preprocess_limit_exceed_error,
-                        pp_example_fn, model_hps, preprocess_params, code_task_vocabs),
-                    iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
-                assert pp_example_as_bytes_or_errors_list is not None
-                if isinstance(pp_example_as_bytes_or_errors_list, list):
-                    errors_list = pp_example_as_bytes_or_errors_list
-                    assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in errors_list)
-                    # Add to limitations exceedings statistics
-                    for pp_limitation in errors_list:
-                        limitation_side_str = \
-                            "+" if pp_limitation.max_val is not None and \
-                                   pp_limitation.value > pp_limitation.max_val else "-"
-                        limitation_name = f'{pp_limitation.object_name}{limitation_side_str}'
-                        pp_limitations_exceedings_counter[limitation_name] += 1
-                        pp_limitations_exceedings_values[limitation_name].insert_point(pp_limitation.value)
-                else:
-                    pp_example_as_bytes = pp_example_as_bytes_or_errors_list
-                    chunks_examples_writer.write_example(pp_example_as_bytes)
-                    # with io.BytesIO(pp_example_as_bytes) as pp_example_as_bytes_io_stream:
-                    #     pp_example_as_bytes_io_stream.seek(0)
-                    #     pp_example = torch.load(pp_example_as_bytes_io_stream)
-                    #     assert isinstance(pp_example, TensorsDataClass)
-                    #     chunks_examples_writer.write_example(pp_example)
+
+        compatible_preprocessed_data_params_hash, compatible_preprocessed_data_params = \
+            find_existing_compatible_preprocessed_data_params(
+                exact_preprocessed_data_params=preprocessed_data_params, datafold=datafold,
+                pp_data_path=pp_data_path, force_not_exact=True)
+        if use_compatible_pp_data_if_exists and compatible_preprocessed_data_params_hash is None:
+            print('Not found compatible preprocessed data to use. Generating from raw data.')
+        if use_compatible_pp_data_if_exists and compatible_preprocessed_data_params_hash is not None:
+            print(f'Using compatible preprocessed data (hash `{compatible_preprocessed_data_params_hash}`) '
+                  f'to generate the target preprocessed dataset (hash `{preprocessed_data_params_hash}`). '
+                  f'Ignoring the raw data.')
+        elif not use_compatible_pp_data_if_exists and compatible_preprocessed_data_params_hash is not None:
+            print(f'Found compatible preprocessed data (hash `{compatible_preprocessed_data_params_hash}`), '
+                  f'but it is NOT used to generate the target preprocessed dataset because '
+                  f'`use_compatible_pp_data_if_exists` is not set. Using the raw data to generate the '
+                  f'preprocessed dataset.')
+            compatible_preprocessed_data_params_hash, compatible_preprocessed_data_params = None, None
+
+        if compatible_preprocessed_data_params_hash is None:
+            pp_limitations_exceedings_counter = Counter()
+            pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
+                defaultdict(OnlineMeanVarianceAccumulators)
+            with mp.Pool(processes=nr_processes) as pool:
+                # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
+                # TODO: have two parallel `tqdm` progress bars:
+                #  (1) reading examples from iterator: it means how many examples are being/finished preprocessed;
+                #  (2) over the `imap_unordered` loop: it means how many examples have been exported
+                #  See here: https://github.com/tqdm/tqdm/issues/407#issuecomment-322932800
+                for pp_example_as_bytes_or_errors_list in pool.imap_unordered(
+                        functools.partial(
+                            catch_preprocess_limit_exceed_error,
+                            pp_example_fn, model_hps, preprocess_params, code_task_vocabs),
+                        iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
+                    assert pp_example_as_bytes_or_errors_list is not None
+                    if isinstance(pp_example_as_bytes_or_errors_list, list):
+                        errors_list = pp_example_as_bytes_or_errors_list
+                        assert all(isinstance(pp_limitation, PreprocessLimitation) for pp_limitation in errors_list)
+                        # Add to limitations exceedings statistics
+                        for pp_limitation in errors_list:
+                            limitation_side_str = \
+                                "+" if pp_limitation.max_val is not None and \
+                                       pp_limitation.value > pp_limitation.max_val else "-"
+                            limitation_name = f'{pp_limitation.object_name}{limitation_side_str}'
+                            pp_limitations_exceedings_counter[limitation_name] += 1
+                            pp_limitations_exceedings_values[limitation_name].insert_point(pp_limitation.value)
+                    else:
+                        pp_example_as_bytes = pp_example_as_bytes_or_errors_list
+                        chunks_examples_writer.write_example(pp_example_as_bytes)
+                        # with io.BytesIO(pp_example_as_bytes) as pp_example_as_bytes_io_stream:
+                        #     pp_example_as_bytes_io_stream.seek(0)
+                        #     pp_example = torch.load(pp_example_as_bytes_io_stream)
+                        #     assert isinstance(pp_example, TensorsDataClass)
+                        #     chunks_examples_writer.write_example(pp_example)
+        else:
+            compatible_dataset = ChunkedRandomAccessDataset(
+                pp_data_path_prefix=pp_data_path, storage_method=storage_method, compression_method=compression_method)
+            for example_idx in tqdm(len(compatible_dataset)):
+                compatible_pp_example = compatible_dataset[example_idx]
+                pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
+                    preprocess_params=preprocess_params)
+                chunks_examples_writer.write_example(pp_example)
 
         nr_preprocessed_examples = chunks_examples_writer.total_nr_examples
         chunks_examples_writer.close_last_written_chunk()
         chunks_examples_writer.enforce_no_further_chunks()
 
         pp_data_params_yaml_filepath = os.path.join(
-            pp_data_path, f'pp_data_params_{preprocessed_data_params.get_sha1_base64()}.yaml')
+            pp_data_path, f'pp_data_params_{preprocessed_data_params_hash}.yaml')
         with open(pp_data_params_yaml_filepath, 'w') as pp_data_params_yaml_file:
             preprocessed_data_params.to_yaml(pp_data_params_yaml_file)
 
         print(f'Finished pre-processing data-fold: `{datafold.name}` with {nr_preprocessed_examples:,} examples.')
 
-        # Print limitations exceedings statistics (to understand why most of the filtered-out items fell)
-        pp_limitations_exceedings_counter_ordered = pp_limitations_exceedings_counter.most_common()
-        pp_limitations_exceedings_counter_total = sum(pp_limitations_exceedings_counter.values())
-        descending_freqs = {
-            limitation_name: round(100 * value / pp_limitations_exceedings_counter_total, 2)
-            for limitation_name, value in pp_limitations_exceedings_counter_ordered}
-        values_stats = {
-            limitation_name: {
-                'freq': f'{freq}% [{pp_limitations_exceedings_counter[limitation_name]:,}]',
-                **pp_limitations_exceedings_values[limitation_name].generate_printable_stats_dict()}
-            for limitation_name, freq in descending_freqs.items()}
-        pprint(values_stats, sort_dicts=False)
+        if compatible_preprocessed_data_params_hash is None:
+            # Print limitations exceedings statistics (to understand why most of the filtered-out items fell)
+            pp_limitations_exceedings_counter_ordered = pp_limitations_exceedings_counter.most_common()
+            pp_limitations_exceedings_counter_total = sum(pp_limitations_exceedings_counter.values())
+            descending_freqs = {
+                limitation_name: round(100 * value / pp_limitations_exceedings_counter_total, 2)
+                for limitation_name, value in pp_limitations_exceedings_counter_ordered}
+            values_stats = {
+                limitation_name: {
+                    'freq': f'{freq}% [{pp_limitations_exceedings_counter[limitation_name]:,}]',
+                    **pp_limitations_exceedings_values[limitation_name].generate_printable_stats_dict()}
+                for limitation_name, freq in descending_freqs.items()}
+            pprint(values_stats, sort_dicts=False)
 
 
 def _get_size_of_file_or_dir(path: Union[str, Path]) -> int:
@@ -1684,7 +1722,8 @@ def _get_size_of_file_or_dir(path: Union[str, Path]) -> int:
 def find_existing_compatible_preprocessed_data_params(
         exact_preprocessed_data_params: NDFAModelPreprocessedDataParams,
         datafold: DataFold,
-        pp_data_path: str) -> Optional[Tuple[str, NDFAModelPreprocessedDataParams]]:
+        pp_data_path: str,
+        force_not_exact: bool = False) -> Optional[Tuple[str, NDFAModelPreprocessedDataParams]]:
     """
     Looks for the most compatible preprocessed dataset, and returns its params hash and params instance.
     Note that the returned hash might be different from the newly computed hash of the returned instance, as some
@@ -1696,12 +1735,12 @@ def find_existing_compatible_preprocessed_data_params(
     existing_pp_datasets_paths = {
         pp_data_params_hash: next(Path(pp_data_path).glob(f'pp_{datafold.value.lower()}_{pp_data_params_hash}*'))
         for pp_data_params_hash in existing_pp_data_params_hashes}
-    orig_preprocessed_data_params_hash = exact_preprocessed_data_params.get_sha1_base64()
-    if orig_preprocessed_data_params_hash in existing_pp_data_params_hashes:
-        # print(f'Found preprocessed dataset with exact params hash `{orig_preprocessed_data_params_hash}` '
+    exact_preprocessed_data_params_hash = exact_preprocessed_data_params.get_sha1_base64()
+    if not force_not_exact and exact_preprocessed_data_params_hash in existing_pp_data_params_hashes:
+        # print(f'Found preprocessed dataset with exact params hash `{exact_preprocessed_data_params_hash}` '
         #       f'in `{pp_data_path}`.')
-        return orig_preprocessed_data_params_hash, exact_preprocessed_data_params
-    # print(f'Could not find preprocessed dataset of exact params hash `{orig_preprocessed_data_params_hash}` '
+        return exact_preprocessed_data_params_hash, exact_preprocessed_data_params
+    # print(f'Could not find preprocessed dataset of exact params hash `{exact_preprocessed_data_params_hash}` '
     #       f'in `{pp_data_path}`. Looking for other compatible preprocessed dataset that contains it..')
     smallest_compatible_pp_data_size = None
     smallest_compatible_pp_data_params = None
@@ -1713,6 +1752,12 @@ def find_existing_compatible_preprocessed_data_params(
             continue
         cur_pp_data_params = NDFAModelPreprocessedDataParams.load_from_yaml(cur_pp_data_params_filepath)
         if cur_pp_data_params is None or not cur_pp_data_params.is_containing(exact_preprocessed_data_params):
+            continue
+        # Note that the hash might have changed since the preprocessed data has been created (because the one of
+        # the params' sub-class might have changed, maybe a field has been added). Hence, in the following condition
+        # we compare both to the original hash of the filename and also to the fresh generated hash of the instance.
+        if force_not_exact and exact_preprocessed_data_params_hash in \
+                {cur_pp_data_params_hash, cur_pp_data_params.get_sha1_base64()}:
             continue
         cur_pp_dataset_size = _get_size_of_file_or_dir(dataset_path)
         if smallest_compatible_pp_data_size is None or cur_pp_dataset_size < smallest_compatible_pp_data_size:

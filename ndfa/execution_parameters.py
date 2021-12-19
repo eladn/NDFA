@@ -60,6 +60,18 @@ class ModelExecutionParams:
         description="Perform preprocessing of the raw dataset.",
         arg_names=['--preprocess'])
 
+    keep_entire_preprocessed_dataset: bool = conf_field(
+        default=False,
+        description="Ignore the preprocess params when performing preprocessing (as usually derived by the model "
+                    "hyper-parameters). Instead, use full preprocess params for the generated preprocessed data.")
+
+    use_compatible_pp_data_if_exists: bool = conf_field(
+        default=True,
+        description="During preprocess, if a compatible preprocess dataset exists (but not the exact one), use it"
+                    "to generate the new preprocessed dataset, instead of creating it from the raw data. During "
+                    "training and evaluation it allows loading a compatible preprocessed dataset if the exact one "
+                    "does not exist.")
+
     get_pp_data_params_hash: bool = conf_field(
         default=False,
         description="Get the hash of the required preprocessed data params matching the given model hyper params.")

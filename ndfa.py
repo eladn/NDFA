@@ -138,7 +138,8 @@ def create_task_dataset(task: CodeTaskBase, exec_params: ModelExecutionParams, d
         datafold=datafold,
         pp_data_path=exec_params.pp_data_dir_path,
         pp_storage_method=exec_params.pp_storage_method,
-        pp_compression_method=exec_params.pp_compression_method)
+        pp_compression_method=exec_params.pp_compression_method,
+        use_compatible_pp_data_if_exists=exec_params.use_compatible_pp_data_if_exists)
 
 
 def main():
@@ -302,7 +303,9 @@ def main():
             pp_nr_processes=exec_params.pp_nr_processes,
             pp_override=exec_params.pp_override,
             storage_method=exec_params.pp_storage_method,
-            compression_method=exec_params.pp_compression_method)
+            compression_method=exec_params.pp_compression_method,
+            keep_entire_preprocessed_dataset=exec_params.keep_entire_preprocessed_dataset,
+            use_compatible_pp_data_if_exists=exec_params.use_compatible_pp_data_if_exists)
 
     model = task.build_model(
         model_hps=exec_params.experiment_setting.model_hyper_params,

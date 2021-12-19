@@ -91,13 +91,14 @@ class PredictLogVarsTask(CodeTaskBase):
     def create_dataset(
             self, model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties,
             datafold: DataFold, pp_data_path: str, pp_storage_method: str = 'dbm',
-            pp_compression_method: str = 'none') -> Dataset:
+            pp_compression_method: str = 'none', use_compatible_pp_data_if_exists: bool = True) -> Dataset:
         preprocess_params = create_preprocess_params_from_model_hps(model_hps=model_hps)
         preprocessed_data_params = NDFAModelPreprocessedDataParams(
             preprocess_params=preprocess_params, dataset_props=dataset_props)
         return PredictLogVarsTaskDataset(
             preprocessed_data_params=preprocessed_data_params, datafold=datafold, pp_data_path=pp_data_path,
-            storage_method=pp_storage_method, compression_method=pp_compression_method)
+            storage_method=pp_storage_method, compression_method=pp_compression_method,
+            use_compatible_pp_data_if_exists=use_compatible_pp_data_if_exists)
 
     def build_loss_criterion(self, model_hps: NDFAModelHyperParams) -> nn.Module:
         return PredictLogVarsModelLoss(model_hps=model_hps)
@@ -198,16 +199,29 @@ class LogVarTargetSymbolsIndices(TensorsDataClass):
 class PredictLogVarsTaggedExample(TensorsDataClass):
     example_hash: str
     code_task_input: MethodCodeInputTensors
-    logging_call_token_idx_in_flat_whole_method_tokenized: torch.LongTensor
+    logging_call_token_idx_in_flat_whole_method_tokenized: torch.LongTensor  # TODO: make optional
     logging_call_cfg_node_idx: BatchedFlattenedIndicesTensor = \
-        batch_flattened_indices_tensor_field(tgt_indexing_group='cfg_nodes')
+        batch_flattened_indices_tensor_field(tgt_indexing_group='cfg_nodes')  # TODO: make optional
     logging_call_ast_node_idx: BatchedFlattenedIndicesTensor = \
-        batch_flattened_indices_tensor_field(tgt_indexing_group='ast_nodes')
+        batch_flattened_indices_tensor_field(tgt_indexing_group='ast_nodes')  # TODO: make optional
     target_symbols_idxs_used_in_logging_call: Optional[LogVarTargetSymbolsIndices] = None
 
     def __iter__(self):  # To support unpacking into (x_batch, y_batch)
         yield self.code_task_input
         yield self.target_symbols_idxs_used_in_logging_call
+
+    def keep_only_relevant_fields_according_to_preprocess_params(self, preprocess_params: NDFAModelPreprocessParams):
+        return dataclasses.replace(
+            self,
+            logging_call_token_idx_in_flat_whole_method_tokenized=
+            self.logging_call_token_idx_in_flat_whole_method_tokenized
+            if preprocess_params.method_code.whole_method_tokens_seq else None,
+            logging_call_cfg_node_idx=
+            self.logging_call_cfg_node_idx if preprocess_params.method_code.hierarchic else None,
+            logging_call_ast_node_idx=
+            self.logging_call_ast_node_idx if preprocess_params.method_code.general_ast else None,
+            code_task_input=self.code_task_input.keep_only_relevant_fields_according_to_preprocess_params(
+                preprocess_params=preprocess_params.method_code))
 
 
 class PredictLogVarsModel(nn.Module, ModuleWithDbgTestGradsMixin):
@@ -333,18 +347,25 @@ class PredictLogVarsTaskDataset(ChunkedRandomAccessDataset):
             datafold: DataFold,
             pp_data_path: str,
             storage_method: str = 'dbm',
-            compression_method: str = 'none'):
+            compression_method: str = 'none',
+            use_compatible_pp_data_if_exists: bool = True):
         compatible_preprocessed_data_params_hash, _ = find_existing_compatible_preprocessed_data_params(
             exact_preprocessed_data_params=preprocessed_data_params,
             datafold=datafold, pp_data_path=pp_data_path)
+        exact_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
         if compatible_preprocessed_data_params_hash is None:
             raise ValueError(
                 f'Could not find any compatible preprocessed dataset in `{pp_data_path}`. '
-                f'Exact preprocessed data params hash is: `{preprocessed_data_params.get_sha1_base64()}`.')
-        exact_preprocessed_data_params_hash = preprocessed_data_params.get_sha1_base64()
+                f'Exact preprocessed data params hash is: `{exact_preprocessed_data_params_hash}`.')
         if compatible_preprocessed_data_params_hash == exact_preprocessed_data_params_hash:
             print(f'Found preprocessed dataset with exact params hash '
                   f'`{exact_preprocessed_data_params_hash}` in `{pp_data_path}`.')
+        elif not use_compatible_pp_data_if_exists:
+            raise ValueError(
+                f'Could not find preprocessed dataset of exact params hash `{exact_preprocessed_data_params_hash}`. '
+                f'A compatible preprocessed dataset with params hash '
+                f'`{compatible_preprocessed_data_params_hash}` has been found in `{pp_data_path}`, '
+                f'but `use_compatible_pp_data_if_exists` is off.')
         else:
             print(f'Found compatible preprocessed dataset with params hash '
                   f'`{compatible_preprocessed_data_params_hash}` in `{pp_data_path}`.')
