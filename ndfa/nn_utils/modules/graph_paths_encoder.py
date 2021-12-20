@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-03"
+
 import torch
 import torch.nn as nn
 import dataclasses
@@ -19,18 +23,18 @@ from ndfa.nn_utils.modules.sequence_combiner import SequenceCombiner
 from ndfa.nn_utils.modules.params.sequence_combiner_params import SequenceCombinerParams
 
 
-__all__ = ['PathsEncoder', 'EncodedPaths', 'EdgeTypeInsertionMode']
+__all__ = ['GraphPathsEncoder', 'EncodedGraphPaths', 'EdgeTypeInsertionMode']
 
 
 @dataclasses.dataclass
-class EncodedPaths:
+class EncodedGraphPaths:
     nodes_occurrences: torch.Tensor
     edges_occurrences: Optional[torch.Tensor] = None
     folded_nodes_encodings: Optional[torch.Tensor] = None
     combined_paths: Optional[torch.Tensor] = None
 
 
-class PathsEncoder(nn.Module):
+class GraphPathsEncoder(nn.Module):
     def __init__(
             self,
             node_dim: int,
@@ -45,9 +49,11 @@ class PathsEncoder(nn.Module):
             folded_node_encodings_updater_params: Optional[StateUpdaterParams] = None,  # supply if should fold
             combine_paths: bool = False,
             paths_combining_params: Optional[SequenceCombinerParams] = None,  # supply if should combine paths
-            norm_params: Optional[NormWrapperParams] = None,
+            encoded_paths_norm_params: Optional[NormWrapperParams] = None,
+            combined_paths_norm_params: Optional[NormWrapperParams] = None,
+            folded_paths_norm_params: Optional[NormWrapperParams] = None,
             dropout_rate: float = 0.3, activation_fn: str = 'relu'):
-        super(PathsEncoder, self).__init__()
+        super(GraphPathsEncoder, self).__init__()
         self.node_encoding_dim = node_dim
         self.edge_type_insertion_mode = edge_type_insertion_mode
         self.is_first_layer = is_first_layer
@@ -99,12 +105,12 @@ class PathsEncoder(nn.Module):
                 encoding_dim=self.node_encoding_dim,
                 combiner_params=paths_combining_params,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
-        self.paths_norm = None if norm_params is None else NormWrapper(
-            nr_features=self.node_encoding_dim, params=norm_params)
-        self.combined_paths_norm = None if norm_params is None else NormWrapper(
-            nr_features=self.node_encoding_dim, params=norm_params)
-        self.folded_nodes_norm = None if norm_params is None else NormWrapper(
-            nr_features=self.node_encoding_dim, params=norm_params)
+        self.encoded_paths_norm_params = None if encoded_paths_norm_params is None else NormWrapper(
+            nr_features=self.node_encoding_dim, params=encoded_paths_norm_params)
+        self.combined_paths_norm = None if combined_paths_norm_params is None else NormWrapper(
+            nr_features=self.node_encoding_dim, params=combined_paths_norm_params)
+        self.folded_nodes_norm = None if folded_paths_norm_params is None else NormWrapper(
+            nr_features=self.node_encoding_dim, params=folded_paths_norm_params)
         self.dropout_layer = nn.Dropout(p=dropout_rate)
 
     def forward(
@@ -114,7 +120,7 @@ class PathsEncoder(nn.Module):
             paths_edge_types: torch.LongTensor,
             paths_lengths: torch.LongTensor,
             paths_mask: Optional[torch.BoolTensor] = None,
-            previous_encoding_layer_output: Optional[EncodedPaths] = None) -> EncodedPaths:
+            previous_encoding_layer_output: Optional[EncodedGraphPaths] = None) -> EncodedGraphPaths:
         assert nodes_encodings.ndim == 2
         assert nodes_encodings.size(1) == self.node_encoding_dim
         assert paths_nodes_indices.ndim == 2
@@ -173,8 +179,8 @@ class PathsEncoder(nn.Module):
 
         paths_encodings = self.sequence_encoder_layer(
             sequence_input=paths_effective_embeddings, lengths=paths_effective_lengths, batch_first=True).sequence
-        if self.paths_norm:
-            paths_encodings = self.paths_norm(paths_encodings)
+        if self.encoded_paths_norm_params:
+            paths_encodings = self.encoded_paths_norm_params(paths_encodings)
 
         if self.edge_type_insertion_mode == EdgeTypeInsertionMode.AsStandAloneToken:
             # separate nodes encodings and edge types embeddings from paths
@@ -213,7 +219,7 @@ class PathsEncoder(nn.Module):
             if self.combined_paths_norm:
                 combined_paths = self.combined_paths_norm(combined_paths)
 
-        return EncodedPaths(
+        return EncodedGraphPaths(
             nodes_occurrences=nodes_occurrences_encodings,
             edges_occurrences=edges_occurrences_encodings,
             folded_nodes_encodings=new_folded_nodes_encodings,

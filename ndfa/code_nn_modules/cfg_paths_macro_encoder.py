@@ -1,10 +1,14 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
-from typing import Optional, Dict, Mapping, Callable
+from typing import Optional, Dict, Mapping
 
 from ndfa.code_nn_modules.params.cfg_paths_macro_encoder_params import CFGPathsMacroEncoderParams
-from ndfa.nn_utils.modules.graph_paths_encoder import PathsEncoder, EncodedPaths
+from ndfa.nn_utils.modules.graph_paths_encoder import GraphPathsEncoder, EncodedGraphPaths
 from ndfa.nn_utils.model_wrapper.vocabulary import Vocabulary
 from ndfa.nn_utils.modules.params.norm_wrapper_params import NormWrapperParams
 from ndfa.code_nn_modules.code_task_input import PDGInputTensors, CFGPathsNGramsInputTensors
@@ -17,8 +21,8 @@ __all__ = ['CFGPathsMacroEncoder', 'CFGPathsMacroEncodings']
 
 @dataclass
 class CFGPathsMacroEncodings:
-    ngrams: Optional[Dict[int, EncodedPaths]] = None
-    paths: Optional[EncodedPaths] = None
+    ngrams: Optional[Dict[int, EncodedGraphPaths]] = None
+    paths: Optional[EncodedGraphPaths] = None
     folded_nodes_encodings: Optional[torch.Tensor] = None
     combined_paths: Optional[FlattenedTensor] = None
 
@@ -37,7 +41,7 @@ class CFGPathsMacroEncoder(nn.Module):
         self.params = params
         self.cfg_node_dim = cfg_node_dim
         self.is_first_layer = is_first_layer
-        self.paths_encoder = PathsEncoder(
+        self.paths_encoder = GraphPathsEncoder(
             node_dim=self.cfg_node_dim,
             paths_sequence_encoder_params=self.params.path_sequence_encoder,
             edge_types_vocab=control_flow_edge_types_vocab,
@@ -48,7 +52,9 @@ class CFGPathsMacroEncoder(nn.Module):
             folded_node_encodings_updater_params=cfg_nodes_encodings_state_updater,
             combine_paths=self.params.output_type == CFGPathsMacroEncoderParams.OutputType.SetOfPaths,
             paths_combining_params=self.params.paths_combining_params,
-            norm_params=norm_params,
+            encoded_paths_norm_params=norm_params,
+            combined_paths_norm_params=None,  # TODO: do we want it?
+            folded_paths_norm_params=None,  # TODO: do we want it?
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.params.is_ngrams:
             raise NotImplementedError  # TODO: implement this case! the folding / set-of-paths are not implemented when ngrams are used..
@@ -62,7 +68,7 @@ class CFGPathsMacroEncoder(nn.Module):
         if self.params.is_ngrams:
             raise NotImplementedError  # TODO: implement this case!
             cfg_control_flow_paths_ngrams_input = self.get_cfg_control_flow_paths_ngrams_input(pdg_input=pdg_input)
-            result_per_ngram_len: Dict[int, EncodedPaths] = {}
+            result_per_ngram_len: Dict[int, EncodedGraphPaths] = {}
             for ngrams_n, ngrams in cfg_control_flow_paths_ngrams_input.items():
                 result_per_ngram_len[ngrams_n] = self.paths_encoder(
                     nodes_encodings=cfg_nodes_encodings,
@@ -86,7 +92,7 @@ class CFGPathsMacroEncoder(nn.Module):
             cfg_paths_input = pdg_input.cfg_pdg_paths \
                 if self.params.paths_type == CFGPathsMacroEncoderParams.PathsType.DataDependencyAndControlFlow else \
                 pdg_input.cfg_control_flow_paths
-            encoded_paths: EncodedPaths = self.paths_encoder(
+            encoded_paths: EncodedGraphPaths = self.paths_encoder(
                 nodes_encodings=cfg_nodes_encodings,
                 paths_nodes_indices=cfg_paths_input.nodes_indices.sequences,
                 paths_edge_types=cfg_paths_input.edges_types.sequences,
@@ -96,7 +102,7 @@ class CFGPathsMacroEncoder(nn.Module):
                 previous_encoding_layer_output.paths)
 
             return CFGPathsMacroEncodings(
-                paths=EncodedPaths(
+                paths=EncodedGraphPaths(
                     nodes_occurrences=encoded_paths.nodes_occurrences,
                     edges_occurrences=encoded_paths.edges_occurrences),
                 folded_nodes_encodings=encoded_paths.folded_nodes_encodings,

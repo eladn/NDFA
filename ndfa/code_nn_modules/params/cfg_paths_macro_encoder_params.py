@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2021-10-05"
+
 from enum import Enum
 from typing import Optional
 from dataclasses import dataclass

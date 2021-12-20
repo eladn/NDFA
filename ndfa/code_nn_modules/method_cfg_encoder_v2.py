@@ -8,7 +8,7 @@ from ndfa.code_nn_modules.code_task_input import MethodCodeInputTensors, PDGInpu
     CFGPathsNGramsInputTensors, PDGExpressionsSubASTInputTensors
 from ndfa.code_tasks.code_task_vocabs import CodeTaskVocabs
 from ndfa.code_nn_modules.cfg_node_encoder import CFGNodeEncoder
-from ndfa.nn_utils.modules.graph_paths_encoder import PathsEncoder, EncodedPaths, EdgeTypeInsertionMode
+from ndfa.nn_utils.modules.graph_paths_encoder import GraphPathsEncoder, EncodedGraphPaths, EdgeTypeInsertionMode
 from ndfa.code_nn_modules.symbols_encoder import SymbolsEncoder
 from ndfa.nn_utils.modules.sequence_encoder import SequenceEncoder
 from ndfa.nn_utils.modules.seq_context_adder import SeqContextAdder
@@ -151,7 +151,7 @@ class MethodCFGEncoderV2(nn.Module):
         #         dropout_rate=dropout_rate, activation_fn=activation_fn)
 
         if self.encoder_params.encoder_type in {'pdg-paths-folded-to-nodes', 'control-flow-paths-folded-to-nodes', 'set-of-control-flow-paths'}:
-            self.cfg_paths_encoder = PathsEncoder(
+            self.cfg_paths_encoder = GraphPathsEncoder(
                 node_dim=self.encoder_params.cfg_node_encoding_dim,
                 paths_sequence_encoder_params=self.encoder_params.cfg_paths_sequence_encoder,
                 edge_types_vocab=code_task_vocabs.pdg_control_flow_edge_types,
@@ -647,8 +647,8 @@ class CFGPathsNGramsEncoder(nn.Module):
     def forward(
             self, cfg_nodes_encodings: torch.Tensor,
             cfg_control_flow_paths_ngrams_input: Mapping[int, CFGPathsNGramsInputTensors],
-            previous_encoding_layer_output: Optional[Dict[int, EncodedPaths]] = None) \
-            -> Dict[int, EncodedPaths]:
+            previous_encoding_layer_output: Optional[Dict[int, EncodedGraphPaths]] = None) \
+            -> Dict[int, EncodedGraphPaths]:
         assert (previous_encoding_layer_output is not None) ^ self.is_first
         results = {}
         for ngrams_n, ngrams in cfg_control_flow_paths_ngrams_input.items():
@@ -683,7 +683,7 @@ class CFGPathsNGramsEncoder(nn.Module):
             nodes_occurrences_encodings, edges_occurrences_encodings = unweave_tensor(
                 woven_tensor=ngrams_encodings, dim=1, nr_target_tensors=2)
             assert nodes_occurrences_encodings.shape == ngrams_nodes_encodings.shape
-            results[ngrams_n] = EncodedPaths(
+            results[ngrams_n] = EncodedGraphPaths(
                 nodes_occurrences=nodes_occurrences_encodings,
                 edges_occurrences=edges_occurrences_encodings)
 
@@ -705,7 +705,7 @@ class ScatterCFGEncodedNGramsToCFGNodeEncodings(nn.Module):
             update_dim=cfg_node_encoding_dim,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
 
-    def forward(self, encoded_cfg_paths_ngrams: Dict[int, EncodedPaths],
+    def forward(self, encoded_cfg_paths_ngrams: Dict[int, EncodedGraphPaths],
                 cfg_control_flow_paths_ngrams_input: Mapping[int, CFGPathsNGramsInputTensors],
                 previous_cfg_nodes_encodings: torch.Tensor, nr_cfg_nodes: int):
         # `encoded_cfg_paths` is in form of sequences. We flatten it by applying a mask selector.
