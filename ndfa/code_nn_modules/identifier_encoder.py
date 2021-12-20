@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-04-04"
+
 import torch
 import torch.nn as nn
 
@@ -82,9 +86,10 @@ class IdentifierEncoder(nn.Module):
             return encoded_identifiers
         else:
             nr_identifiers = identifiers_input.identifiers_vocab_word_index.tensor.size(0)
+            device = identifiers_input.identifiers_vocab_word_index.tensor.device
             return self.identifiers_embedding(
                 vocab_word_idx=identifiers_input.identifiers_vocab_word_index.tensor,
                 word_hashes=None,  # identifiers.identifier_hashings.tensor  # TODO
-                batch_unique_word_idx=torch.arange(nr_identifiers),
+                batch_unique_word_idx=torch.arange(nr_identifiers, device=device, dtype=torch.long),
                 obfuscation_vocab_random_indices_shuffle_getter=
                 lambda: identifiers_input.identifiers_obfuscation.sample)
