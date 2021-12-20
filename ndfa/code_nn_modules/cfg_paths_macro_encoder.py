@@ -53,8 +53,8 @@ class CFGPathsMacroEncoder(nn.Module):
             combine_paths=self.params.output_type == CFGPathsMacroEncoderParams.OutputType.SetOfPaths,
             paths_combining_params=self.params.paths_combining_params,
             encoded_paths_norm_params=norm_params,
-            combined_paths_norm_params=None,  # TODO: do we want it?
-            folded_paths_norm_params=None,  # TODO: do we want it?
+            combined_paths_norm_params=norm_params,
+            folded_paths_norm_params=norm_params,
             dropout_rate=dropout_rate, activation_fn=activation_fn)
         if self.params.is_ngrams:
             raise NotImplementedError  # TODO: implement this case! the folding / set-of-paths are not implemented when ngrams are used..
