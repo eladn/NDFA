@@ -477,11 +477,20 @@ class MethodASTInputTensors(SubASTInputTensors):
 @dataclasses.dataclass
 class PDGExpressionsSubASTInputTensors(SubASTInputTensors):
     ast_leaf_to_leaf_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
-        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+        batched_flattened_indices_flattened_tensor_field(
+            tgt_indexing_group='cfg_nodes',
+            sampling_initial_seed_salt='astpth',
+            per_example_sampling=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.sub_asts_leaf_to_leaf_paths_dataloading_sampling_params)
     ast_leaf_to_root_paths_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
-        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+        batched_flattened_indices_flattened_tensor_field(
+            tgt_indexing_group='cfg_nodes',
+            sampling_initial_seed_salt='astpth',
+            per_example_sampling=lambda collate_data:
+            collate_data.model_hps.method_code_encoder.sub_asts_leaf_to_root_paths_dataloading_sampling_params)
     siblings_sequences_pdg_node_indices: BatchedFlattenedIndicesFlattenedTensor = \
-        batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
+        batched_flattened_indices_flattened_tensor_field(
+            tgt_indexing_group='cfg_nodes')
 
     pdg_node_idx_to_sub_ast_root_idx_mapping_key: BatchedFlattenedIndicesFlattenedTensor = \
         batched_flattened_indices_flattened_tensor_field(tgt_indexing_group='cfg_nodes')
