@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-10-26"
+
 import torch
 import dataclasses
 from typing import List, Union, Optional, Tuple, Dict, Set, Any, final

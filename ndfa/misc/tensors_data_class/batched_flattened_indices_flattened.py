@@ -1,6 +1,10 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-10-26"
+
 import torch
 import dataclasses
-from typing import List, Union, Optional, Tuple, Dict, Set, Any, final, Callable
+from typing import List, Union, Optional, Tuple, Dict, Any, final, Callable
 
 from .misc import CollateData
 from .tensors_data_class import TensorsDataClass
@@ -8,6 +12,7 @@ from .mixins import HasTargetIndexingGroupMixin, TensorDataClassWithSingleIndice
     TensorDataClassWithSingleSequenceFieldMixin, HasSelfIndexingGroupMixin
 from .batch_flattened import BatchFlattenedTensorsDataClassMixin
 from .batch_flattened_seq import BatchFlattenedSequencesDataClassMixin
+from .sampling_utils import apply_sampling_on_inputs
 from ndfa.nn_utils.modules.params.sampling_params import SamplingParams  # TODO: put this in TensorsDataClass module
 
 
@@ -88,8 +93,31 @@ class BatchedFlattenedIndicesFlattenedTensorsDataClassMixin(BatchFlattenedTensor
 
 
 @dataclasses.dataclass
-class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchedFlattenedIndicesFlattenedTensorsDataClassMixin, TensorsDataClass):
-    pass  # the double inheritance is all the impl needed
+class BatchedFlattenedIndicesFlattenedTensorsDataClass(BatchedFlattenedIndicesFlattenedTensorsDataClassMixin,
+                                                       TensorsDataClass):
+    per_example_sampling: Optional[
+        Union[SamplingParams, Callable[[Any], SamplingParams]]] = dataclasses.field(default=None)
+    sampling_initial_seed_salt: str = dataclasses.field(default='0')
+
+    @classmethod
+    def get_management_fields(cls) -> Tuple[str, ...]:
+        return super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls).get_management_fields() + \
+               ('per_example_sampling', 'sampling_initial_seed_salt')
+
+    @classmethod
+    def _collate_first_pass(
+            cls, inputs: List['BatchedFlattenedIndicesFlattenedTensorsDataClass'],
+            collate_data: CollateData) \
+            -> 'BatchedFlattenedIndicesFlattenedTensorsDataClass':
+        indices_fields = cls.get_indices_fields()
+        inputs = apply_sampling_on_inputs(
+            inputs=inputs,
+            field_names=[field.name for field in indices_fields],
+            sequences_per_example_sampling=inputs[0].per_example_sampling,
+            sequences_sampling_initial_seed_salt=inputs[0].sampling_initial_seed_salt,
+            collate_data=collate_data)
+        return super(BatchedFlattenedIndicesFlattenedTensorsDataClass, cls)._collate_first_pass(
+            inputs=inputs, collate_data=collate_data)
 
 
 @final
@@ -103,8 +131,13 @@ def batched_flattened_indices_flattened_tensor_field(
         *,
         default=dataclasses.MISSING,
         self_indexing_group: Optional[str] = None,
-        tgt_indexing_group: Optional[str] = None) -> dataclasses.Field:
-    management_fields_defaults = {'self_indexing_group': self_indexing_group, 'tgt_indexing_group': tgt_indexing_group}
+        tgt_indexing_group: Optional[str] = None,
+        sampling_initial_seed_salt: Optional[str] = dataclasses.MISSING,
+        per_example_sampling: Optional[Union[SamplingParams, Callable[[Any], SamplingParams]]] = dataclasses.MISSING) \
+        -> dataclasses.Field:
+    management_fields_defaults = {
+        'self_indexing_group': self_indexing_group, 'tgt_indexing_group': tgt_indexing_group,
+        'sampling_initial_seed_salt': sampling_initial_seed_salt, 'per_example_sampling': per_example_sampling}
     management_fields_defaults = {k: v for k, v in management_fields_defaults.items() if v is not dataclasses.MISSING}
     return dataclasses.field(default=default, metadata=management_fields_defaults)
 
