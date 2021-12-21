@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-12-04"
+
 import torch
 import torch.nn as nn
 
@@ -51,11 +55,23 @@ class CFGSubASTExpressionCombiner(nn.Module):
             assert combined_sub_asts.size() == (nr_cfg_nodes, self.combined_dim)
             return combined_sub_asts
         elif self.combining_params.combining_subject == 'ast_paths':
+            ast_paths_types_with_pdg_node_association = \
+                {'leaf_to_leaf', 'leaf_to_root', 'siblings_sequences', 'siblings_w_parent_sequences'}
+            if len(set(encoded_code_expressions.ast_paths_by_type.keys()) - ast_paths_types_with_pdg_node_association):
+                unsupported_used_ast_paths_types = \
+                    set(encoded_code_expressions.ast_paths_by_type.keys()) - ast_paths_types_with_pdg_node_association
+                raise ValueError(
+                    f'When combining a top-level expression into a CFG node, '
+                    f'the only allowed AST paths types are {ast_paths_types_with_pdg_node_association}. '
+                    f'The used paths types {unsupported_used_ast_paths_types} are unsupported.')
             all_ast_paths_combined = torch.cat(
-                [ast_paths.combined for ast_paths in encoded_code_expressions.ast_paths_by_type.values()], dim=0)
+                [ast_paths.combined
+                 for ast_paths_type, ast_paths in encoded_code_expressions.ast_paths_by_type.items()
+                 if ast_paths_type in ast_paths_types_with_pdg_node_association], dim=0)
             all_ast_paths_pdg_node_indices = torch.cat(
                 [cfg_nodes_expressions_ast_input.get_ast_paths_pdg_node_indices(ast_paths_type).indices
-                 for ast_paths_type in encoded_code_expressions.ast_paths_by_type.keys()], dim=0)
+                 for ast_paths_type in encoded_code_expressions.ast_paths_by_type.keys()
+                 if ast_paths_type in ast_paths_types_with_pdg_node_association], dim=0)
             # TODO: FIXME: what attn query should we use here?
             #  we currently use zeros so only the bias vector affects as a global attention.
             attn_queries = all_ast_paths_combined.new_zeros(size=(nr_cfg_nodes, self.ast_node_encoding_dim))
