@@ -44,6 +44,7 @@ class ASTPathsEncoder(nn.Module):
             for ast_paths_type in self.encoder_params.ast_paths_types)
         self.is_first_encoder_layer = is_first_encoder_layer
 
+        # TODO: Add and use HP param `reuse_paths_encodings_from_previous_input_layer`.
         if self.is_first_encoder_layer:
             if self.encoder_params.paths_add_traversal_edges:
                 self.ast_traversal_orientation_vocab = ast_traversal_orientation_vocab
@@ -105,7 +106,14 @@ class ASTPathsEncoder(nn.Module):
         assert not self.encoder_params.shuffle_ast_paths or not self.encoder_params.paths_add_traversal_edges
 
         ast_paths_traversal_orientation_encodings_input = None
-        if self.is_first_encoder_layer:
+        if ast_paths_last_states is not None and \
+                self.encoder_params.encoder_type == ASTEncoderParams.EncoderType.SetOfPaths:
+            # If no collapse stage, don't re-expand the AST nodes encodings. Actually, the AST nodes encodings are
+            #   not being updated when there is no collapse, so they include the initial AST nodes embeddings.
+            # Instead, just use the paths encoding from previous layer.
+            ast_paths_node_occurrences_encodings_inputs = ast_paths_last_states.nodes_occurrences
+            ast_paths_traversal_orientation_encodings_input = ast_paths_last_states.traversal_orientation
+        elif self.is_first_encoder_layer:  # TODO: Use HP param `reuse_paths_encodings_from_previous_input_layer`.
             assert ast_paths_node_indices is not None
             ast_paths_node_occurrences_encodings_inputs = ast_nodes_encodings[ast_paths_node_indices.sequences]
             if self.encoder_params.paths_add_traversal_edges:
@@ -132,6 +140,7 @@ class ASTPathsEncoder(nn.Module):
                 state_update=ast_nodes_encodings[ast_paths_node_indices.sequences])
             ast_paths_traversal_orientation_encodings_input = ast_paths_last_states.traversal_orientation
 
+        # TODO: fix following `assert` for case when no path-types with traversal are used (like `leaves_sequence`)!
         assert paths_shuffler is None or ast_paths_traversal_orientation_encodings_input is None
 
         if ast_paths_traversal_orientation_encodings_input is None:
