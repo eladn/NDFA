@@ -371,6 +371,24 @@ class SubASTInputTensors(TensorsDataClass):
 
     def keep_only_relevant_fields_according_to_preprocess_params(
             self, preprocess_params: ASTPreprocessParams):
+        if preprocess_params is None:
+            # Possible in case of inheritor `MethodASTInputTensors` is kept (for info about AST nodes types) without
+            # keeping the structural data about the AST of the entire method.
+            return dataclasses.replace(
+                self,
+                ast_leaf_to_leaf_paths_node_indices=None,
+                ast_leaf_to_leaf_paths_child_place=None,
+                ast_leaf_to_leaf_paths_vertical_direction=None,
+                ast_leaf_to_leaf_paths_shuffler=None,
+                ast_leaf_to_root_paths_node_indices=None,
+                ast_leaf_to_root_paths_child_place=None,
+                ast_leaf_to_root_paths_shuffler=None,
+                ast_leaves_sequence_node_indices=None,
+                ast_leaves_sequence_shuffler=None,
+                siblings_sequences_node_indices=None,
+                siblings_w_parent_sequences_node_indices=None,
+                dgl_tree=None,
+                pyg_graph=None)
         return dataclasses.replace(
             self,
             ast_leaf_to_leaf_paths_node_indices=self.ast_leaf_to_leaf_paths_node_indices
