@@ -1635,7 +1635,7 @@ def preprocess_code_task_dataset(
         if use_compatible_pp_data_if_exists and compatible_preprocessed_data_params_hash is not None:
             print(f'Using compatible preprocessed data (hash `{compatible_preprocessed_data_params_hash}`) '
                   f'to generate the target preprocessed dataset (hash `{preprocessed_data_params_hash}`). '
-                  f'Ignoring the raw data.')
+                  f'Raw data will be ignored if managing to open the compatible dataset.')
         elif not use_compatible_pp_data_if_exists and compatible_preprocessed_data_params_hash is not None:
             print(f'Found compatible preprocessed data (hash `{compatible_preprocessed_data_params_hash}`), '
                   f'but it is NOT used to generate the target preprocessed dataset because '
@@ -1643,7 +1643,21 @@ def preprocess_code_task_dataset(
                   f'preprocessed dataset.')
             compatible_preprocessed_data_params_hash, compatible_preprocessed_data_params = None, None
 
-        if compatible_preprocessed_data_params_hash is None:
+        compatible_dataset = None
+        if compatible_preprocessed_data_params_hash is not None:
+            compatible_pp_data_filename = f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params_hash}'
+            compatible_dataset_path_prefix = os.path.join(pp_data_path, compatible_pp_data_filename)
+            try:
+                compatible_dataset = ChunkedRandomAccessDataset(
+                    pp_data_path_prefix=compatible_dataset_path_prefix,
+                    storage_method=storage_method, compression_method=compression_method)
+                print(f'Compatible dataset from `{compatible_dataset_path_prefix}` loaded successfully. '
+                      f'Ignoring raw data.')
+            except ValueError:
+                print(f'Could NOT load compatible dataset from `{compatible_dataset_path_prefix}`. Using raw data.')
+                compatible_dataset = None
+
+        if compatible_dataset is None:
             pp_limitations_exceedings_counter = Counter()
             pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
                 defaultdict(OnlineMeanVarianceAccumulators)
@@ -1679,10 +1693,6 @@ def preprocess_code_task_dataset(
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
         else:
-            compatible_pp_data_filename = f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params_hash}'
-            compatible_dataset = ChunkedRandomAccessDataset(
-                pp_data_path_prefix=os.path.join(pp_data_path, compatible_pp_data_filename),
-                storage_method=storage_method, compression_method=compression_method)
             for example_idx in tqdm(len(compatible_dataset)):
                 compatible_pp_example = compatible_dataset[example_idx]
                 pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
