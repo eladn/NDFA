@@ -18,7 +18,8 @@ from ndfa.code_tasks.code_task_properties import CodeTaskProperties
 from ndfa.code_tasks.evaluation_metric_base import EvaluationMetric
 from ndfa.code_tasks.symbols_set_evaluation_metric import SymbolsSetEvaluationMetric
 from ndfa.misc.code_data_structure_api import *
-from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample
+from ndfa.misc.iter_raw_extracted_data_files import iter_raw_extracted_examples_and_verify, RawExtractedExample, \
+    get_nr_raw_extracted_examples
 from ndfa.nn_utils.model_wrapper.chunked_random_access_dataset import ChunkedRandomAccessDataset
 from ndfa.misc.tensors_data_class import TensorsDataClass, BatchedFlattenedIndicesTensor, CollateData, \
     batch_flattened_indices_tensor_field
@@ -45,10 +46,14 @@ class PredictLogVarsTask(CodeTaskBase):
         super(PredictLogVarsTask, self).__init__(task_props)
         # TODO: extract relevant fields from `task_props` into some `PredictLogVariablesTaskProps`!
 
-    def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) \
-            -> Iterable[RawExtractedExample]:
+    def iterate_raw_examples(
+            self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str,
+            show_progress_bar: bool = False) -> Iterable[RawExtractedExample]:
         return iter_raw_extracted_examples_and_verify(
-            raw_extracted_data_dir=raw_extracted_data_dir, show_progress_bar=True)
+            raw_extracted_data_dir=raw_extracted_data_dir, show_progress_bar=show_progress_bar)
+
+    def get_nr_raw_extracted_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) -> int:
+        return get_nr_raw_extracted_examples(raw_extracted_data_dir=raw_extracted_data_dir)
 
     def preprocess_raw_example(
             self, model_hps: NDFAModelHyperParams,

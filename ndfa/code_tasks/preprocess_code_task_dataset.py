@@ -15,7 +15,7 @@ import multiprocessing as mp
 from typing_extensions import Protocol
 from collections import defaultdict, namedtuple, Counter
 from typing import Iterable, Collection, Any, Set, Optional, Dict, List, \
-    Union, Sequence, TypeVar, NamedTuple, Tuple, Generic
+    Union, Sequence, TypeVar, NamedTuple, Tuple, Generic, Callable
 
 import torch
 import dgl
@@ -1571,7 +1571,11 @@ class PPExampleFnType(Protocol):
 
 
 class RawExtractedExamplesGenerator(Protocol):
-    def __call__(self, raw_extracted_data_dir: str) -> Iterable[Any]: ...
+    def __call__(self, raw_extracted_data_dir: str, show_progress_bar: bool = False) -> Iterable[Any]: ...
+
+
+class NrRawExtractedExamplesGetter(Protocol):
+    def __call__(self, raw_extracted_data_dir: str) -> int: ...
 
 
 def catch_preprocess_limit_exceed_error(
@@ -1595,7 +1599,8 @@ def catch_preprocess_limit_exceed_error(
 
 def preprocess_code_task_dataset(
         model_hps: NDFAModelHyperParams, dataset_props: DatasetProperties, pp_data_path: str,
-        raw_extracted_examples_generator: RawExtractedExamplesGenerator, pp_example_fn: PPExampleFnType,
+        raw_extracted_examples_generator: RawExtractedExamplesGenerator,
+        nr_raw_extracted_examples_getter: NrRawExtractedExamplesGetter, pp_example_fn: PPExampleFnType,
         code_task_vocabs: CodeTaskVocabs, raw_train_data_path: Optional[str] = None,
         raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
         nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
@@ -1664,13 +1669,17 @@ def preprocess_code_task_dataset(
             pp_limitations_exceedings_counter = Counter()
             pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
                 defaultdict(OnlineMeanVarianceAccumulators)
+            nr_raw_data_examples = nr_raw_extracted_examples_getter(raw_extracted_data_dir=raw_dataset_path)
+            print(f'Raw dataset has `{nr_raw_data_examples}` examples.')
+            progress_bar = tqdm(range(nr_raw_data_examples), miniters=progress_bar_min_interval_sec)
+            progress_bar_iterator = iter(progress_bar)
             with mp.Pool(processes=nr_processes) as pool:
                 # To calculate `work_chunk_size`, we ensure resolution of at least 20 chunks per worker to
                 # compensate slowdown rates between the faster worker and the slower worker.
                 max_work_chunk_size = 10
                 min_nr_work_chunks_per_worker = 20
                 work_chunk_size = min(
-                    max_work_chunk_size, compatible_dataset_size // (nr_processes * min_nr_work_chunks_per_worker))
+                    max_work_chunk_size, nr_raw_data_examples // (nr_processes * min_nr_work_chunks_per_worker))
                 # TODO: `imap_unordered` output order is not well-defined.
                 #  add option to use `imap` for reproducibility or re-sort after.
                 # TODO: have two parallel `tqdm` progress bars:
@@ -1681,7 +1690,8 @@ def preprocess_code_task_dataset(
                         functools.partial(
                             catch_preprocess_limit_exceed_error,
                             pp_example_fn, model_hps, preprocess_params, code_task_vocabs),
-                        iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path),
+                        iterable=raw_extracted_examples_generator(
+                            raw_extracted_data_dir=raw_dataset_path, show_progress_bar=False),
                         chunksize=work_chunk_size):
                     assert pp_example_as_bytes_or_errors_list is not None
                     if isinstance(pp_example_as_bytes_or_errors_list, list):
@@ -1703,6 +1713,8 @@ def preprocess_code_task_dataset(
                         #     pp_example = torch.load(pp_example_as_bytes_io_stream)
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
+                    next(progress_bar_iterator, None)
+            progress_bar.close()
         else:
             # We run the examples processing concurrently.
             # De-serialize and re-serialize an example takes times (`torch.load()` for each tensor is heavy).

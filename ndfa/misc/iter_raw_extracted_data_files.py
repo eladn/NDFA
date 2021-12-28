@@ -11,7 +11,8 @@ from itertools import takewhile, repeat
 from ndfa.misc.code_data_structure_api import *
 
 
-__all__ = ['RawExtractedExample', 'iter_raw_extracted_examples', 'iter_raw_extracted_examples_and_verify']
+__all__ = ['RawExtractedExample', 'iter_raw_extracted_examples', 'iter_raw_extracted_examples_and_verify',
+           'get_nr_raw_extracted_examples']
 
 
 @dataclasses.dataclass
@@ -46,14 +47,13 @@ raw_data_filepath_arg_namespace_field = RawExtractedDataFiles(
     method_pdg='method_pdg_jsons_filepath')
 
 
-def iter_raw_extracted_examples(
+def get_raw_data_file_paths(
         raw_extracted_data_dir: typing.Optional[str] = None, logging_call_hashes_filepath: typing.Optional[str] = None,
         logging_call_jsons_filepath: typing.Optional[str] = None, method_jsons_filepath: typing.Optional[str] = None,
         method_ast_jsons_filepath: typing.Optional[str] = None, method_pdg_jsons_filepath: typing.Optional[str] = None,
-        args: typing.Optional[argparse.Namespace] = None, show_progress_bar: bool = False,
-        sample_rate: typing.Optional[float] = None, verify_aligned: bool = True, require_logging_call: bool = False,
+        args: typing.Optional[argparse.Namespace] = None, require_logging_call: bool = False,
         require_logging_call_hash: bool = False, require_method: bool = False, require_method_ast: bool = False,
-        require_method_pdg: bool = False) -> typing.Iterable[RawExtractedExample]:
+        require_method_pdg: bool = False) -> RawExtractedDataFiles:
     paths_kwargs = argparse.Namespace(
         raw_extracted_data_dir=raw_extracted_data_dir,
         logging_call_hashes_filepath=logging_call_hashes_filepath,
@@ -95,6 +95,24 @@ def iter_raw_extracted_examples(
     for field_name, do_require in dataclasses.asdict(require).items():
         if do_require and getattr(raw_data_file_paths, field_name) is None:
             raise ValueError(f'`{field_name}` is required but not specified.')
+
+    return raw_data_file_paths
+
+
+def iter_raw_extracted_examples(
+        raw_extracted_data_dir: typing.Optional[str] = None, logging_call_hashes_filepath: typing.Optional[str] = None,
+        logging_call_jsons_filepath: typing.Optional[str] = None, method_jsons_filepath: typing.Optional[str] = None,
+        method_ast_jsons_filepath: typing.Optional[str] = None, method_pdg_jsons_filepath: typing.Optional[str] = None,
+        args: typing.Optional[argparse.Namespace] = None, show_progress_bar: bool = False,
+        sample_rate: typing.Optional[float] = None, verify_aligned: bool = True, require_logging_call: bool = False,
+        require_logging_call_hash: bool = False, require_method: bool = False, require_method_ast: bool = False,
+        require_method_pdg: bool = False) -> typing.Iterable[RawExtractedExample]:
+    raw_data_file_paths = get_raw_data_file_paths(
+        raw_extracted_data_dir=raw_extracted_data_dir, logging_call_hashes_filepath=logging_call_hashes_filepath,
+        logging_call_jsons_filepath=logging_call_jsons_filepath, method_jsons_filepath=method_jsons_filepath,
+        method_ast_jsons_filepath=method_ast_jsons_filepath, method_pdg_jsons_filepath=method_pdg_jsons_filepath,
+        args=args, require_logging_call=require_logging_call, require_logging_call_hash=require_logging_call_hash,
+        require_method=require_method, require_method_ast=require_method_ast, require_method_pdg=require_method_pdg)
 
     non_null_field_names = tuple(field.name for field in dataclasses.fields(raw_data_file_paths)
                                  if getattr(raw_data_file_paths, field.name) is not None)
@@ -168,6 +186,17 @@ def count_lines_in_file(file_path: str):
     with open(file_path, 'rb') as f:
         bufgen = takewhile(lambda x: x, (f.raw.read(1024 * 1024) for _ in repeat(None)))
         return sum(buf.count(b'\n') for buf in bufgen)
+
+
+def get_nr_raw_extracted_examples(raw_extracted_data_dir: str, **kwargs) -> int:
+    raw_data_file_paths = get_raw_data_file_paths(
+        raw_extracted_data_dir=raw_extracted_data_dir, **kwargs)
+    non_null_field_names = tuple(field.name for field in dataclasses.fields(raw_data_file_paths)
+                                 if getattr(raw_data_file_paths, field.name) is not None)
+    field_of_smallest_file = min(
+        non_null_field_names, key=lambda field_name: os.path.getsize(getattr(raw_data_file_paths, field_name)))
+    nr_examples = count_lines_in_file(getattr(raw_data_file_paths, field_of_smallest_file))
+    return nr_examples
 
 
 def iter_raw_extracted_examples_and_verify(

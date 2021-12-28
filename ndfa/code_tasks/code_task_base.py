@@ -39,6 +39,7 @@ class CodeTaskBase(abc.ABC):
         preprocess_code_task_dataset(
             model_hps=model_hps, dataset_props=dataset_props, pp_data_path=pp_data_path,
             raw_extracted_examples_generator=functools.partial(self.iterate_raw_examples, model_hps=model_hps),
+            nr_raw_extracted_examples_getter=functools.partial(self.get_nr_raw_extracted_examples, model_hps=model_hps),
             pp_example_fn=self.preprocess_raw_example, code_task_vocabs=code_task_vocabs,
             raw_train_data_path=raw_train_data_path, raw_validation_data_path=raw_validation_data_path,
             raw_test_data_path=raw_test_data_path, nr_processes=pp_nr_processes, pp_override=pp_override,
@@ -47,7 +48,14 @@ class CodeTaskBase(abc.ABC):
             use_compatible_pp_data_if_exists=use_compatible_pp_data_if_exists)
 
     @abc.abstractmethod
-    def iterate_raw_examples(self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) -> Iterable[Any]:
+    def iterate_raw_examples(
+            self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str,
+            show_progress_bar: bool = False) -> Iterable[Any]:
+        ...
+
+    @abc.abstractmethod
+    def get_nr_raw_extracted_examples(
+            self, model_hps: NDFAModelHyperParams, raw_extracted_data_dir: str) -> int:
         ...
 
     @abc.abstractmethod
@@ -65,7 +73,7 @@ class CodeTaskBase(abc.ABC):
             add_tag: bool = True) \
             -> Iterable[Tuple[Any, Any]]:
         for raw_example in self.iterate_raw_examples(
-                model_hps=model_hps, raw_extracted_data_dir=raw_extracted_data_dir):
+                model_hps=model_hps, raw_extracted_data_dir=raw_extracted_data_dir, show_progress_bar=True):
             try:
                 pp_example = self.preprocess_raw_example(
                     model_hps=model_hps, code_task_vocabs=code_task_vocabs,
