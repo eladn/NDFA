@@ -1693,7 +1693,7 @@ def preprocess_code_task_dataset(
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
         else:
-            for example_idx in tqdm(len(compatible_dataset)):
+            for example_idx in tqdm(range(len(compatible_dataset))):
                 compatible_pp_example = compatible_dataset[example_idx]
                 pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
                     preprocess_params=preprocess_params)
