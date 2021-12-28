@@ -1693,6 +1693,17 @@ def preprocess_code_task_dataset(
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
         else:
+            # TODO: Make it concurrent.
+            #  De-serialize and re-serialize an example takes times (`torch.load()` for each tensor is heavy).
+            #  Actually, this is the original reason we create preprocess dataset for exact pp-params.
+            #  Distribute the task of <(1) load example from compatible dataset, (2) de-serialize it, (3) remove
+            #  irrelevant fields, (4) serialize the new example> to `nr_processes` workers. Each worker would open
+            #  the compatible dataset once upon its creation, and then would be given with a chunk of work to do.
+            #  Notice that simply `pool.imap_unordered()` might not be effective as it would make the compatible
+            #  dataset to be re-opened for each chunk of work. Unless we pre-divide the jobs to the workers (which
+            #  is not optimal because one might be slower but it might be a good compromise). The more optimal
+            #  option is to create two producer->consumer message queue per each worker (which acts as a consumer
+            #  of example idx and as a producer of the new serialized example).
             for example_idx in tqdm(range(len(compatible_dataset))):
                 compatible_pp_example = compatible_dataset[example_idx]
                 pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
