@@ -42,6 +42,9 @@ class KeyValueStoreInterface(abc.ABC):
     def close(self):
         ...
 
+    def after_done_writing(self):
+        pass
+
     @classmethod
     @abc.abstractmethod
     def get_new_and_truncate_write_mode(cls) -> 'str':
@@ -169,6 +172,7 @@ class TarKeyValueStore(KeyValueStoreInterface):
 
 class RocksDBKeyValueStore(KeyValueStoreInterface):
     def __init__(self, path, mode, compression):
+        self.path = path
         compressions_translation = {'bz2': 'bzip2', 'none': 'no', 'lzma': 'lz4', 'gzip': 'zlib'}
         if compression in compressions_translation:
             compression = compressions_translation[compression]
@@ -203,6 +207,11 @@ class RocksDBKeyValueStore(KeyValueStoreInterface):
 
     def close(self):
         del self.db
+
+    def after_done_writing(self):
+        print(f'Performing compaction to RocksDB @ `{self.path}` ..')
+        self.db.compact_range()
+        print('Done RocksDB compaction.')
 
     def get_value_by_key(self, key: str) -> bytes:
         return self.db.get(key.encode('ascii'))
@@ -318,6 +327,7 @@ class ChunkedRandomAccessDatasetWriter:
         print(f'Closing chunk #{self.cur_chunk_idx} with {self.cur_chunk_nr_examples:,} examples '
               f'and total size of {prettyprint_filesize(self.cur_chunk_size_in_bytes)}.')
         self.cur_chunk_file.write_member('len', int(self.cur_chunk_nr_examples).to_bytes(8, 'little'))
+        self.cur_chunk_file.after_done_writing()
         self.cur_chunk_file.close()
         self.cur_chunk_file = None
 
