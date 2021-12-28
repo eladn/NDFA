@@ -1600,7 +1600,8 @@ def preprocess_code_task_dataset(
         raw_validation_data_path: Optional[str] = None, raw_test_data_path: Optional[str] = None,
         nr_processes: int = 4, pp_override: bool = False, storage_method: str = 'dbm',
         compression_method: str = 'none', keep_entire_preprocessed_dataset: bool = False,
-        use_compatible_pp_data_if_exists: bool = True):
+        use_compatible_pp_data_if_exists: bool = True,
+        progress_bar_min_interval_sec: float = 0.1):
     datafolds = (
         (DataFold.Train, raw_train_data_path),
         (DataFold.Validation, raw_validation_data_path),
@@ -1723,6 +1724,7 @@ def preprocess_code_task_dataset(
                     max_work_chunk_size, compatible_dataset_size // (nr_processes * min_nr_work_chunks_per_worker))
                 # TODO: `imap_unordered` output order is not well-defined.
                 #  add option to use `imap` for reproducibility or re-sort after.
+                progress_bar = iter(tqdm(range(compatible_dataset_size), miniters=progress_bar_min_interval_sec))
                 for pp_example_as_bytes in pool.imap_unordered(
                         func=functools.partial(
                             _load_example_from_global_dataset_keep_only_relevant_fields_and_serialize,
@@ -1730,6 +1732,7 @@ def preprocess_code_task_dataset(
                         iterable=range(compatible_dataset_size),
                         chunksize=work_chunk_size):
                     chunks_examples_writer.write_example(pp_example_as_bytes)
+                    next(progress_bar, None)
 
         nr_preprocessed_examples = chunks_examples_writer.total_nr_examples
         chunks_examples_writer.close_last_written_chunk()
