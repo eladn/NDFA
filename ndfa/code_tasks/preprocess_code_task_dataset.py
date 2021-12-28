@@ -1643,7 +1643,7 @@ def preprocess_code_task_dataset(
                   f'preprocessed dataset.')
             compatible_preprocessed_data_params_hash, compatible_preprocessed_data_params = None, None
 
-        compatible_dataset = None
+        compatible_dataset_path_prefix, compatible_dataset_size = None, None
         if compatible_preprocessed_data_params_hash is not None:
             compatible_pp_data_filename = f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params_hash}'
             compatible_dataset_path_prefix = os.path.join(pp_data_path, compatible_pp_data_filename)
@@ -1651,18 +1651,27 @@ def preprocess_code_task_dataset(
                 compatible_dataset = ChunkedRandomAccessDataset(
                     pp_data_path_prefix=compatible_dataset_path_prefix,
                     storage_method=storage_method, compression_method=compression_method)
+                compatible_dataset_size = len(compatible_dataset)
+                del compatible_dataset
                 print(f'Compatible dataset from `{compatible_dataset_path_prefix}` loaded successfully. '
                       f'Ignoring raw data.')
             except ValueError:
                 print(f'Could NOT load compatible dataset from `{compatible_dataset_path_prefix}`. Using raw data.')
-                compatible_dataset = None
+                compatible_dataset_path_prefix, compatible_dataset_size = None, None
 
-        if compatible_dataset is None:
+        if compatible_dataset_path_prefix is None:
             pp_limitations_exceedings_counter = Counter()
             pp_limitations_exceedings_values: Dict[str, OnlineMeanVarianceAccumulators] = \
                 defaultdict(OnlineMeanVarianceAccumulators)
             with mp.Pool(processes=nr_processes) as pool:
-                # TODO: `imap_unordered` output order is not well-defined. add option to use `imap` for reproducibility.
+                # To calculate `work_chunk_size`, we ensure resolution of at least 20 chunks per worker to
+                # compensate slowdown rates between the faster worker and the slower worker.
+                max_work_chunk_size = 10
+                min_nr_work_chunks_per_worker = 20
+                work_chunk_size = min(
+                    max_work_chunk_size, compatible_dataset_size // (nr_processes * min_nr_work_chunks_per_worker))
+                # TODO: `imap_unordered` output order is not well-defined.
+                #  add option to use `imap` for reproducibility or re-sort after.
                 # TODO: have two parallel `tqdm` progress bars:
                 #  (1) reading examples from iterator: it means how many examples are being/finished preprocessed;
                 #  (2) over the `imap_unordered` loop: it means how many examples have been exported
@@ -1671,7 +1680,8 @@ def preprocess_code_task_dataset(
                         functools.partial(
                             catch_preprocess_limit_exceed_error,
                             pp_example_fn, model_hps, preprocess_params, code_task_vocabs),
-                        iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path)):
+                        iterable=raw_extracted_examples_generator(raw_extracted_data_dir=raw_dataset_path),
+                        chunksize=work_chunk_size):
                     assert pp_example_as_bytes_or_errors_list is not None
                     if isinstance(pp_example_as_bytes_or_errors_list, list):
                         errors_list = pp_example_as_bytes_or_errors_list
@@ -1693,22 +1703,33 @@ def preprocess_code_task_dataset(
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
         else:
-            # TODO: Make it concurrent.
-            #  De-serialize and re-serialize an example takes times (`torch.load()` for each tensor is heavy).
-            #  Actually, this is the original reason we create preprocess dataset for exact pp-params.
-            #  Distribute the task of <(1) load example from compatible dataset, (2) de-serialize it, (3) remove
-            #  irrelevant fields, (4) serialize the new example> to `nr_processes` workers. Each worker would open
-            #  the compatible dataset once upon its creation, and then would be given with a chunk of work to do.
-            #  Notice that simply `pool.imap_unordered()` might not be effective as it would make the compatible
-            #  dataset to be re-opened for each chunk of work. Unless we pre-divide the jobs to the workers (which
-            #  is not optimal because one might be slower but it might be a good compromise). The more optimal
-            #  option is to create two producer->consumer message queue per each worker (which acts as a consumer
-            #  of example idx and as a producer of the new serialized example).
-            for example_idx in tqdm(range(len(compatible_dataset))):
-                compatible_pp_example = compatible_dataset[example_idx]
-                pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
-                    preprocess_params=preprocess_params)
-                chunks_examples_writer.write_example(pp_example)
+            # We run the examples processing concurrently.
+            # De-serialize and re-serialize an example takes times (`torch.load()` for each tensor is heavy).
+            # Actually, this is the original reason we create preprocess dataset for exact pp-params.
+            # We distribute the task of <(1) load example from compatible dataset, (2) de-serialize it, (3) remove
+            # irrelevant fields, (4) serialize the new example> to `nr_processes` workers. Each worker opens
+            # the compatible dataset once upon its creation.
+            with mp.Pool(
+                    processes=nr_processes,
+                    initializer=_globally_load_dataset,
+                    initargs=(
+                            'pp_compatible', compatible_dataset_path_prefix,
+                            storage_method, compression_method)) as pool:
+                # To calculate `work_chunk_size`, we ensure resolution of at least 10 chunks per worker to
+                # compensate slowdown rates between the faster worker and the slower worker.
+                max_work_chunk_size = 20
+                min_nr_work_chunks_per_worker = 10
+                work_chunk_size = min(
+                    max_work_chunk_size, compatible_dataset_size // (nr_processes * min_nr_work_chunks_per_worker))
+                # TODO: `imap_unordered` output order is not well-defined.
+                #  add option to use `imap` for reproducibility or re-sort after.
+                for pp_example_as_bytes in pool.imap_unordered(
+                        func=functools.partial(
+                            _load_example_from_global_dataset_keep_only_relevant_fields_and_serialize,
+                            'pp_compatible', preprocess_params),
+                        iterable=range(compatible_dataset_size),
+                        chunksize=work_chunk_size):
+                    chunks_examples_writer.write_example(pp_example_as_bytes)
 
         nr_preprocessed_examples = chunks_examples_writer.total_nr_examples
         chunks_examples_writer.close_last_written_chunk()
@@ -1793,3 +1814,31 @@ def find_existing_compatible_preprocessed_data_params(
     # else:
     #     print(f'Could not find any compatible preprocessed dataset in `{pp_data_path}`.')
     return smallest_compatible_pp_data_params_hash, smallest_compatible_pp_data_params
+
+
+# Used as an initializer for workers that are managed with multiprocessing.
+_globally_loaded_datasets = {}
+def _globally_load_dataset(
+        global_dataset_name: str, dataset_path_prefix: str,
+        storage_method: str, compression_method: str):
+    global _globally_loaded_datasets
+    if global_dataset_name in _globally_loaded_datasets:
+        raise ValueError(f'Dataset of name `{global_dataset_name}` is already globally loaded.')
+    _globally_loaded_datasets[global_dataset_name] = ChunkedRandomAccessDataset(
+        pp_data_path_prefix=dataset_path_prefix,
+        storage_method=storage_method, compression_method=compression_method)
+
+
+def _load_example_from_global_dataset_keep_only_relevant_fields_and_serialize(
+        global_dataset_name: str,
+        preprocess_params: NDFAModelPreprocessParams,
+        example_idx_to_process: int):
+    global _globally_loaded_datasets
+    compatible_dataset = _globally_loaded_datasets[global_dataset_name]
+    compatible_pp_example = compatible_dataset[example_idx_to_process]
+    new_pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
+        preprocess_params=preprocess_params)
+    with io.BytesIO() as bytes_io_stream:
+        torch.save(new_pp_example, bytes_io_stream)
+        binary_serialized_new_example = bytes_io_stream.getvalue()
+    return binary_serialized_new_example
