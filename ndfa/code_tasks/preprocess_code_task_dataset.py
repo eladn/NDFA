@@ -1679,8 +1679,10 @@ def preprocess_code_task_dataset(
                         #     assert isinstance(pp_example, TensorsDataClass)
                         #     chunks_examples_writer.write_example(pp_example)
         else:
+            compatible_pp_data_filename = f'pp_{datafold.value.lower()}_{compatible_preprocessed_data_params_hash}'
             compatible_dataset = ChunkedRandomAccessDataset(
-                pp_data_path_prefix=pp_data_path, storage_method=storage_method, compression_method=compression_method)
+                pp_data_path_prefix=os.path.join(pp_data_path, compatible_pp_data_filename),
+                storage_method=storage_method, compression_method=compression_method)
             for example_idx in tqdm(len(compatible_dataset)):
                 compatible_pp_example = compatible_dataset[example_idx]
                 pp_example = compatible_pp_example.keep_only_relevant_fields_according_to_preprocess_params(
