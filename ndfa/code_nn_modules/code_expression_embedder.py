@@ -1,3 +1,7 @@
+__author__ = "Elad Nachmias"
+__email__ = "eladnah@gmail.com"
+__date__ = "2020-12-13"
+
 import torch
 import torch.nn as nn
 from typing import Optional
@@ -49,6 +53,7 @@ class CodeExpressionEmbedder(nn.Module):
                 ast_node_child_pos_vocab=code_task_vocabs.ast_node_child_pos,
                 primitive_types_vocab=code_task_vocabs.primitive_types,
                 modifiers_vocab=code_task_vocabs.modifiers,
+                combine_parts_by=self.encoder_params.ast_encoder.nodes_embeddings_parts_combiner,
                 dropout_rate=dropout_rate, activation_fn=activation_fn)
         else:
             raise ValueError(f'Unsupported expression encoder type `{self.encoder_params.encoder_type}`.')

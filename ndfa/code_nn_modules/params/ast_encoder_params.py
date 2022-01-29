@@ -66,3 +66,6 @@ class ASTEncoderParams(HasDispatchableField):
 
     gnn_encoder: Optional[GNNEncoderParams] = conf_field(
         default_factory=GNNEncoderParams)
+
+    nodes_embeddings_parts_combiner: str = conf_field(
+        default='project', choices=('project', 'add'))
